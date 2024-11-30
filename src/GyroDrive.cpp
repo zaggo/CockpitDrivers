@@ -113,15 +113,15 @@ void GyroDrive::offAllAxes()
  *
  * @note The function will return GyroDriveResult::notHomed if the GyroDrive is not homed.
  */
-GyroDrive::GyroDriveResult GyroDrive::moveToDegree(int16_t rollDegree, int16_t pitchDegree)
+GyroDrive::GyroDriveResult GyroDrive::moveToDegree(double rollDegree, double pitchDegree)
 {
     if (!isHomed)
     {
         return GyroDriveResult::notHomed;
     }
 
-    int32_t targetPositionRoll = static_cast<int32_t>(rollDegree) * static_cast<int32_t>(kRollTotalSteps) / DEGREE_FULL_ROTATION;
-    int32_t targetPositionPitch = static_cast<int32_t>(pitchDegree) * static_cast<int32_t>(kPitchTotalSteps) / DEGREE_FULL_ROTATION;
+    int32_t targetPositionRoll = static_cast<int32_t>(rollDegree * static_cast<double>(kRollTotalSteps)) / DEGREE_FULL_ROTATION;
+    int32_t targetPositionPitch = static_cast<int32_t>(pitchDegree * static_cast<double>(kPitchTotalSteps)) / DEGREE_FULL_ROTATION;
     int32_t correctedPositionPitch = targetPositionPitch - convertPosition(roll, axes[roll]->getPosition());
     int32_t stepsToMoveRoll = calculateShortestPath(axes[roll]->getPosition(), targetPositionRoll, kRollTotalSteps);
     int32_t stepsToMovePitch = calculateShortestPath(axes[pitch]->getPosition(), correctedPositionPitch, kPitchTotalSteps);
