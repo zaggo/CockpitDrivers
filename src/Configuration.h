@@ -33,9 +33,13 @@ const double kAdjustmentFactor = 0.76923077;
 const uint16_t kX25TotalSteps = 315*3;
 const uint8_t kX25MotorCount = 4;
 const uint8_t kX25MotorPins[kX25MotorCount][4] = {
-    {22, 24, 26, 28},
-    {23, 25, 27, 29},
-    {30, 32, 34, 36},
-    {31, 33, 35, 37}
+    {22, 24, 28, 26},
+    {29, 27, 23, 25},
+    {30, 32, 36, 34},
+    {31, 33, 37, 35}
+    // {29, 27, 25, 23},
+    // {22, 24, 26, 28},
+    // {30, 32, 34, 36},
+    // {31, 33, 35, 37}
 };
 #endif // CONFIGURATION_H

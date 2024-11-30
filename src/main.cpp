@@ -31,7 +31,7 @@ static void new_message_callback(uint16_t message_id, struct SiMessagePortPayloa
       case kVerticalSpeed: {
           if (payload->type != SI_MESSAGE_PORT_DATA_TYPE_FLOAT) { return; }
           float relPos = payload->data_float[0];
-          messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"Received position: "+relPos+" for X25 motor: "+message_id);
+          // messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"Received position: "+relPos+" for X25 motor: "+message_id);
           // Motor-ID prüfen und Position setzen
           if (message_id > 0 && message_id <= kX25MotorCount) {
             x25Steppers[message_id - 1]->setPosition(relPos * kX25TotalSteps);
@@ -43,7 +43,7 @@ static void new_message_callback(uint16_t message_id, struct SiMessagePortPayloa
           uint8_t dataLength = payload->len;
           double rollToDegree = static_cast<double>(payload->data_float[0]);
           double pitchToDegree = static_cast<double>(payload->data_float[1]) * kAdjustmentFactor;
-          messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"AttitudeIndicator (len="+dataLength+") roll: "+rollToDegree+" pitch: "+pitchToDegree);
+          // messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"AttitudeIndicator (len="+dataLength+") roll: "+rollToDegree+" pitch: "+pitchToDegree);
           gyroDrive.moveToDegree(rollToDegree, pitchToDegree);
         }
         break;
