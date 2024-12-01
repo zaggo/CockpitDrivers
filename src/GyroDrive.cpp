@@ -120,8 +120,9 @@ GyroDrive::GyroDriveResult GyroDrive::moveToDegree(double rollDegree, double pit
         return GyroDriveResult::notHomed;
     }
 
-    int32_t targetPositionRoll = static_cast<int32_t>(rollDegree * static_cast<double>(kRollTotalSteps)) / DEGREE_FULL_ROTATION;
-    int32_t targetPositionPitch = static_cast<int32_t>(pitchDegree * static_cast<double>(kPitchTotalSteps)) / DEGREE_FULL_ROTATION;
+    stopAllAxes();
+    int32_t targetPositionRoll = static_cast<int32_t>(rollDegree * static_cast<double>(kRollTotalSteps) / static_cast<double>(DEGREE_FULL_ROTATION));
+    int32_t targetPositionPitch = static_cast<int32_t>(pitchDegree * static_cast<double>(kPitchTotalSteps) / static_cast<double>(DEGREE_FULL_ROTATION));
     int32_t correctedPositionPitch = targetPositionPitch - convertPosition(roll, axes[roll]->getPosition());
     int32_t stepsToMoveRoll = calculateShortestPath(axes[roll]->getPosition(), targetPositionRoll, kRollTotalSteps);
     int32_t stepsToMovePitch = calculateShortestPath(axes[pitch]->getPosition(), correctedPositionPitch, kPitchTotalSteps);

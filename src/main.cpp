@@ -40,7 +40,7 @@ static void new_message_callback(uint16_t message_id, struct SiMessagePortPayloa
         break;
       case kAttitudeIndicator: {
           if (payload->type != SI_MESSAGE_PORT_DATA_TYPE_FLOAT) { return; }
-          uint8_t dataLength = payload->len;
+          // uint8_t dataLength = payload->len;
           double rollToDegree = static_cast<double>(payload->data_float[0]);
           double pitchToDegree = static_cast<double>(payload->data_float[1]) * kAdjustmentFactor;
           // messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"AttitudeIndicator (len="+dataLength+") roll: "+rollToDegree+" pitch: "+pitchToDegree);
