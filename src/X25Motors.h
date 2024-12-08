@@ -4,8 +4,15 @@
 #include "Configuration.h"
 #include <SwitecX25.h>
 
-extern SwitecX25* x25Steppers[kX25MotorCount];
-void initX25Steppers();
-void updateAllX25Steppers();
+class X25Motors {
+    public:
+        X25Motors();
+        ~X25Motors();
+
+        void setPosition(uint8_t motorIndex, float relPos);
+        void updateAllX25Steppers();
+    private:
+        SwitecX25* x25Steppers[kX25MotorCount];
+};
 
 #endif // X25MOTORS_H
