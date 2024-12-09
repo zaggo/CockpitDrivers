@@ -50,11 +50,12 @@ void Tachometer::displayNumber(float digits[])
     for (uint8_t i = 0; i < 6; i++)
     {
         uint8_t digit = static_cast<uint8_t>(digits[i]);
-        bool isAnimating = false;
-        if (i < 5) {
-            isAnimating = (static_cast<uint8_t>(digits[i+1]) == 9 && yShift != currentYShift);
-        } else {
-            isAnimating = (yShift != currentYShift);
+        bool isAnimating = (yShift != currentYShift);
+        for(uint8_t j = i + 1; j < 6; j++) {
+            if (static_cast<uint8_t>(digits[j]) != 9) {
+                isAnimating = false;
+                break;
+            }
         }
         if (currentDigits[i] != digit || isAnimating)
         {
@@ -92,7 +93,6 @@ void Tachometer::displayNumber(float digits[])
 
     if (somethingChanged)
     {
-        oled->displayCanvas();    
-        //Serial.println("Displaying canvas");
+        oled->asyncDisplayCanvas();    
     }
 }

@@ -3,9 +3,6 @@
 
 #include <Arduino.h>
 #include "Tachometer.h"
-#include "GyroDrive.h"
-#include "Configuration.h"
-#include "X25Motors.h"
 #include <si_message_port.hpp>
 
 class AirManager {
@@ -22,8 +19,6 @@ class AirManager {
         static void new_message_callback(uint16_t message_id, struct SiMessagePortPayload* payload);
 
         SiMessagePort* messagePort;
-        GyroDrive* gyroDrive;
-        X25Motors* x25Motors;
         Tachometer* tachometer;
 };
 

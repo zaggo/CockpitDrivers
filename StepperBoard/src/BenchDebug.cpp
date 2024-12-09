@@ -21,16 +21,6 @@ BenchDebug::BenchDebug(BenchMode mode)
         Serial.println("X25Motors initialized");
     }
 
-    if (mode & kTachometer)
-    {
-        tachometer = new Tachometer();
-        digits = new float[6];
-        Serial.println("Tachometer initialized");
-    }
-
-    startTime = millis();
-    lastTime = startTime;
-
     pinMode(kLedPin, OUTPUT);
     digitalWrite(kLedPin, heartbeatLedOn);
     Serial.println("System running...");
@@ -40,8 +30,6 @@ BenchDebug::~BenchDebug()
 {
     delete gyroDrive;
     delete x25Motors;
-    delete tachometer;
-    delete[] digits;
 }
 
 void BenchDebug::handleUserInput()
@@ -68,14 +56,14 @@ void BenchDebug::handleUserInput()
                 }
                 else if (inputBuffer.startsWith("C"))
                 {
-                    gyroDrive->moveSteps(kRollTotalSteps, 0);
+                    gyroDrive->moveSteps(kRollTotalSteps, 0, true);
                 }
                 else if (inputBuffer.startsWith("R"))
                 {
                     String rString = inputBuffer.substring(1, inputBuffer.indexOf(" "));
                     rString.trim();
                     int32_t steps = rString.toInt();
-                    gyroDrive->moveSteps(steps, 0);
+                    gyroDrive->moveSteps(steps, 0, true);
                 }
                 else if (inputBuffer.startsWith("p") || inputBuffer.startsWith("r"))
                 {
@@ -131,18 +119,6 @@ void BenchDebug::loop()
     }
 
     handleUserInput();
-
-    if (tachometer)
-    {
-        uint32_t now = millis();
-        if (now - lastTime > 50L)
-        {
-            lastTime = now;
-            float seconds = static_cast<float>(now - startTime) / 1000.0 + 3600. - 20.;
-            tachometer->secondsToDigits(seconds, digits);
-            tachometer->displayNumber(digits);
-        }
-    }
 
     if (gyroDrive)
     {

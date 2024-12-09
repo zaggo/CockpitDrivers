@@ -25,7 +25,8 @@ OLED0in91::OLED0in91()
     canvas.height = OLED_0in91_HEIGHT;
 
     canvas.image = new uint8_t[canvas.widthByte * canvas.heightByte]();
-    if (canvas.image == NULL)
+    asyncImageBuffer = new uint8_t[canvas.widthByte * canvas.heightByte]();
+    if (canvas.image == NULL || asyncImageBuffer == NULL) 
     {
         DEBUGLOG_PRINTLN("Failed to apply for black memory...");
     }
@@ -37,6 +38,25 @@ OLED0in91::~OLED0in91()
 {
     Wire.end();
     delete[] canvas.image;
+    delete[] asyncImageBuffer;
+}
+
+void OLED0in91::asyncTask() {
+    if(asyncLine < OLED_0in91_HEIGHT / 8) {
+        writeOLEDRegister(0xb0 + asyncLine);
+        writeOLEDRegister(0x00);
+        writeOLEDRegister(0x10);
+        for (uint8_t column = 0; column < OLED_0in91_WIDTH; column++)
+        {
+            writeOLEDData(asyncImageBuffer[(3 - asyncLine) + column * 4]);
+        }
+        asyncLine++;
+    }
+}
+
+void OLED0in91::asyncDisplayCanvas() {
+    memcpy(asyncImageBuffer, canvas.image, canvas.widthByte * canvas.heightByte);
+    asyncLine = 0;
 }
 
 void OLED0in91::displayCanvas()
@@ -98,9 +118,9 @@ void OLED0in91::drawDigit(int16_t x, int16_t y, const uint8_t digit, bool white,
     uint32_t charOffset = digit * digitsFont.height * (digitsFont.width / 8 + (digitsFont.width % 8 ? 1 : 0));
     const unsigned char *ptr = &digitsFont.table[charOffset];
 
-    for (int16_t line = 0; line < digitsFont.height; line++)
+    for (int16_t line = 0; line < static_cast<int16_t>(digitsFont.height); line++)
     {
-        for (int16_t column = 0; column < digitsFont.width; column++)
+        for (int16_t column = 0; column < static_cast<int16_t>(digitsFont.width); column++)
         {
             // To determine whether the font background color and screen background color is consistent
             if (onBlack)
@@ -134,7 +154,7 @@ void OLED0in91::drawDigit(int16_t x, int16_t y, const uint8_t digit, bool white,
 
 void OLED0in91::setPixel(int16_t x, int16_t y, bool white)
 {
-    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height)
+    if (x < 0 || y < 0 || x >= static_cast<int16_t>(canvas.width) || y >= static_cast<int16_t>(canvas.height))
     {
         return;
     }

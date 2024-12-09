@@ -26,7 +26,7 @@ class GyroDrive
 
     GyroDriveResult homeAllAxis(); // Synchronous
     GyroDriveResult moveToDegree(double rollDegree, double pitchDegree); // Ansyc
-    void moveSteps(int32_t numStepsRoll, int32_t numStepsPitch, bool inhibitSpeedChange = false); // Ansyc
+    void moveSteps(int32_t numStepsRoll, int32_t numStepsPitch, bool correctPitchForRoll, bool inhibitSpeedChange = false); // Ansyc
 
     void runAllAxes();
     void stopAllAxes();

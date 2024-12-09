@@ -26,5 +26,4 @@ void X25Motors::setPosition(uint8_t motorIndex, float relPos) {
         return;
     }
     x25Steppers[motorIndex]->setPosition(relPos * kX25TotalSteps);
-
 }

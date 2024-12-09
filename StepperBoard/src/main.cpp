@@ -1,7 +1,8 @@
 #include <Arduino.h>
 
-// Only if we're running on a Duemillanove...
-#if defined(__AVR_ATmega328P__)
+#define BENCHDEBUG 0
+
+#if BENCHDEBUG
 #include "BenchDebug.h"
 BenchDebug* benchDebug;
 #else
@@ -10,16 +11,15 @@ AirManager* airManager;
 #endif
 
 void setup() {
-  #if defined(__AVR_ATmega328P__)
-  benchDebug = new BenchDebug(kTachometer);
+  #if BENCHDEBUG
+  benchDebug = new BenchDebug(kGyroDrive);
   #else
   airManager = new AirManager();
   #endif
-  delay(100);
 }
 
 void loop() {
-  #if defined(__AVR_ATmega328P__)
+  #if BENCHDEBUG
   benchDebug->loop();
   #else
   airManager->loop();

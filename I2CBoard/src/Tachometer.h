@@ -10,6 +10,9 @@ class Tachometer {
 
     void displayNumber(float digits[]);
     void secondsToDigits(float seconds, float* digits);
+    inline void asyncTask() {
+        oled->asyncTask();
+    }
 
   private:
     OLED0in91* oled;

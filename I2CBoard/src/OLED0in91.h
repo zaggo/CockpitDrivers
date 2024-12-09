@@ -23,6 +23,9 @@ class OLED0in91
 
         void displayCanvas();
 
+        void asyncDisplayCanvas();
+        void asyncTask();
+
         void fillRectangle(uint16_t xStart, uint16_t yStart, uint16_t xEnd, uint16_t yEnd, bool white);
         void drawVerticalLine(uint16_t xStart, uint16_t yStart, uint16_t length, bool white);
         void drawDigit(int16_t x, int16_t y, const uint8_t digit, bool white, bool onBlack);
@@ -53,6 +56,8 @@ class OLED0in91
 
         // iVars
         Canvas canvas;
+        uint8_t *asyncImageBuffer;
+        uint8_t asyncLine = OLED_0in91_HEIGHT/8;
 
         // Constants
         const uint8_t IIC_CMD = 0x00;

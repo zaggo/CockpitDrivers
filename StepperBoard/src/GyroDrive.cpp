@@ -120,12 +120,13 @@ GyroDrive::GyroDriveResult GyroDrive::moveToDegree(double rollDegree, double pit
         return GyroDriveResult::notHomed;
     }
 
-    stopAllAxes();
+    // stopAllAxes();
     int32_t targetPositionRoll = static_cast<int32_t>(rollDegree * static_cast<double>(kRollTotalSteps) / static_cast<double>(DEGREE_FULL_ROTATION));
     int32_t targetPositionPitch = static_cast<int32_t>(pitchDegree * static_cast<double>(kPitchTotalSteps) / static_cast<double>(DEGREE_FULL_ROTATION));
     int32_t correctedPositionPitch = targetPositionPitch - convertPosition(roll, axes[roll]->getPosition());
     int32_t stepsToMoveRoll = calculateShortestPath(axes[roll]->getPosition(), targetPositionRoll, kRollTotalSteps);
     int32_t stepsToMovePitch = calculateShortestPath(axes[pitch]->getPosition(), correctedPositionPitch, kPitchTotalSteps);
+
 
     DEBUGLOG_PRINT("Roll Current Pos: ");
     DEBUGLOG_PRINT(axes[roll]->getPosition());
@@ -145,7 +146,7 @@ GyroDrive::GyroDriveResult GyroDrive::moveToDegree(double rollDegree, double pit
     DEBUGLOG_PRINT(" RPM: ");
     DEBUGLOG_PRINTLN(axes[pitch]->getRpm());
 
-    moveSteps(stepsToMoveRoll, stepsToMovePitch);
+    moveSteps(stepsToMoveRoll, stepsToMovePitch, true);
 
     return GyroDriveResult::success;
 }
@@ -242,7 +243,7 @@ void GyroDrive::moveDegree(int16_t rollDegree, int16_t pitchDegree, bool inhibit
 {
     int32_t numStepsRoll = (int)(static_cast<int32_t>(rollDegree) * static_cast<int32_t>(kRollTotalSteps) / DEGREE_FULL_ROTATION);
     int32_t numStepsPitch = (int)(static_cast<int32_t>(pitchDegree) * static_cast<int32_t>(kPitchTotalSteps) / DEGREE_FULL_ROTATION);
-    moveSteps(numStepsRoll, numStepsPitch, inhibitSpeedChange);
+    moveSteps(numStepsRoll, numStepsPitch, true, inhibitSpeedChange);
 }
 
 /**
@@ -254,9 +255,14 @@ void GyroDrive::moveDegree(int16_t rollDegree, int16_t pitchDegree, bool inhibit
  * @param numStepsRoll The number of steps to move for the roll axis.
  * @param numStepsPitch The number of steps to move for the pitch axis.
  */
-void GyroDrive::moveSteps(int32_t numStepsRoll, int32_t numStepsPitch, bool inhibitSpeedChange)
+void GyroDrive::moveSteps(int32_t numStepsRoll, int32_t numStepsPitch, bool correctPitchForRoll, bool inhibitSpeedChange)
 {
-    int32_t correctedPitchSteps = -numStepsRoll + numStepsPitch;
+    int32_t correctedPitchSteps;
+    if (correctPitchForRoll) {
+        correctedPitchSteps = -numStepsRoll + numStepsPitch;
+    } else {
+        correctedPitchSteps = numStepsPitch;
+    }
 
     DEBUGLOG_PRINT("Move steps Roll: ");
     DEBUGLOG_PRINT(numStepsRoll);
@@ -374,7 +380,7 @@ GyroDrive::GyroDriveResult GyroDrive::homeRollAxis()
 
     DEBUGLOG_PRINTLN("Zero adjust...");
 
-    moveSteps(zeroAdjust, 0);
+    moveSteps(zeroAdjust, 0, true);
     while (axes[roll]->getStepsLeft() != 0)
     {
         runAllAxes();
