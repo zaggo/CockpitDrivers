@@ -1,17 +1,14 @@
 #include <BenchDebug.h>
 const int kLedPin = 13;
 
-BenchDebug::BenchDebug(BenchMode mode)
+BenchDebug::BenchDebug()
 {
     Serial.begin(115200);
     Serial.println("Cockpit alive!");
 
-    if (mode & kTachometer)
-    {
-        tachometer = new Tachometer();
-        digits = new float[6];
-        Serial.println("Tachometer initialized");
-    }
+    tachometer = new Tachometer();
+    digits = new float[6];
+    Serial.println("Tachometer initialized");
 
     startTime = millis();
     lastTime = startTime;

@@ -6,8 +6,8 @@ AirManager::AirManager() {
     instance = this;
 
     // Init library on channel A and Arduino type MEGA 2560
-    messagePort = new SiMessagePort(SI_MESSAGE_PORT_DEVICE_ARDUINO_NANO, SI_MESSAGE_PORT_CHANNEL_I, new_message_callback);
-    messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"Initialize I2C driver on Port I...");
+    messagePort = new SiMessagePort(SI_MESSAGE_PORT_DEVICE_ARDUINO_NANO, SI_MESSAGE_PORT_CHANNEL_O, new_message_callback);
+    messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"Initialize I2C driver on Port O...");
 
     tachometer = new Tachometer();
     messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String)"Tachometer initialized");

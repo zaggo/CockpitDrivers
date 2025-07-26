@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define BENCHDEBUG 0
+#define BENCHDEBUG 1
 
 #if BENCHDEBUG
 #include "BenchDebug.h"
@@ -12,7 +12,7 @@ AirManager* airManager;
 
 void setup() {
   #if BENCHDEBUG
-  benchDebug = new BenchDebug(kGyroDrive);
+  benchDebug = new BenchDebug(kHSI);
   #else
   airManager = new AirManager();
   #endif
