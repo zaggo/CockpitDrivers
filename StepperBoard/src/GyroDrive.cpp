@@ -241,8 +241,8 @@ uint32_t GyroDrive::convertPosition(Axis fromAxis, uint32_t steps)
  */
 void GyroDrive::moveDegree(int16_t rollDegree, int16_t pitchDegree, bool inhibitSpeedChange)
 {
-    int32_t numStepsRoll = (int)(static_cast<int32_t>(rollDegree) * static_cast<int32_t>(kRollTotalSteps) / DEGREE_FULL_ROTATION);
-    int32_t numStepsPitch = (int)(static_cast<int32_t>(pitchDegree) * static_cast<int32_t>(kPitchTotalSteps) / DEGREE_FULL_ROTATION);
+    int32_t numStepsRoll = static_cast<int32_t>(rollDegree) * static_cast<int32_t>(kRollTotalSteps) / DEGREE_FULL_ROTATION;
+    int32_t numStepsPitch = static_cast<int32_t>(pitchDegree) * static_cast<int32_t>(kPitchTotalSteps) / DEGREE_FULL_ROTATION;
     moveSteps(numStepsRoll, numStepsPitch, true, inhibitSpeedChange);
 }
 
@@ -351,7 +351,7 @@ GyroDrive::GyroDriveResult GyroDrive::homeRollAxis()
         return GyroDriveResult::homingError;
     }
 
-    axes[roll]->setRpm(kPitchMinRpm);
+    axes[roll]->setRpm(kRollMinRpm);
     axes[pitch]->setRpm(kPitchMinRpm);
 
     DEBUGLOG_PRINTLN("Slow search end of zero state");
@@ -372,7 +372,7 @@ GyroDrive::GyroDriveResult GyroDrive::homeRollAxis()
     }
     uint32_t zeroStartPosition = axes[roll]->getPosition();
 
-    axes[roll]->setRpm(kPitchMaxRpm);
+    axes[roll]->setRpm(kRollMaxRpm);
     axes[pitch]->setRpm(kPitchMaxRpm);
 
     // The real zero is in the middle of the zeroStart and zeroEnd

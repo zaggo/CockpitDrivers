@@ -12,7 +12,7 @@ AirManager* airManager;
 
 void setup() {
   #if BENCH_DEBUG
-  benchDebug = new BenchDebug(kTachometer);
+  benchDebug = new BenchDebug();
   #else
   airManager = new AirManager();
   #endif

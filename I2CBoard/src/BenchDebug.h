@@ -3,15 +3,9 @@
 #include <Arduino.h>
 #include "Tachometer.h"
 
-enum BenchMode {
-    kTachometer = 1 << 0,
-
-    kAll = kTachometer
-};
-
 class BenchDebug {
     public:
-        BenchDebug(BenchMode mode);
+        BenchDebug();
         ~BenchDebug();
 
         void loop();
