@@ -2,6 +2,8 @@
 #define CONFIGURATION_H
 
 #include <Arduino.h>
+#include <Wire.h>
+#include <avr/pgmspace.h>
 
 // Gyro Configuration
 const uint8_t kRollPin1 = 51;
@@ -31,15 +33,13 @@ const double kAdjustmentFactor = 0.76923077;
 
 // X26.168 Configuration
 const uint16_t kX25TotalSteps = 315*3;
-const uint8_t kX25MotorCount = 4;
+const uint8_t kX25MotorCount = 5;
 const uint8_t kX25MotorPins[kX25MotorCount][4] = {
     {22, 24, 28, 26},
     {29, 27, 23, 25},
     {30, 32, 36, 34},
-    {31, 33, 37, 35}
-    // {29, 27, 25, 23},
-    // {22, 24, 26, 28},
-    // {30, 32, 34, 36},
-    // {31, 33, 35, 37}
+    {31, 33, 37, 35},
+    {45, 43, 41, 39}
 };
+
 #endif // CONFIGURATION_H

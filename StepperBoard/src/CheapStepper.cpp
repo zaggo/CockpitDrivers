@@ -119,7 +119,7 @@ void CheapStepper::run(uint32_t currentMicros) {
       stepCCW();
       stepsLeft++;
     } else {
-      off();
+      // off();
     }
     lastStepTime = currentMicros;
    }
