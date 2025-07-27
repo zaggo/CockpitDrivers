@@ -2,7 +2,6 @@
 #define CONFIGURATION_H
 
 #include <Arduino.h>
-#include <Wire.h>
 #include <avr/pgmspace.h>
 
 // Gyro Configuration
@@ -40,60 +39,6 @@ const uint8_t kX25MotorPins[kX25MotorCount][4] = {
     {30, 32, 36, 34},
     {31, 33, 37, 35},
     {45, 43, 41, 39}
-};
-
-// HSI Configuration
-
-const uint8_t kVorServoPin = A3;
-const uint8_t kFromToServoPin = A4;
-const uint8_t kGSServoPin = A5;
-
-enum HSIAxis {
-    vor = 0,
-    compass,
-    bug,
-    hsiAxisCount
-    };
-
-enum PinKeys {
-    kPin1 = 0,
-    kPin2,
-    kPin3,
-    kPin4,
-    kZeroedPin,
-    pinKeyCount
-};
-
-enum RpmKeys {
-    kMaxRpm = 0,
-    kMinRpm,
-    rpmKeyCount
-};
-
-const uint8_t kMotorPins[HSIAxis::hsiAxisCount][PinKeys::pinKeyCount] = {
-    // VOR
-    {2, 3, 4, 5, A0},
-    // Compass
-    {6, 7, 8, 9, A1},
-    // Bug
-    {10, 11, 12, 13, A2}
-};
-
-const uint32_t kTotalSteps[HSIAxis::hsiAxisCount] = {
-    4096L, 4096L, 4096L
-};
-
-const uint16_t kZeroAdjustDegree[HSIAxis::hsiAxisCount] = {
-    0, 0, 0
-};
-
-const double kRpmLimits[HSIAxis::hsiAxisCount][RpmKeys::rpmKeyCount] = {
-    // VOR
-    {10.0, 4.0},
-    // Compass
-    {14.0, 4.0},
-    // Bug
-    {14.0, 4.0}
 };
 
 #endif // CONFIGURATION_H
