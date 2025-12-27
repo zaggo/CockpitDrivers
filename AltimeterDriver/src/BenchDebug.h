@@ -4,7 +4,7 @@
 
 #if BENCHDEBUG
 #include <Arduino.h>
-#include "HSI.h"
+#include "Altimeter.h"
 
 class BenchDebug {
     public:
@@ -14,14 +14,19 @@ class BenchDebug {
         void loop();
     private:
         void handleUserInput();
-        bool handleHSIInput(String command);
+        bool handleAltimeterInput(String command);
 
         String inputBuffer;
+                
+        uint32_t fetchPressureRatio = 0L;
+        float lastPressureRatio = -1.0f;
+
+        float currentHeightInFeet = 0.0f;
 
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;
 
-        HSI* hsi;
+        Altimeter* altimeter;
 };
 #endif
 #endif // BENCHDEBUG_H

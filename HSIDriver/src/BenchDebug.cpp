@@ -1,5 +1,5 @@
-#if BENCHDEBUG
 #include <BenchDebug.h>
+#if BENCHDEBUG
 const int kLedPin = 13;
 
 BenchDebug::BenchDebug()
@@ -39,6 +39,12 @@ bool BenchDebug::handleHSIInput(String command) {
         float degrees = rString.toFloat();
         hsi->moveToDegree(cdi, degrees);
         return true;
+    } else if (command.startsWith("sd")) {
+        String rString = command.substring(2);
+        rString.trim();
+        int32_t steps = rString.toInt();
+        hsi->moveSteps(cdi, steps, true);
+        return true;
     } else if (command.startsWith("ho")) {
         String rString = command.substring(2);
         rString.trim();
@@ -55,11 +61,23 @@ bool BenchDebug::handleHSIInput(String command) {
         float degrees = rString.toFloat();
         hsi->moveToDegree(compass, degrees);
         return true;
+    } else if (command.startsWith("so")) {
+        String rString = command.substring(2);
+        rString.trim();
+        int32_t steps = rString.toInt();
+        hsi->moveSteps(compass, steps, true);
+        return true;
     } else if (command.startsWith("hd")) {
         String rString = command.substring(2);
         rString.trim();
         float degrees = rString.toFloat();
         hsi->moveToDegree(hdg,-degrees);
+        return true;
+    } else if (command.startsWith("sh")) {
+        String rString = command.substring(2);
+        rString.trim();
+        int32_t steps = rString.toInt();
+        hsi->moveSteps(hdg, steps, true);
         return true;
     } else if (command.startsWith("vo")) {
         String rString = command.substring(2);
@@ -115,6 +133,9 @@ bool BenchDebug::handleHSIInput(String command) {
         Serial.println(F("ga <degrees>: Move ONLY the Glidescope needle servo 1 by the given degrees."));
         Serial.println(F("gb <degrees>: Move OMLY the Glidescope needle servo 2 by the given degrees."));
         Serial.println(F("ft <value>: 0 means 'no nav', 1 means 'from', 2 means 'to'."));
+        Serial.println(F("sd <steps>: Move the CDI axis by the given steps (positive or negative)."));
+        Serial.println(F("so <steps>: Move the Compass axis by the given steps (positive or negative)."));
+        Serial.println(F("sh <steps>: Move the HDG axis by the given steps (positive or negative)."));
         return true;
     }       
     return false;

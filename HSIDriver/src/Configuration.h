@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+#define BENCHDEBUG 0
+
 const uint8_t kMCP23017Address = 0x20;
 
 const uint8_t kCDIEncoderAPin = 3;
@@ -54,9 +56,10 @@ const uint32_t kTotalSteps[hsiAxisCount] = {
 };
 
 const int16_t kZeroAdjustDegree[hsiAxisCount] = {
-    92, // CDI
-    128, // Compass
-    -115 // HDG
+    -90,85,-11
+    // 92, // CDI
+    // 128, // Compass
+    // -115 // HDG
 };
 
 const double kServoAdjustDegree[servoCount] = {
@@ -90,11 +93,11 @@ const double kServoMaximumDegree[servoCount] = {
 
 const double kRpmLimits[hsiAxisCount][rpmKeyCount] = {
     // CDI
-    {14.0, 4.0},
+    {12.0, 10.0},
     // Compass
-    {14.0, 4.0},
+    {12.0, 10.0},
     // Bug
-    {14.0, 4.0}
+    {12.0, 10.0}
 };
 
 #endif // CONFIGURATION_H

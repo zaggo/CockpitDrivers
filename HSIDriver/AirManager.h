@@ -21,9 +21,6 @@ class AirManager {
 
         SiMessagePort* messagePort;
         HSI* hsi;
-
-        float setDegCDI= 0.;
-        float setDegCompass= 0.;
 };
 
 #endif // AIRMANAGER_H

@@ -18,22 +18,8 @@ public:
         success = 0,
         homingError,
         notHomed,
-        invalidId,
-        homingTimeout,
-        axisStateReached
+        invalidId
         };
-    enum HomingPhase {
-        unknown = 0,
-        leaveZero,
-        searchZero,
-        searchZeroEnd,
-        returnToZeroEnd,
-        searchZeroStart,
-        moveToTrueZero,
-        moveToAdjustedZero,
-        homed,
-        timeout
-    };
 
 public:
     HSI();
@@ -49,7 +35,6 @@ public:
     HSIDriveResult homeAxis(HSIAxis axis); // Synchronous
     HSIDriveResult moveToDegree(double cdiDegree, double compassDegree, double hdgDegree, double vorOffset, FromTo fromTo, double vsiOffset); // Ansyc
     HSIDriveResult moveToDegree(HSIAxis axis, double degree);
-    void moveSteps(HSIAxis axis, int16_t steps, bool synchron = false);
     HSIDriveResult moveServo(ServoId id, double degree);
 
     int16_t getCdiEncoder() { return cdiEncoder; }
@@ -66,29 +51,21 @@ public:
     volatile bool currentCdiEncoderButtonState;
     volatile bool currentCompEncoderButtonState;
 
-    String errorName(HSIDriveResult result);
-
 private:
     HSIDriveResult lookForZeroChange(HSIAxis axis, int32_t degree, bool targetZeroedState); // Synchronous
     void fetchZeroedState(HSIAxis axis); 
+    void moveSteps(HSIAxis axis, int16_t steps, bool synchron = false);
     void moveDegree(HSIAxis axis, int16_t degree, bool synchron = false);
     int32_t calculateShortestPath(HSIAxis axis, int32_t targetPosition);
     uint32_t normalizePosition(int32_t position, uint32_t totalSteps);
     String axisName(HSIAxis axis);
     String servoName(ServoId id);
     void sendMotorData();
-    HSIDriveResult nextHomingState(HSIAxis axis);
-    bool checkAllHomed();
-    HSIDriveResult lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZeroedState);
-    void resetPositionAndBacklash(HSIAxis axis);
-
 private:
     MCP23017 *mcp;
 
     Servo* servos[servoCount];
     CheapStepper* axes[hsiAxisCount];
-    HomingPhase homingState[hsiAxisCount];
-    uint32_t zeroEndPosition[hsiAxisCount];
 
     uint8_t cdiPattern = 0;
     uint8_t hdgPattern = 0;

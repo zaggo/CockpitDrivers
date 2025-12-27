@@ -1,10 +1,8 @@
 #ifndef BENCHDEBUG_H
 #define BENCHDEBUG_H
-#include "Configuration.h"
-
-#if BENCHDEBUG
 #include <Arduino.h>
-#include "HSI.h"
+#include "Configuration.h"
+#include "Servos.h"
 
 class BenchDebug {
     public:
@@ -14,14 +12,13 @@ class BenchDebug {
         void loop();
     private:
         void handleUserInput();
-        bool handleHSIInput(String command);
 
         String inputBuffer;
 
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;
 
-        HSI* hsi;
+        Servos* servos;
 };
-#endif
+
 #endif // BENCHDEBUG_H

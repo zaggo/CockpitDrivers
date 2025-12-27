@@ -27,7 +27,7 @@
 #include "Arduino.h"
 #include "CheapStepper.h"
 
-CheapStepper::CheapStepper(uint32_t stepsBacklash, bool inversed) : pins{8, 9, 10, 11}, stepsBacklash(stepsBacklash), inversed(inversed)
+CheapStepper::CheapStepper(bool inversed) : pins{8, 9, 10, 11}, inversed(inversed)
 {
   for (int pin = 0; pin < 4; pin++)
   {
@@ -35,7 +35,7 @@ CheapStepper::CheapStepper(uint32_t stepsBacklash, bool inversed) : pins{8, 9, 1
   }
 }
 
-CheapStepper::CheapStepper(uint8_t in1, uint8_t in2, uint8_t in3, uint8_t in4, uint32_t stepsBacklash, bool inversed) : pins{in1, in2, in3, in4}, stepsBacklash(stepsBacklash), inversed(inversed)
+CheapStepper::CheapStepper(uint8_t in1, uint8_t in2, uint8_t in3, uint8_t in4, bool inversed) : pins{in1, in2, in3, in4}, inversed(inversed)
 {
   for (uint8_t pin = 0; pin < 4; pin++)
   {
@@ -43,20 +43,47 @@ CheapStepper::CheapStepper(uint8_t in1, uint8_t in2, uint8_t in3, uint8_t in4, u
   }
 }
 
-CheapStepper::CheapStepper(uint8_t *patternOut, uint32_t stepsBacklash, bool inversed) : pins{0xff, 0xff, 0xff, 0xff}, stepsBacklash(stepsBacklash), inversed(inversed)
+CheapStepper::CheapStepper(uint8_t *patternOut, bool inversed) : pins{0xff, 0xff, 0xff, 0xff}, inversed(inversed)
 {
   this->patternOut = patternOut;
-}
-
-void CheapStepper::resetPosition(uint32_t position)
-{
-  this->position = position;
 }
 
 uint32_t CheapStepper::setRpm(double rpm)
 {
   delay = calcDelay(rpm);
   return delay;
+}
+
+void CheapStepper::move(bool clockwise, uint32_t numSteps)
+{
+  for (uint32_t n = 0; n < numSteps; n++)
+  {
+    step(clockwise);
+  }
+}
+
+void CheapStepper::moveTo(bool clockwise, int32_t toStep)
+{
+  // keep to 0-(totalSteps-1) range
+  toStep %= totalSteps;
+  while (position != toStep)
+  {
+    step(clockwise);
+  }
+}
+
+void CheapStepper::moveDegrees(bool clockwise, uint16_t deg)
+{
+  int nSteps = static_cast<uint32_t>(deg) * totalSteps / 360L;
+  move(clockwise, nSteps);
+}
+
+void CheapStepper::moveToDegree(bool clockwise, uint16_t deg)
+{
+  // keep to 0-359 range
+  deg %= 360;
+  uint32_t toStep = static_cast<uint32_t>(deg) * totalSteps / 360L;
+  moveTo(clockwise, toStep);
 }
 
 // NON-BLOCKING MOVES
@@ -66,19 +93,42 @@ void CheapStepper::newMove(bool clockwise, uint32_t numSteps, uint32_t currentMi
   // numSteps sign ignored
   // stepsLeft signed positive if clockwise, neg if ccw
 
-  if (clockwise != lastDirectionClockwise)
-  { // direction change
-    unusedBacklashSteps = stepsBacklash - unusedBacklashSteps;
-  }
-
   if (clockwise)
-    stepsLeft = static_cast<int32_t>(numSteps + unusedBacklashSteps);
+    stepsLeft = static_cast<int32_t>(numSteps);
   else
-    stepsLeft = -static_cast<int32_t>(numSteps + unusedBacklashSteps);
-
-  lastDirectionClockwise = clockwise;
+    stepsLeft = -static_cast<int32_t>(numSteps);
 
   lastStepTime = currentMicros;
+}
+
+void CheapStepper::newMoveTo(bool clockwise, uint32_t toStep, uint32_t currentMicros)
+{
+  // keep toStep in 0-(totalSteps-1) range
+  toStep %= totalSteps;
+
+  if (clockwise)
+    stepsLeft = static_cast<int32_t>(abs(toStep - position));
+  // clockwise: simple diff, always pos
+  else
+    stepsLeft = -(static_cast<int32_t>(totalSteps) - static_cast<int32_t>(abs(toStep - position)));
+  // counter-clockwise: totalSteps - diff, made neg
+
+  lastStepTime = currentMicros;
+}
+
+void CheapStepper::newMoveDegrees(bool clockwise, uint16_t deg)
+{
+  uint32_t nSteps = static_cast<uint32_t>(deg) * totalSteps / 360L;
+  newMove(clockwise, nSteps);
+}
+
+void CheapStepper::newMoveToDegree(bool clockwise, uint16_t deg)
+{
+  // keep to 0-359 range
+  deg %= 360;
+
+  uint32_t toStep = static_cast<int32_t>(deg) * totalSteps / 360L;
+  newMoveTo(clockwise, toStep);
 }
 
 void CheapStepper::run(uint32_t currentMicros)
@@ -162,7 +212,10 @@ void CheapStepper::seqCW()
       seqN = 0; // roll over to A seq
   }
   seq(seqN);
-  incrementPosition();
+  position++; // track miniSteps
+  // if (position >= totalSteps){
+  //   position = 0; // keep stepN within 0-(totalSteps-1)
+  // }
 }
 
 void CheapStepper::seqCCW()
@@ -181,7 +234,15 @@ void CheapStepper::seqCCW()
   }
   seq(seqN);
 
-  decrementPosition();
+  // track miniSteps
+  // if (position == 0)
+  // {
+  //   //   position = totalSteps-1; // keep stepN within 0-(totalSteps-1)
+  // }
+  // else
+  // {
+    position--;
+  // }
 }
 
 void CheapStepper::seq(uint8_t seqNum)

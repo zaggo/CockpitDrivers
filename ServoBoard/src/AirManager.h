@@ -2,9 +2,8 @@
 #define AIRMANAGER_H
 
 #include <Arduino.h>
-#include "Configuration.h"
 #include <si_message_port.hpp>
-#include "HSI.h"
+#include "Servos.h"
 
 class AirManager {
     public:
@@ -18,12 +17,9 @@ class AirManager {
 
     private:
         static void new_message_callback(uint16_t message_id, struct SiMessagePortPayload* payload);
+        Servos* servos; // Pointer to the Servos class instance
 
         SiMessagePort* messagePort;
-        HSI* hsi;
-
-        float setDegCDI= 0.;
-        float setDegCompass= 0.;
 };
 
 #endif // AIRMANAGER_H

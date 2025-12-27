@@ -1,5 +1,6 @@
 #include <Arduino.h>
-#include "Configuration.h"
+
+#define BENCHDEBUG 0
 
 #if BENCHDEBUG
 #include "BenchDebug.h"

@@ -34,26 +34,62 @@ class CheapStepper
 {
 
 public: 
-  CheapStepper(uint32_t stepsBacklash = 0, bool inversed = false);
-  CheapStepper (uint8_t in1, uint8_t in2, uint8_t in3, uint8_t in4, uint32_t stepsBacklash = 0, bool inversed = false);
-  CheapStepper (uint8_t* patternOut, uint32_t stepsBacklash = 0,  bool inversed = false);
+  CheapStepper(bool inversed = false);
+  CheapStepper (uint8_t in1, uint8_t in2, uint8_t in3, uint8_t in4, bool inversed = false);
+  CheapStepper (uint8_t* patternOut, bool inversed = false);
 
   uint32_t setRpm(double rpm); // sets speed (10-24 rpm, hi-low torque)
   // <6 rpm blocked in code, may overheat
   // 23-24rpm may skip
 
   void set4076StepMode() { totalSteps = 4076; }
-  void setTotalSteps (uint32_t numSteps) { totalSteps = numSteps; } // allows custom # of steps (usually 4076)
+  void setTotalSteps (uint32_t numSteps) { totalSteps = numSteps; }
+  // allows custom # of steps (usually 4076)
+
+  // blocking! (pauses arduino until move is done)
+  void move (bool clockwise, uint32_t numSteps); // 4096 steps = 1 revolution
+  void moveTo (bool clockwise, int32_t toStep); // move to specific step position
+  void moveDegrees (bool clockwise, uint16_t deg);
+  void moveToDegree (bool clockwise, uint16_t deg);
+
+  void moveCW (uint32_t numSteps) { move (true, numSteps); }
+  void moveCCW (uint32_t numSteps) { move (false, numSteps); }
+  void moveToCW (int32_t toStep) { moveTo (true, toStep); }
+  void moveToCCW (int32_t toStep) { moveTo (false, toStep); }
+  void moveDegreesCW (uint16_t deg) { moveDegrees (true, deg); }
+  void moveDegreesCCW (uint16_t deg) { moveDegrees (false, deg); }
+  void moveToDegreeCW (uint16_t deg) { moveToDegree (true, deg); }
+  void moveToDegreeCCW (uint16_t deg) { moveToDegree (false, deg); }
 
 
   // non-blocking versions of move()
   // call run() in loop to keep moving
+
+  void newMove (bool clockwise, uint32_t numSteps, uint32_t uS = micros());
+  void newMoveTo (bool clockwise, uint32_t toStep, uint32_t uS = micros());
+  void newMoveDegrees (bool clockwise, uint16_t deg);
+  void newMoveToDegree (bool clockwise, uint16_t deg);
+
   void run(uint32_t uS = micros());
   void stop();
   void off();
 
-  void newMove (bool clockwise, uint32_t numSteps, uint32_t uS = micros());
+  void newMoveCW(uint32_t numSteps) { newMove(true, numSteps); }
+  void newMoveCCW(uint32_t numSteps) { newMove(false, numSteps); }
+  void newMoveToCW(uint32_t toStep) { newMoveTo(true, toStep); }
+  void newMoveToCCW(uint32_t toStep) { newMoveTo(false, toStep); }
+  void newMoveDegreesCW(uint16_t deg) { newMoveDegrees(true, deg); }
+  void newMoveDegreesCCW(uint16_t deg) { newMoveDegrees(false, deg); }
+  void newMoveToDegreeCW(uint16_t deg) { newMoveToDegree(true, deg); }
+  void newMoveToDegreeCCW(uint16_t deg) { newMoveToDegree(false, deg); }
+
+
+
   void step(bool clockwise);
+  // move 1 step clockwise or counter-clockwise
+
+  void stepCW () { step (true); } // move 1 step clockwise
+  void stepCCW () { step (false); } // move 1 step counter-clockwise
 
   int32_t getPosition() { return position; } // returns current miniStep position
   uint32_t getDelay() { return delay; } // returns current delay (microseconds)
@@ -62,38 +98,15 @@ public:
 
   // Extension
   uint32_t getTotalSteps() { return totalSteps; }
-  void resetPosition(uint32_t position = 0L);
+  void resetPosition(uint32_t position = 0L) { this -> position = position; }
   void setDelay(uint32_t _delay) { delay = _delay; }
-  uint32_t getBacklashSteps() { return stepsBacklash; }
-  bool lastDirectionIsClockwise() { return lastDirectionClockwise; }
 
 private:
-  void stepCW () { step (true); } // move 1 step clockwise
-  void stepCCW () { step (false); } // move 1 step counter-clockwise
 
   uint32_t calcDelay(double rpm); // calcs microsecond step delay for given rpm
   double calcRpm(uint32_t _delay); // calcs rpm for given delay in microseconds
   double calcRpm(){
     return calcRpm(delay); // calcs rpm from current delay
-  }
-  int32_t positionPlus(int32_t offset) {
-    return (position + offset) % totalSteps;
-  } // returns position + offset wrapped to totalSteps
-
-  void incrementPosition() {
-    if (unusedBacklashSteps > 0) {
-      unusedBacklashSteps--;
-    } else {
-      position = (position + 1) % totalSteps;
-    }
-  }
-
-  void decrementPosition() {
-    if (unusedBacklashSteps > 0) {
-      unusedBacklashSteps--;
-    } else {
-      position = (position == 0) ? (totalSteps - 1) : (position - 1);
-    } 
   }
 
   void seqCW();
@@ -104,8 +117,7 @@ private:
 
   uint8_t* patternOut = NULL; // pointer to pattern buffer
 
-  uint32_t stepsBacklash; // to compensate for steps lost when changing direction
-  bool inversed; // for inverting stepper direction
+  bool inversed = false; // for inverting stepper direction
 
   int32_t position = 0; // keeps track of step position
   // 0-4095 (4096 mini-steps / revolution) or maybe 4076...
@@ -121,9 +133,6 @@ private:
   // variables for non-blocking moves:
   uint32_t lastStepTime; // time in microseconds that last step happened
   int32_t stepsLeft = 0; // steps left to move, neg for counter-clockwise
-
-  bool lastDirectionClockwise = true; // last direction moved
-  uint32_t unusedBacklashSteps = 0; // unused backlash steps
 
   bool melde=false;
 };

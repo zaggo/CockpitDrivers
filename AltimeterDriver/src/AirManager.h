@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "Configuration.h"
 #include <si_message_port.hpp>
-#include "HSI.h"
+#include "Altimeter.h"
 
 class AirManager {
     public:
@@ -20,10 +20,8 @@ class AirManager {
         static void new_message_callback(uint16_t message_id, struct SiMessagePortPayload* payload);
 
         SiMessagePort* messagePort;
-        HSI* hsi;
-
-        float setDegCDI= 0.;
-        float setDegCompass= 0.;
+        Altimeter* altimeter;
+        float currentPressure = 0.0f;
 };
 
 #endif // AIRMANAGER_H
