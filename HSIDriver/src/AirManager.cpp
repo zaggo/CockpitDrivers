@@ -32,15 +32,16 @@ AirManager::~AirManager()
 
 void AirManager::loop()
 {
-    bool wasHomed = hsi != NULL && hsi->isHomed;
+    //bool wasHomed = hsi != NULL && hsi->isHomed;
     messagePort->Tick();
     if (hsi != NULL)
     {
         hsi->loop();
-        if (!wasHomed && hsi->isHomed)
-        {
-            messagePort->SendMessage(kHome);
-        }
+        // if (!wasHomed && hsi->isHomed)
+        // {
+        //     messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String) "SendMessge for All axis homed");
+        //     messagePort->SendMessage(kHome);
+        // }
         float currentSetDegCDI = static_cast<float>(hsi->getCdiEncoder());
         if (setDegCDI != currentSetDegCDI)
         {
@@ -51,6 +52,7 @@ void AirManager::loop()
         if (setDegCompass != currentSetDegCompass)
         {
             setDegCompass = currentSetDegCompass;
+            messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_ERROR, (String) "CompasEncode changed to: " + hsi->getCompEncoder());
             messagePort->SendMessage(kSetDegreesCompass, currentSetDegCompass);
         }
     }
@@ -121,6 +123,9 @@ void AirManager::new_message_callback(uint16_t message_id, struct SiMessagePortP
             instance->hsi->moveServo(vsi1Servo, 0);
             instance->hsi->moveServo(vsi2Servo, 0);
             instance->hsi->moveServo(vorServo, 0);
+
+            instance->messagePort->SendMessage(kHome);
+
             // instance->messagePort->DebugMessage(SI_MESSAGE_PORT_LOG_LEVEL_INFO, (String) "Servos homed");
         }
         break;

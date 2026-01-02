@@ -21,6 +21,10 @@ class BenchDebug {
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;
 
+        double combiCompassDegree = 0.0;
+        double combiHdgDegree = 0.0;
+        double combiCdiDegree = 0.0;
+
         HSI* hsi;
 };
 #endif

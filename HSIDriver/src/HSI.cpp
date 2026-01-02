@@ -86,7 +86,7 @@ HSI::HSI()
 
     axes[compass] = new CheapStepper(&compPattern, 15, true);
     axes[cdi] = new CheapStepper(&cdiPattern, 28, true);
-    axes[hdg] = new CheapStepper(&hdgPattern, 75, false);
+    axes[hdg] = new CheapStepper(&hdgPattern, 75, true);
 
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
@@ -180,7 +180,7 @@ void HSI::loop()
         //DEBUGLOG_PRINTLN(" [cdiEncoder:" + String(cdiEncoder) + "] ");
     }
     const uint32_t debounceDelay = 50000; // microseconds
-    const uint32_t longPressDelay = 150000; // microseconds
+    const uint32_t longPressDelay = 1500000; // microseconds
 
     // Debouncing the CDI encoder push button state
     if (currentCdiEncoderButtonState != cdiEncoderButtonState && (uS - lastCdiDebounceTime) > debounceDelay)
@@ -297,8 +297,7 @@ HSI::HSIDriveResult HSI::moveToDegree(double cdiDegree, double compassDegree, do
 
 HSI::HSIDriveResult HSI::moveToDegree(HSIAxis axis, double degree)
 {
-    // DEBUGLOG_PRINT("MoveToDegree: ");
-    // DEBUGLOG_PRINT(axisName(axis));
+    DEBUGLOG_PRINT(String("MoveToDegree: ")+axisName(axis)+String(" to ")+String(degree));
     if (homingState[axis] != homed)
     {
         DEBUGLOG_PRINTLN(String(F(" >> Not Homed")));

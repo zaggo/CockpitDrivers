@@ -122,6 +122,27 @@ bool BenchDebug::handleHSIInput(String command) {
         }
         hsi->moveServo(fromToServo, fromToValue);
         return true;
+    } else if (command.startsWith("xd")) {
+        String rString = command.substring(2);
+        rString.trim();
+        double degrees = rString.toDouble();
+        combiCdiDegree = degrees;
+        hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
+        return true;
+    } else if (command.startsWith("xo")) {
+        String rString = command.substring(2);
+        rString.trim();
+        double degrees = rString.toDouble();
+        combiCompassDegree = degrees;
+        hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
+        return true;
+    } else if (command.startsWith("xh")) {
+        String rString = command.substring(2);
+        rString.trim();
+        double degrees = rString.toDouble();
+        combiHdgDegree = degrees;
+        hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
+        return true;  
     } else if (command.startsWith("?")) {
         Serial.println(F("HSI Commands:"));
         Serial.println(F("ho <axis>: Home axis, no axis = all, 0 = CDI, 1 = Comp, 2 = HDG."));
@@ -136,6 +157,9 @@ bool BenchDebug::handleHSIInput(String command) {
         Serial.println(F("sd <steps>: Move the CDI axis by the given steps (positive or negative)."));
         Serial.println(F("so <steps>: Move the Compass axis by the given steps (positive or negative)."));
         Serial.println(F("sh <steps>: Move the HDG axis by the given steps (positive or negative)."));
+        Serial.println(F("xd <degrees>: Move CDI to degrees in combined mode."));
+        Serial.println(F("xo <degrees>: Move Compass to degrees in combined mode."));
+        Serial.println(F("xh <degrees>: Move HDG to degrees in combined mode."));
         return true;
     }       
     return false;

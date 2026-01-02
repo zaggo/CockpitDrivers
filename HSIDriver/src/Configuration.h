@@ -56,7 +56,7 @@ const uint32_t kTotalSteps[hsiAxisCount] = {
 };
 
 const int16_t kZeroAdjustDegree[hsiAxisCount] = {
-    -90,85,-11
+    -90,85,11
     // 92, // CDI
     // 128, // Compass
     // -115 // HDG
