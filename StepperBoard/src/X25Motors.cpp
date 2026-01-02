@@ -27,3 +27,10 @@ void X25Motors::setPosition(uint8_t motorIndex, float relPos) {
     }
     x25Steppers[motorIndex]->setPosition(relPos * kX25TotalSteps);
 }
+
+void X25Motors::homeAllX25Steppers() {
+    for (uint8_t i = 0; i < kX25MotorCount; i++) {
+        x25Steppers[i]->zero();       // Motor gegen Anschlag fahren
+        x25Steppers[i]->setPosition(0); // Startposition setzen
+    }
+}

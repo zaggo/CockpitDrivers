@@ -1,0 +1,146 @@
+#ifndef TRANSPONDER_H
+#define TRANSPONDER_H
+
+#include "Arduino.h"
+#include <TM1637Display.h>
+#include "Configuration.h"
+#include <MCP23017.h>
+
+class Transponder
+{
+public:
+    // Transponder mode (off=0, stdby=1, on (mode A)=2, alt (mode C)=3, test=4, GND (mode S)=5, ta_only (mode S)=6, ta/ra=7)
+    enum TransponderMode
+    {
+        off = 0,
+        stdby,
+        on,
+        alt,
+        test,
+        gnd,
+        ta_only,
+        ta_ra
+    };
+
+    enum TransponderButton
+    {
+        btn_ident = 15,
+        btn_vfr = 14,
+        btn_sby = 13,
+        btn_on = 12,
+        btn_alt = 11,
+        btn_zero = 10,
+        btn_one = 9, 
+        btn_two = 8,
+        btn_three = 7,
+        btn_four = 6,
+        btn_five = 5,
+        btn_six = 4,
+        btn_seven = 3,
+        btn_eight = 2,
+        btn_nine = 1,
+        btn_pwr = 0
+    };
+
+    Transponder();
+    ~Transponder();
+
+    void tick();
+
+    void setIdent(bool ident)
+    {
+        identActive = ident;
+        isSquawkEntryMode = false;
+    }
+
+    void setSquawkCode(const String squawk) { currentSquawkCode = squawk; }
+    void setMode(TransponderMode mode) { currentMode = mode; }
+    void setBrightness(uint8_t level)
+    {
+        if (level > 7)
+            level = 7;
+        brightness = level;
+    }
+
+    void pressNumberButton(uint8_t button); // 0-9
+
+    String getSquawkCode() { return currentSquawkCode; }
+    TransponderMode getMode() { return currentMode; }
+
+    // Singleton instance
+    static Transponder *instance;
+
+    volatile bool mcpInterrupt = false;
+
+    bool identRequest = false;
+    bool squawkCodeUpdated = false;
+
+private:
+    void bufferSquawk(const String &squawk);
+    void bufferMode(TransponderMode mode, bool identActive);
+    void handleInterrupt();
+    void didPressButton(TransponderButton button);
+    void didReleaseButton(TransponderButton button);
+    void commitSquawk();
+
+    #if BENCHDEBUG
+    String buttonName(TransponderButton button);
+    #endif
+private:
+    MCP23017 *mcp;
+    uint16_t currentButtonState = 0xffff;
+
+    uint8_t brightness = 3;
+
+    uint32_t pwrButtonLongPressTimer = 0L;
+    uint32_t commitTimer = 0L;
+    uint32_t identTimer = 0L;
+
+    String currentSquawkCode = "1200";
+
+    TransponderMode currentMode = stdby;
+    bool identActive = false;
+
+    String displaySquakCode = "";
+    TransponderMode displayMode = off;
+    bool displayIdentActive = false;
+    uint8_t displayBrightness = 0;
+
+    bool isSquawkEntryMode = false;
+    uint32_t squawkEntryModeTimer = 0L;
+    uint32_t squawkEntryBlinkTimer = 0L;
+    unsigned int squawkEntryPosition = 0; // 0-3
+
+    String vfrSquawkCode = "1200";
+
+    TM1637Display *display;
+    uint8_t data[kLEDDigits] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    uint8_t offData[kLEDDigits] = {SEG_G, SEG_G, SEG_G, SEG_G, SEG_G, SEG_G};
+
+    uint32_t flashTimer = 0L;
+    const uint32_t stbyFlashInterval = 1000L;       // 1 second
+    const uint32_t identFlashInterval = 250L;       // 0.25 seconds
+    const uint32_t squawkEntryTimeout = 5000L;      // 5 seconds
+    const uint32_t squawkEntryBlinkInterval = 500L; // 0.5 seconds
+
+    const uint8_t squakIndex[4] = {0, 5, 4, 3}; // Indexes in data array for squawk digits
+
+    const uint8_t SEG_SBY[2] = {
+        SEG_A | SEG_F | SEG_G | SEG_C | SEG_D,          // S
+        SEG_F | SEG_E | SEG_D | SEG_G | SEG_C | SEG_DP, // b.
+    };
+    const uint8_t SEG_ON[2] = {
+        SEG_G | SEG_E | SEG_C | SEG_D,  // o
+        SEG_E | SEG_G | SEG_C | SEG_DP, // n
+    };
+    const uint8_t SEG_AL[2] = {
+        SEG_A | SEG_F | SEG_B | SEG_G | SEG_E | SEG_C, // A
+        SEG_F | SEG_E | SEG_D | SEG_DP,                // L
+    };
+    const uint8_t SEG_ID[2] = {
+        SEG_B | SEG_C,                         // I
+        SEG_B | SEG_G | SEG_E | SEG_C | SEG_D, // d
+    };
+
+};
+#endif

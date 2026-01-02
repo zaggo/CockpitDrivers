@@ -11,6 +11,8 @@ class X25Motors {
 
         void setPosition(uint8_t motorIndex, float relPos);
         void updateAllX25Steppers();
+
+        void homeAllX25Steppers();
     private:
         SwitecX25* x25Steppers[kX25MotorCount];
 };
