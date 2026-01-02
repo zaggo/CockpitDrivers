@@ -249,7 +249,7 @@ Altimeter::AltimeterDriveResult Altimeter::nextHomingState(AltimeterAxis axis)
             axes[axis]->stop();
             axes[axis]->resetPosition();
             axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
-            int32_t zeroAdjust = static_cast<int32_t>(((zeroEndPosition[axis] - zeroStartPosition) % axes[axis]->getTotalSteps()) / 2L);
+            int32_t zeroAdjust = (zeroEndPosition[axis] - zeroStartPosition) % static_cast<int32_t>(axes[axis]->getTotalSteps()) / 2L;
             DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to true zero position, zero adjust steps: ")) + String(zeroAdjust));
             moveSteps(axis, zeroAdjust);
             homingState[axis] = moveToTrueZero;

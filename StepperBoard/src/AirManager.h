@@ -5,6 +5,7 @@
 #include "GyroDrive.h"
 #include "Configuration.h"
 #include "X25Motors.h"
+#include "Transponder.h"
 #include <si_message_port.hpp>
 
 class AirManager {
@@ -23,6 +24,7 @@ class AirManager {
         SiMessagePort* messagePort;
         GyroDrive* gyroDrive;
         X25Motors* x25Motors;
+        Transponder* transponder;
 };
 
 #endif // AIRMANAGER_H
