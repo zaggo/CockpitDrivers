@@ -145,12 +145,14 @@ void Transponder::tick()
             Serial.println("Power Button Long Pressed: Turning OFF");
             setMode(off);
             commitSquawk();
+            modeUpdated = true;
         }
         else
         {
             Serial.println("Power Button Long Pressed: Turning ON to STDBY");
             setMode(stdby);
             commitSquawk();
+            modeUpdated = true;
         }
     }
 
@@ -263,12 +265,26 @@ void Transponder::tick()
         }
     }
 
+    if (transponderLightOn != displayTransponderLightOn && !identActive)
+    {
+        if (transponderLightOn)
+        {
+            data[1] |= SEG_DP;
+        }
+        else
+        {
+            data[1] &= ~SEG_DP;
+        }
+        displayTransponderLightOn = transponderLightOn;
+        updated = true;
+    }
+
     if (brightness != displayBrightness)
     {
         display->setBrightness(brightness);
         displayBrightness = brightness;
         updated = true;
-    } 
+    }
 
     if (updated)
     {
@@ -295,7 +311,16 @@ void Transponder::didPressButton(TransponderButton button)
     switch (button)
     {
     case btn_pwr:
-        pwrButtonLongPressTimer = millis() + kPwrButtonLongPressDuration;
+        if (currentMode == off)
+        {
+            setMode(stdby);
+            commitSquawk();
+            modeUpdated = true;
+        }
+        else
+        {
+            pwrButtonLongPressTimer = millis() + kPwrButtonLongPressDuration;
+        }
         break;
     case btn_zero:
     case btn_one:
@@ -313,24 +338,30 @@ void Transponder::didPressButton(TransponderButton button)
 #if BENCHDEBUG
         setIdent(true);
         identTimer = millis() + 3000L; // IDENT active for 3 seconds
+#else
+        identRequest = true;
 #endif
         break;
     case btn_vfr:
         currentSquawkCode = vfrSquawkCode;
         bufferSquawk(currentSquawkCode);
         commitSquawk();
+        squawkCodeUpdated = true;
         break;
     case btn_sby:
         setMode(stdby);
         commitSquawk();
+        modeUpdated = true;
         break;
     case btn_on:
         setMode(on);
         commitSquawk();
+        modeUpdated = true;
         break;
     case btn_alt:
         setMode(alt);
         commitSquawk();
+        modeUpdated = true;
         break;
     }
 }
@@ -341,9 +372,6 @@ void Transponder::didReleaseButton(TransponderButton button)
     {
     case btn_pwr:
         pwrButtonLongPressTimer = 0L;
-        break;
-    case btn_ident:
-        identRequest = true;
         break;
     default:
         break;

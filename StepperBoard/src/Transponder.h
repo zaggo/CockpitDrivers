@@ -61,11 +61,16 @@ public:
             level = 7;
         brightness = level;
     }
+    void setTransponderLight(bool on)
+    {
+        transponderLightOn = on;
+    }
 
     void pressNumberButton(uint8_t button); // 0-9
 
     String getSquawkCode() { return currentSquawkCode; }
     TransponderMode getMode() { return currentMode; }
+    uint8_t getBrightness() { return brightness; }
 
     // Singleton instance
     static Transponder *instance;
@@ -74,6 +79,7 @@ public:
 
     bool identRequest = false;
     bool squawkCodeUpdated = false;
+    bool modeUpdated = false;
 
 private:
     void bufferSquawk(const String &squawk);
@@ -91,6 +97,7 @@ private:
     uint16_t currentButtonState = 0xffff;
 
     uint8_t brightness = 3;
+    bool transponderLightOn = false;
 
     uint32_t pwrButtonLongPressTimer = 0L;
     uint32_t commitTimer = 0L;
@@ -105,6 +112,7 @@ private:
     TransponderMode displayMode = off;
     bool displayIdentActive = false;
     uint8_t displayBrightness = 0;
+    bool displayTransponderLightOn = false;
 
     bool isSquawkEntryMode = false;
     uint32_t squawkEntryModeTimer = 0L;
@@ -115,7 +123,7 @@ private:
 
     TM1637Display *display;
     uint8_t data[kLEDDigits] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    uint8_t offData[kLEDDigits] = {SEG_G, SEG_G, SEG_G, SEG_G, SEG_G, SEG_G};
+    uint8_t offData[kLEDDigits] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0}; // {SEG_G, SEG_G, SEG_G, SEG_G, SEG_G, SEG_G};
 
     uint32_t flashTimer = 0L;
     const uint32_t stbyFlashInterval = 1000L;       // 1 second
@@ -127,15 +135,15 @@ private:
 
     const uint8_t SEG_SBY[2] = {
         SEG_A | SEG_F | SEG_G | SEG_C | SEG_D,          // S
-        SEG_F | SEG_E | SEG_D | SEG_G | SEG_C | SEG_DP, // b.
+        SEG_F | SEG_E | SEG_D | SEG_G | SEG_C, // b
     };
     const uint8_t SEG_ON[2] = {
         SEG_G | SEG_E | SEG_C | SEG_D,  // o
-        SEG_E | SEG_G | SEG_C | SEG_DP, // n
+        SEG_E | SEG_G | SEG_C, // n
     };
     const uint8_t SEG_AL[2] = {
         SEG_A | SEG_F | SEG_B | SEG_G | SEG_E | SEG_C, // A
-        SEG_F | SEG_E | SEG_D | SEG_DP,                // L
+        SEG_F | SEG_E | SEG_D,                // L
     };
     const uint8_t SEG_ID[2] = {
         SEG_B | SEG_C,                         // I
