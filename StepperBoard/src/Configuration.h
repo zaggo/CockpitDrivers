@@ -51,7 +51,7 @@ const uint8_t kSDA = 20;
 const uint8_t kSCL = 21;
 
 const uint8_t kMCP23017Address = 0x20; // Default I2C address
-const uint8_t kMCP23017InterruptPin = 3; // Pin connected to MCP23017 INT output
+const uint8_t kMCP23017InterruptPin = 18; // Pin connected to MCP23017 INT output
 
 const uint8_t kLEDDigits = 6;
 
