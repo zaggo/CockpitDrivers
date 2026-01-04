@@ -103,7 +103,7 @@ private:
     uint32_t commitTimer = 0L;
     uint32_t identTimer = 0L;
 
-    String currentSquawkCode = "1200";
+    String currentSquawkCode = "";
 
     TransponderMode currentMode = off;
     bool identActive = false;
@@ -128,8 +128,9 @@ private:
     uint32_t flashTimer = 0L;
     const uint32_t stbyFlashInterval = 1000L;       // 1 second
     const uint32_t identFlashInterval = 250L;       // 0.25 seconds
-    const uint32_t squawkEntryTimeout = 5000L;      // 5 seconds
+    const uint32_t squawkEntryTimeout = 3000L;      // 3 seconds
     const uint32_t squawkEntryBlinkInterval = 500L; // 0.5 seconds
+    const uint32_t pwrButtonLongPressDuration = 2000L; // 2 seconds
 
     const uint8_t squakIndex[4] = {0, 5, 4, 3}; // Indexes in data array for squawk digits
 

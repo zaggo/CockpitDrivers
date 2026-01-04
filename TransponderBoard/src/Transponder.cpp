@@ -17,6 +17,7 @@ Transponder::Transponder()
     instance = this;
     display = new TM1637Display(kTransponderClkPin, kTransponderDioPin); // Example CLK and DIO pins
     display->setBrightness(0x01);
+    currentSquawkCode = vfrSquawkCode;
     memcpy(data, offData, 6);
     display->setSegments(data, 6);
 
@@ -223,7 +224,7 @@ void Transponder::tick()
         }
     }
 
-    if (displaySquakCode != currentSquawkCode)
+    if (displaySquakCode != currentSquawkCode && currentMode != off)
     {
         displaySquakCode = currentSquawkCode;
         bufferSquawk(displaySquakCode);
@@ -295,7 +296,7 @@ void Transponder::tick()
             {
                 data[squakIndex[squawkEntryPosition]] ^= SEG_DP; // Toggle segments
             }
-            squawkEntryBlinkTimer = now + 500L;              // Blink every 0.5 seconds
+            squawkEntryBlinkTimer = now + squawkEntryBlinkInterval;              // Blink every 0.5 seconds
             updated = true;
         }
     }
@@ -339,7 +340,7 @@ void Transponder::commitSquawk()
     {
         data[squakIndex[i]] = 0x00;
     }
-    commitTimer = millis() + 200L; // Small delay before updating display
+    commitTimer = millis() + squawkEntryTimeout; // Small delay before updating display
     display->setSegments(data, kLEDDigits);
     squawkCodeUpdated = true;
 }
@@ -357,7 +358,7 @@ void Transponder::didPressButton(TransponderButton button)
         }
         else
         {
-            pwrButtonLongPressTimer = millis() + kPwrButtonLongPressDuration;
+            pwrButtonLongPressTimer = millis() + pwrButtonLongPressDuration;
         }
         break;
     case btn_zero:

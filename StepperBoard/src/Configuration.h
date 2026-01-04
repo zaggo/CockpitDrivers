@@ -7,12 +7,11 @@
 enum BenchMode {
     kGyroDrive = 1 << 0,
     kX25Motors = 1 << 1,
-    kTransponder = 1 << 2,
     kAll = 0xff
 };
 
 #define BENCHDEBUG 0
-#define BENCHDEBUG_MODE kX25Motors | kTransponder
+#define BENCHDEBUG_MODE kX25Motors 
 
 const uint32_t kHeartbeatInterval = 1000L; // 1 second
 
@@ -52,19 +51,5 @@ const uint8_t kX25MotorPins[kX25MotorCount][4] = {
     {31, 33, 37, 35},
     {45, 43, 41, 39}
 };
-
-// Transponder Configuration
-const uint8_t kTransponderClkPin = 6;
-const uint8_t kTransponderDioPin = 7;
-
-const uint8_t kSDA = 20;
-const uint8_t kSCL = 21;
-
-const uint8_t kMCP23017Address = 0x20; // Default I2C address
-const uint8_t kMCP23017InterruptPin = 18; // Pin connected to MCP23017 INT output
-
-const uint8_t kLEDDigits = 6;
-
-const uint32_t kPwrButtonLongPressDuration = 2000L; // 2 seconds
 
 #endif // CONFIGURATION_H
