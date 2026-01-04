@@ -6,13 +6,6 @@
 #include "X25Motors.h"
 #include "Transponder.h"
 
-enum BenchMode {
-    kGyroDrive = 1 << 0,
-    kX25Motors = 1 << 1,
-    kTransponder = 1 << 2,
-    kAll = 0xff
-};
-
 class BenchDebug {
     public:
         BenchDebug(BenchMode mode);

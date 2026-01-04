@@ -105,7 +105,7 @@ private:
 
     String currentSquawkCode = "1200";
 
-    TransponderMode currentMode = stdby;
+    TransponderMode currentMode = off;
     bool identActive = false;
 
     String displaySquakCode = "";

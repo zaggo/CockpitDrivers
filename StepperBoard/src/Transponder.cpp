@@ -1,5 +1,7 @@
 #include "Transponder.h"
-// #include <Wire.h>
+#include "DebugLog.h"
+#include <Wire.h>
+
 
 Transponder *Transponder::instance = nullptr;
 // ISR(PCINT1_vect) // Comp Interrupt
@@ -55,7 +57,21 @@ Transponder::Transponder()
 
 Transponder::~Transponder()
 {
-    instance = NULL;
+    detachInterrupt(digitalPinToInterrupt(kMCP23017InterruptPin));
+    
+    if (display)
+    {
+        delete display;
+        display = nullptr;
+    }
+    
+    if (mcp)
+    {
+        delete mcp;
+        mcp = nullptr;
+    }
+    
+    instance = nullptr;
 }
 
 void Transponder::pressNumberButton(uint8_t button)
@@ -83,11 +99,14 @@ void Transponder::pressNumberButton(uint8_t button)
 
 void Transponder::bufferSquawk(const String &squawk)
 {
-    if (squawk.length() != 4)
-        return; // Invalid squawk code length
+    if (squawk.length() != 4 || !display)
+        return; // Invalid squawk code length or display not initialized
 
     for (int i = 0; i < 4; ++i)
     {
+        if (squakIndex[i] >= kLEDDigits)
+            continue; // Bounds check to prevent buffer overflow
+        
         char c = squawk.charAt(i);
         if (c >= '0' && c <= '9')
         {
@@ -104,28 +123,40 @@ void Transponder::bufferMode(TransponderMode mode, bool identActive)
 {
     if (identActive)
     {
-        data[2] = SEG_ID[0];                        // 'I'
-        data[1] = SEG_ID[1];                        // 'd'
+        if (2 < kLEDDigits && 1 < kLEDDigits) // Bounds check
+        {
+            data[2] = SEG_ID[0];                        // 'I'
+            data[1] = SEG_ID[1];                        // 'd'
+        }
         flashTimer = millis() + identFlashInterval; // Start flashing timer
         return;
     }
     switch (mode)
     {
     case stdby:
-        data[2] = SEG_SBY[0];                      // 'S'
-        data[1] = SEG_SBY[1];                      // 'b'
+        if (2 < kLEDDigits && 1 < kLEDDigits) // Bounds check
+        {
+            data[2] = SEG_SBY[0];                      // 'S'
+            data[1] = SEG_SBY[1];                      // 'b'
+        }
         flashTimer = millis() + stbyFlashInterval; // Start flashing timer
         return;
     case off:
-        memcpy(data, offData, kLEDDigits); // All segments '-' (off)
+        memcpy(data, offData, sizeof(data) < sizeof(offData) ? sizeof(data) : sizeof(offData)); // Safe copy
         return;
     case on:
-        data[2] = SEG_ON[0]; // 'O'
-        data[1] = SEG_ON[1]; // 'n'
+        if (2 < kLEDDigits && 1 < kLEDDigits) // Bounds check
+        {
+            data[2] = SEG_ON[0]; // 'O'
+            data[1] = SEG_ON[1]; // 'n'
+        }
         return;
     case alt:
-        data[2] = SEG_AL[0]; // 'A'
-        data[1] = SEG_AL[1]; // 'L'
+        if (2 < kLEDDigits && 1 < kLEDDigits) // Bounds check
+        {
+            data[2] = SEG_AL[0]; // 'A'
+            data[1] = SEG_AL[1]; // 'L'
+        }
         return;
     default:
         return;
@@ -142,14 +173,14 @@ void Transponder::tick()
         pwrButtonLongPressTimer = 0L;
         if (currentMode != off)
         {
-            Serial.println("Power Button Long Pressed: Turning OFF");
+            DEBUGLOG_PRINTLN(F("Power Button Long Pressed: Turning OFF"));
             setMode(off);
             commitSquawk();
             modeUpdated = true;
         }
         else
         {
-            Serial.println("Power Button Long Pressed: Turning ON to STDBY");
+            DEBUGLOG_PRINTLN(F("Power Button Long Pressed: Turning ON to STDBY"));
             setMode(stdby);
             commitSquawk();
             modeUpdated = true;
@@ -160,8 +191,6 @@ void Transponder::tick()
     {
         if (mcpInterrupt)
         {
-            // Serial.println("MCP23017 Interrupt detected");
-            // mcpInterrupt = false;
             handleInterrupt();
         }
         else
@@ -224,7 +253,10 @@ void Transponder::tick()
             // Flash the ident segments off and on every 0.25 seconds
             for (int i = 0; i < 4; ++i)
             {
-                data[squakIndex[i]] ^= SEG_DP; // Toggle points
+                if (squakIndex[i] < kLEDDigits) // Bounds check
+                {
+                    data[squakIndex[i]] ^= SEG_DP; // Toggle points
+                }
             }
             flashTimer = now + identFlashInterval;
             updated = true;
@@ -259,7 +291,10 @@ void Transponder::tick()
         else if (now > squawkEntryBlinkTimer)
         {
             // Blink the current position
-            data[squakIndex[squawkEntryPosition]] ^= SEG_DP; // Toggle segments
+            if (squawkEntryPosition < 4 && squakIndex[squawkEntryPosition] < kLEDDigits) // Bounds check
+            {
+                data[squakIndex[squawkEntryPosition]] ^= SEG_DP; // Toggle segments
+            }
             squawkEntryBlinkTimer = now + 500L;              // Blink every 0.5 seconds
             updated = true;
         }
@@ -267,13 +302,16 @@ void Transponder::tick()
 
     if (transponderLightOn != displayTransponderLightOn && !identActive)
     {
-        if (transponderLightOn)
+        if (1 < kLEDDigits) // Bounds check
         {
-            data[1] |= SEG_DP;
-        }
-        else
-        {
-            data[1] &= ~SEG_DP;
+            if (transponderLightOn)
+            {
+                data[1] |= SEG_DP;
+            }
+            else
+            {
+                data[1] &= ~SEG_DP;
+            }
         }
         displayTransponderLightOn = transponderLightOn;
         updated = true;
@@ -380,6 +418,9 @@ void Transponder::didReleaseButton(TransponderButton button)
 
 void Transponder::handleInterrupt()
 {
+    if (!mcp)
+        return;
+        
     uint8_t captureA, captureB;
     mcp->clearInterrupts(captureA, captureB);
     mcpInterrupt = false;

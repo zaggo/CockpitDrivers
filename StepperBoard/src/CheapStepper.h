@@ -131,8 +131,6 @@ private:
   // variables for non-blocking moves:
   uint32_t lastStepTime; // time in microseconds that last step happened
   int32_t stepsLeft = 0; // steps left to move, neg for counter-clockwise
-
-  bool melde=false;
 };
 
 #endif

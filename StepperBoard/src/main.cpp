@@ -11,7 +11,7 @@ AirManager* airManager;
 
 void setup() {
   #if BENCHDEBUG
-  benchDebug = new BenchDebug(kTransponder);
+  benchDebug = new BenchDebug(BENCHDEBUG_MODE);
   #else
   airManager = new AirManager();
   #endif

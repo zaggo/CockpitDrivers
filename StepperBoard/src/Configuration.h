@@ -4,7 +4,17 @@
 #include <Arduino.h>
 #include <avr/pgmspace.h>
 
+enum BenchMode {
+    kGyroDrive = 1 << 0,
+    kX25Motors = 1 << 1,
+    kTransponder = 1 << 2,
+    kAll = 0xff
+};
+
 #define BENCHDEBUG 0
+#define BENCHDEBUG_MODE kX25Motors | kTransponder
+
+const uint32_t kHeartbeatInterval = 1000L; // 1 second
 
 // Gyro Configuration
 const uint8_t kRollPin1 = 51;
@@ -55,6 +65,6 @@ const uint8_t kMCP23017InterruptPin = 18; // Pin connected to MCP23017 INT outpu
 
 const uint8_t kLEDDigits = 6;
 
-const uint32_t kPwrButtonLongPressDuration = 3000L; // 3 seconds
+const uint32_t kPwrButtonLongPressDuration = 2000L; // 2 seconds
 
 #endif // CONFIGURATION_H
