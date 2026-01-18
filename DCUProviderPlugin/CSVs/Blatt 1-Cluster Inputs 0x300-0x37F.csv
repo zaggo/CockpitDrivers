@@ -1,0 +1,7 @@
+Cluster Inputs 0x300-0x37F
+CAN ID;Cluster;Rate;Payload Byte;Content;Size;Dataref;Scale
+0x300;Altimeter;onChange;0..1;Baro inHg * 100;uint16;sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot;inHg * 100 or  hPa * 10
+;;;2;Unit;uint8;0 = hPa 1=inHg;1
+;;;3..7;reserved;;;0
+;;;;;;;
+0x302;;;;;;;

@@ -1,0 +1,106 @@
+DataRefs
+Device/Instrument;DataRef/Command;Format;Idx;D/C;R/W;Unit
+Altimeter - Baro;sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot;FLOAT;;D;w;inHg
+Altimeter - Altitude;sim/cockpit2/gauges/indicators/altitude_ft_pilot;FLOAT;;D;r;feet
+Annuc - test;sim/annunciator/test_all_annunciators;;;C;r/w;BEGIN/END
+Annunc - stall;sim/cockpit2/annunciators/stall_warning;INT;;D;r;bool
+Annunc - gear up waning;sim/cockpit2/annunciators/gear_warning;INT;;D;r;bool
+Annunc - gear unsafe;sim/cockpit/warnings/annunciators/gear_unsafe;INT;;D;r;bool
+Annunc - AAS;VFLYTEAIR/ARROWIII/AASSwitch;INT;;D;r/w;bool
+Annunc - Gear nose;sim/flightmodel/movingparts/gear1def;FLOAT;;D;r;bool
+Annunc - Gear left;sim/flightmodel/movingparts/gear2def;FLOAT;;D;r;bool
+Annunc - Gear right;sim/flightmodel/movingparts/gear3def;FLOAT;;D;r;bool
+Electric Bus Volts;sim/cockpit2/electrical/bus_volts;FLOAT[6];0;D;r;Volt
+Panel Brightness;sim/cockpit/electrical/instrument_brightness;FLOAT;;D;r/w;0..1
+Radio Brightness;sim/cockpit2/switches/instrument_brightness_ratio;FLOAT[32];0,1;D;w;0..1
+GNS430 - Button;sim/GPS/g430n1_vvol;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_nav_com_tog;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_com_ff;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_nav_ff;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_cdi;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_obs;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_msg;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_fpl;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_proc;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_zoom_in;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_zoom_out;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_direct;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_menu;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_clr;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_ent;;;C;w;BEGIN/END
+GNS430 - Button;sim/GPS/g430n1_cursor;;;C;w;BEGIN/END
+GNS430 - Encoder;sim/GPS/g430n1_page_up;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_page_dn;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_chapter_up;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_chapter_dn;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_fine_up;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_fine_down;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_coarse_up;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_coarse_down;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_cvol_up;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_cvol_dn;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_vvol_up;;;C;w;ONCE
+GNS430 - Encoder;sim/GPS/g430n1_vvol_dn;;;C;w;ONCE
+GNS430 - Button;sim/GPS/g430n1_cvol;;;C;w;BEGIN/END
+HSI - OBS-Enc;sim/cockpit2/radios/actuators/hsi_obs_deg_mag_pilot;FLOAT;;D;w;degree
+HSI - HDG-Enc;sim/cockpit2/autopilot/heading_dial_deg_mag_pilot;FLOAT;;D;w;degree
+HSI - Compas;sim/cockpit2/gauges/indicators/heading_electric_deg_mag_pilot;FLOAT;;D;r;degree
+HSI - OBS;sim/cockpit2/radios/actuators/hsi_obs_deg_mag_pilot;FLOAT;;D;r;degree
+HSI -HDG;sim/cockpit2/autopilot/heading_dial_deg_mag_pilot;FLOAT;;D;r;degree
+HSI - FRTO;sim/cockpit/radios/nav1_fromto;INT;;D;r;0,1,2
+HSI - VOR;sim/cockpit/radios/nav1_hdef_dot;FLOAT;;D;r;degree/10?
+HSI - VSI;sim/cockpit/radios/nav1_vdef_dot;FLOAT;;D;r;degree/10?
+Odometer;VFLYTEAIR/tach/TachTimeHrs1000;INT;;D;r;Hrs 1000s
+Odometer;VFLYTEAIR/tach/TachTimeHrs100;INT;;D;r;Hrs 100s
+Odometer;VFLYTEAIR/tach/TachTimeHrs10;INT;;D;r;Hrs 10s
+Odometer;VFLYTEAIR/tach/TachTimeHrs1;INT;;D;r;Hrs 1s
+Odometer;VFLYTEAIR/tach/TachTimeTenths;INT;;D;r;Hrs/10
+Odometer;VFLYTEAIR/tach/TachTimeHundredths;FLOAT;;D;r;Hrs/100
+Electric - AMPs;sim/cockpit2/electrical/generator_amps;FLOAT[8];0;D;r;Amps
+Fuel Pressure;sim/cockpit2/engine/indicators/fuel_pressure_psi;FLOAT[8];0;D;r;psi
+EGT;sim/cockpit2/engine/indicators/EGT_deg_cel;FLOAT[16];0;D;r;degree F
+Elevator Trim;sim/cockpit2/controls/elevator_trim;FLOAT;;D;r;-1..1
+Starter LED;sim/flightmodel2/engines/starter_is_running;INT[16];0;D;r;bool
+Starter;sim/magnetos/magnetos_off_1;;;C;w;ONCE
+Starter;sim/magnetos/magnetos_right_1;;;C;w;ONCE
+Starter;sim/magnetos/magnetos_left_1;;;C;w;ONCE
+Starter;sim/magnetos/magnetos_both_1;;;C;w;ONCE
+Starter;sim/starters/engage_starter_1;;;C;w;BEGIN/END
+Attitude Pitch;sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot;FLOAT;;D;r;degree
+Attitude Roll;sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot;FLOAT;;D;r;degree
+Turnrate;sim/cockpit2/gauges/indicators/turn_rate_roll_deg_pilot;FLOAT;;D;r;degree
+Sideslip;sim/cockpit2/gauges/indicators/slip_deg;FLOAT;;D;r;degree
+Airspeed;sim/cockpit2/gauges/indicators/airspeed_kts_pilot;FLOAT;;D;r;knots
+Vertical Speed;sim/cockpit2/gauges/indicators/vvi_fpm_pilot;FLOAT;;D;r;feet per minute
+RPM;sim/cockpit2/engine/indicators/engine_speed_rpm;FLOAT[16];0;D;r;RPM
+Vacuum Pressure;sim/cockpit/misc/vacuum;FLOAT;;D;r;psi?
+Switchboard;sim/electrical/generator_1_on;;;C;w;ONCE
+Switchboard;sim/electrical/generator_1_off;;;C;w;ONCE
+Switchboard;sim/electrical/battery_1_on;;;C;w;ONCE
+Switchboard;sim/electrical/battery_1_off;;;C;w;ONCE
+Switchboard;sim/fuel/fuel_pump_1_on;;;C;w;ONCE
+Switchboard;sim/fuel/fuel_pump_1_off;;;C;w;ONCE
+Switchboard;sim/lights/landing_lights_on;;;C;w;ONCE
+Switchboard;sim/lights/landing_lights_off;;;C;w;ONCE
+Switchboard;sim/lights/nav_lights_on;;;C;w;ONCE
+Switchboard;sim/lights/nav_lights_off;;;C;w;ONCE
+Switchboard;sim/lights/beacon_lights_on;;;C;w;ONCE
+Switchboard;sim/lights/beacon_lights_off;;;C;w;ONCE
+Switchboard;sim/lights/strobe_lights_on;;;C;w;ONCE
+Switchboard;sim/lights/strobe_lights_off;;;C;w;ONCE
+Switchboard;sim/lights/taxi_lights_on;;;C;w;ONCE
+Switchboard;sim/lights/taxi_lights_off;;;C;w;ONCE
+Switchboard;sim/systems/avionics_on;;;C;w;ONCE
+Switchboard;sim/systems/avionics_off;;;C;w;ONCE
+Switchboard;sim/ice/pitot_heat0_on;;;C;w;ONCE
+Switchboard;sim/ice/pitot_heat_2_on;;;C;w;ONCE
+Switchboard;sim/ice/pitot_heat0_off;;;C;w;ONCE
+Switchboard;sim/ice/pitot_heat_2_off;;;C;w;ONCE
+Switchboard;sim/cockpit2/switches/panel_brightness_ratio;FLOAT[4];0;D;w;0..1
+Parking Break;sim/cockpit2/controls/parking_brake_ratio;FLOAT;;D;w;0..1
+Transpoder Code;sim/cockpit2/radios/actuators/transponder_code;INT;;D;r/w;0000..7777
+Transponder Mode;VFLYTEAIR/AXP340/AXP340_MODE;INT;;D;r/w;0..5
+Transponder Ident;sim/transponder/transponder_ident;;;C;w;ONCE
+Transponder Light;sim/cockpit2/radios/indicators/transponder_id;INT;;D;r;bool
+Fuel Gauge;sim/cockpit2/fuel/fuel_level_indicated_left;FLOAT;;D;r;kg
+Fuel Gauge;sim/cockpit2/fuel/fuel_level_indicated_right;FLOAT;;D;r;kg

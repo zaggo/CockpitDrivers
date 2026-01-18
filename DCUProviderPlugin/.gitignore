@@ -1,0 +1,31 @@
+# Build artifacts
+build/
+output/
+*.xpl
+*.o
+*.a
+*.so
+*.dylib
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# IDEs
+.vscode/
+.idea/
+*.xcodeproj
+.DS_Store
+
+# Dependencies
+external/
+
+# Logs
+*.log
+
+# Temporary files
+*~
+*.swp
+*.swo

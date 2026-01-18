@@ -1,0 +1,7 @@
+CAN Message IDs
+CAN ID Range;Use
+0x100–0x17F;Gateway → Instruments: FAST (20–50 Hz)
+0x180–0x1FF;Gateway → Instruments: MED (5–10 Hz)
+0x200–0x27F;Gateway → Instruments: SLOW (1–2 Hz / Status)
+0x300–0x37F;Instruments → Gateway: Inputs (event / 10–50 Hz bei Encodern)
+0x380–0x3FF;Instruments → Gateway: Heartbeat/Diag

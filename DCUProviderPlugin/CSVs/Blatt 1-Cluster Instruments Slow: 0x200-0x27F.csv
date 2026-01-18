@@ -1,0 +1,9 @@
+Cluster Instruments Slow: 0x200-0x27F
+CAN ID;Cluster;Rate;Payload Byte;Content;Size;Dataref;Scale
+0x202;Fuel Gauge;2 Hz;0..1;FuelL * 100;uint16;sim/cockpit2/fuel/fuel_level_indicated_left;kg * 100
+;;;2..3;FuelR * 100;uint16;sim/cockpit2/fuel/fuel_level_indicated_right;kg * 100
+;;;4..7;reserved;;;0
+0x203;Lights;2 Hz;0..1;Panel Dim * 1000;uint16;sim/cockpit/electrical/instrument_brightness;0..1 * 1000
+;;;2..3;Radio Dim * 1000;uint16;sim/cockpit2/switches/instrument_brightness_ratio [0];0..1 * 1000
+;;;4;Dome Light Dim * 1000;uint8;sim/cockpit2/switches/panel_brightness_ratio [0];0..1 * 1000
+;;;5..7;reserved;;;0

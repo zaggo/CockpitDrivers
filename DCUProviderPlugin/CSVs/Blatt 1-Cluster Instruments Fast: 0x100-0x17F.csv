@@ -1,0 +1,14 @@
+Cluster Instruments Fast: 0x100-0x17F
+CAN ID;Cluster;Rate;Payload Byte;Content;Size;Dataref;Scale
+0x100;Airspeed;50Hz;0..1;IAS*10;uint16;sim/cockpit2/gauges/indicators/airspeed_kts_pilot;knots*10
+;;;2..3;TAS*10;optional;;0
+;;;4..7;reserved;;;0
+0x101;Attitude;50Hz;0..1;Pitch*100;int16;sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot;deg*100
+;;;2..3;Roll*100;int16;sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot;deg*100
+;;;4..7;reserved;;;0
+0x102;Altitude;20Hz;0..3;Altitude ft;int32;sim/cockpit2/gauges/indicators/altitude_ft_pilot;direct
+;;;4..5;VSI ft/min;int16;sim/cockpit2/gauges/indicators/vvi_fpm_pilot;direct
+;;;6..7;reserved;;;0
+0x103;Turn Coordinator;50Hz;0..1;Turn rate * 100;int16;sim/cockpit2/gauges/indicators/turn_rate_roll_deg_pilot;deg *100
+;;;2..3;Side Slip * 100;int16;sim/cockpit2/gauges/indicators/slip_deg;deg * 100
+;;;4..7;reserved;;;0
