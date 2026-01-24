@@ -20,7 +20,7 @@ class CAN {
         bool isStarted = false;
 
         // Heartbeat (Variante 2)
-        static constexpr uint8_t kNodeId = 1; // FuelGauge
+        static constexpr uint8_t kNodeId = 2; // FuelGauge
         static constexpr uint8_t kFwMajor = 1;
         static constexpr uint8_t kFwMinor = 0;
 

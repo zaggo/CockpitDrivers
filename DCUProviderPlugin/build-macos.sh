@@ -18,7 +18,7 @@ echo -e "${YELLOW}╚═══════════════════�
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Build directory
-BUILD_DIR="${SCRIPT_DIR}/build"
+BUILD_DIR="${SCRIPT_DIR}/build-macos"
 
 # Output directory
 OUTPUT_DIR="${BUILD_DIR}/output"
@@ -120,7 +120,7 @@ echo ""
 
 # ============ Verify Build Output ============
 
-if [ ! -f "${OUTPUT_DIR}/DCUProvider.xpl" ]; then
+if [ ! -f "${OUTPUT_DIR}/mac.xpl" ]; then
     echo -e "${RED}✗ Plugin binary not found${NC}"
     exit 1
 fi
@@ -133,33 +133,33 @@ echo -e "${YELLOW}╚═══════════════════�
 
 
 echo -e "${GREEN}Plugin Details:${NC}"
-ls -lh "${OUTPUT_DIR}/DCUProvider.xpl"
+ls -lh "${OUTPUT_DIR}/mac.xpl"
 
 echo -e "\n${GREEN}Plugin Location:${NC}"
-echo -e "${BLUE}  ${OUTPUT_DIR}/DCUProvider.xpl${NC}"
+echo -e "${BLUE}  ${OUTPUT_DIR}/mac.xpl${NC}"
 
 # ============ Auto-Install Plugin ============
-INSTALL_PATH="/Volumes/1TBSSD/XPlane/X-Plane 12/Resources/plugins/DCUProvider/mac_x64/DCUProvider.xpl"
+INSTALL_PATH="/Volumes/1TBSSD/XPlane/X-Plane 12/Resources/plugins/DCUProvider/64/mac.xpl"
 mkdir -p "$(dirname "$INSTALL_PATH")"
-cp "${OUTPUT_DIR}/DCUProvider.xpl" "$INSTALL_PATH"
+cp "${OUTPUT_DIR}/mac.xpl" "$INSTALL_PATH"
 echo -e "${GREEN}✓ Plugin automatisch installiert nach:${NC} ${BLUE}$INSTALL_PATH${NC}"
 
 # ============ Installation ============
 
-if [ -d "$XPLANE_PLUGINS_DIR" ]; then
+if [ -d "$XPLANE_PLUGINS_DIR" ] && [ -z "$BUILD_ALL_MODE" ]; then
     echo -e "\n${YELLOW}X-Plane plugins directory found${NC}"
     
     read -p "$(echo -e ${YELLOW}Install plugin? [y/n]${NC} )" -n 1 -r
     echo
     
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        cp "${OUTPUT_DIR}/DCUProvider.xpl" "${XPLANE_PLUGINS_DIR}/"
+        cp "${OUTPUT_DIR}/mac.xpl" "${XPLANE_PLUGINS_DIR}/"
         echo -e "${GREEN}✓ Plugin installed${NC}"
         echo -e "${GREEN}✓ Restart X-Plane to load${NC}"
     fi
-else
+elif [ -z "$BUILD_ALL_MODE" ]; then
     echo -e "\n${YELLOW}Manual installation:${NC}"
-    echo -e "${BLUE}  cp ${OUTPUT_DIR}/DCUProvider.xpl /Volumes/1TBSSD/XPlane/X-Plane\ 12/Resources/plugins/DCUProvider/mac_x64/DCUProvider.xpl${NC}"
+    echo -e "${BLUE}  cp ${OUTPUT_DIR}/mac.xpl /Volumes/1TBSSD/XPlane/X-Plane\ 12/Resources/plugins/DCUProvider/64/mac.xpl${NC}"
 fi
 
 echo ""

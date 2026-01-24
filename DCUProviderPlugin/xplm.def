@@ -1,0 +1,19 @@
+LIBRARY XPLM_64
+EXPORTS
+    XPLMRegisterFlightLoopCallback
+    XPLMUnregisterFlightLoopCallback
+    XPLMDebugString
+    XPLMFindDataRef
+    XPLMGetDataf
+    XPLMSetDataf
+    XPLMGetDatavf
+    XPLMCreateWindowEx
+    XPLMDestroyWindow
+    XPLMSetWindowIsVisible
+    XPLMGetWindowIsVisible
+    XPLMGetWindowGeometry
+    XPLMDrawString
+    XPLMDrawTranslucentDarkBox
+    XPLMFindPluginsMenu
+    XPLMAppendMenuItem
+    XPLMRemoveMenuItem

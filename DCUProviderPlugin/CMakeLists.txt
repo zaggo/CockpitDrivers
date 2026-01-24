@@ -126,7 +126,7 @@ if(APPLE)
     set_target_properties(DCUProvider PROPERTIES
         SUFFIX ".xpl"
         PREFIX ""
-        OUTPUT_NAME "DCUProvider"
+        OUTPUT_NAME "mac"
         LINK_FLAGS "-undefined dynamic_lookup"
     )
     
@@ -168,20 +168,56 @@ elseif(WIN32)
     set_target_properties(DCUProvider PROPERTIES
         SUFFIX ".xpl"
         PREFIX ""
-        OUTPUT_NAME "DCUProvider"
+        OUTPUT_NAME "win"
     )
     
-    # Windows libraries
-    target_link_libraries(DCUProvider PRIVATE
-        opengl32
-        setupapi
-    )
+    # Create import library from .def file for MinGW
+    if(MINGW)
+        set(XPLM_DEF_FILE "${CMAKE_CURRENT_SOURCE_DIR}/xplm.def")
+        set(XPLM_IMPORT_LIB "${CMAKE_CURRENT_BINARY_DIR}/libxplm.a")
+        
+        add_custom_command(
+            OUTPUT ${XPLM_IMPORT_LIB}
+            COMMAND ${CMAKE_DLLTOOL} -d ${XPLM_DEF_FILE} -l ${XPLM_IMPORT_LIB}
+            DEPENDS ${XPLM_DEF_FILE}
+            COMMENT "Creating XPLM import library for MinGW"
+        )
+        
+        add_custom_target(xplm_import_lib DEPENDS ${XPLM_IMPORT_LIB})
+        add_dependencies(DCUProvider xplm_import_lib)
+        
+        # Static linking for MinGW to avoid runtime DLL dependencies
+        target_link_libraries(DCUProvider PRIVATE
+            ${XPLM_IMPORT_LIB}
+            opengl32
+            setupapi
+            -static-libgcc
+            -static-libstdc++
+            -static
+            -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive
+        )
+    else()
+        # MSVC: use the SDK library directly
+        target_link_libraries(DCUProvider PRIVATE
+            ${XPLANE_SDK}/Libraries/Win/XPLM_64.lib
+            opengl32
+            setupapi
+        )
+    endif()
     
-    # Compiler flags for Windows
-    target_compile_options(DCUProvider PRIVATE
-        /W4
-        /WX
-    )
+    # Compiler flags for Windows (GCC/MinGW style)
+    if(MINGW)
+        target_compile_options(DCUProvider PRIVATE
+            -Wall
+            -Wextra
+            -fvisibility=hidden
+        )
+    else()
+        # MSVC style flags
+        target_compile_options(DCUProvider PRIVATE
+            /W4
+        )
+    endif()
     
 elseif(UNIX AND NOT APPLE)
     # Linux
@@ -199,7 +235,7 @@ elseif(UNIX AND NOT APPLE)
     set_target_properties(DCUProvider PROPERTIES
         SUFFIX ".xpl"
         PREFIX ""
-        OUTPUT_NAME "DCUProvider"
+        OUTPUT_NAME "lin"
     )
     
     # Linux libraries
@@ -220,13 +256,14 @@ endif()
 # Output directory
 set_target_properties(DCUProvider PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/output"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/output"
 )
 
 # X-Plane plugins directory (for auto-install)
 if(APPLE)
     set(DEFAULT_XPLANE_PLUGINS_DIR "${HOME}/Library/Preferences/X-Plane 12/Resources/plugins")
 elseif(WIN32)
-    set(DEFAULT_XPLANE_PLUGINS_DIR "C:/Users/${ENV:USERNAME}/AppData/Roaming/X-Plane 12/Resources/plugins")
+    set(DEFAULT_XPLANE_PLUGINS_DIR "C:/Users/$ENV{USERNAME}/AppData/Roaming/X-Plane 12/Resources/plugins")
 elseif(UNIX AND NOT APPLE)
     set(DEFAULT_XPLANE_PLUGINS_DIR "${HOME}/.x-plane_12/Resources/plugins")
 endif()

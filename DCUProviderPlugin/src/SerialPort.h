@@ -4,6 +4,10 @@
 #include <cstdint>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 class SerialPort {
 public:
     SerialPort() = default;
@@ -34,8 +38,11 @@ public:
     size_t readNonBlocking(void* outBuf, size_t maxLen);
     
 private:
+#ifdef _WIN32
+    HANDLE hComm_ = INVALID_HANDLE_VALUE;
+#else
     /// Converts a baud rate integer to termios speed constant.
     static int baudToSpeed(int baud);
-    
     int fd_ = -1;
+#endif
 };

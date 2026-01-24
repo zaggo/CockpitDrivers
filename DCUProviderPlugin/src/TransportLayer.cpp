@@ -47,7 +47,7 @@ std::optional<Message> TransportLayer::decodeFrame(const uint8_t* buffer, size_t
     uint8_t payloadLen = buffer[3];
     
     // Validate: we need at least 4 + payloadLen bytes
-    if (len < 4 + payloadLen) {
+    if (len < static_cast<size_t>(4 + payloadLen)) {
         return std::nullopt;  // Incomplete frame
     }
     

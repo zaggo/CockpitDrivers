@@ -68,9 +68,41 @@ void CAN::onCanInterrupt()
 }
 
 void CAN::loop()
-{
+{    
+    if (!isStarted) {
+        return;
+    }
+
+    // --- Heartbeat TX (Instrument -> DCU), 2 Hz mit kleinem Offset pro Node ---
+    const uint32_t now = millis();
+    const uint32_t periodMs = 500;
+    const uint32_t offsetMs = (uint32_t)kNodeId * 20; // vermeidet gleichzeitige HBs
+
+    if (lastInstrumentHeartbeatSendMs == 0) {
+        lastInstrumentHeartbeatSendMs = now + offsetMs; // erster Sendetermin
+    }
+
+    if ((int32_t)(now - lastInstrumentHeartbeatSendMs) >= 0) {
+        sendInstrumentHeartbeat();
+        lastInstrumentHeartbeatSendMs += periodMs;
+    }
+
+    // --- Gateway Heartbeat Timeout (DCU -> Instrument) ---
+    const uint32_t timeoutMs = 1500;
+    const bool alive = (lastGatewayHeartbeatMs != 0) && (now - lastGatewayHeartbeatMs <= timeoutMs);
+    if (alive != gatewayAlive) {
+        gatewayAlive = alive;
+        DEBUGLOG_PRINTLN(gatewayAlive ? F("Gateway heartbeat OK") : F("Gateway heartbeat TIMEOUT"));
+        // Optional: Failsafe. Für FuelGauge z.B. Helligkeit runter.
+        if (!gatewayAlive) {
+            fuelGauge->setBrightness(0);
+        } else {
+            fuelGauge->setBrightness(255);
+        }
+    }
+
     // Fast path: no interrupt seen and line is high -> nothing to do.
-    if (!isStarted || (!canIrq && digitalRead(kCanIntPin) == HIGH))
+    if (!canIrq && digitalRead(kCanIntPin) == HIGH)
     {
         return;
     }
@@ -97,32 +129,6 @@ void CAN::loop()
         canBus->readMsgBuf(&rxId, &ext, &len, buf);
         handleFrame(rxId, ext, len, buf);
     }
-
-    // --- Heartbeat TX (Instrument -> DCU), 2 Hz mit kleinem Offset pro Node ---
-    const uint32_t now = millis();
-    const uint32_t periodMs = 500;
-    const uint32_t offsetMs = (uint32_t)kNodeId * 20; // vermeidet gleichzeitige HBs
-
-    if (lastInstrumentHeartbeatSendMs == 0) {
-        lastInstrumentHeartbeatSendMs = now + offsetMs; // erster Sendetermin
-    }
-
-    if ((int32_t)(now - lastInstrumentHeartbeatSendMs) >= 0) {
-        sendInstrumentHeartbeat();
-        lastInstrumentHeartbeatSendMs += periodMs;
-    }
-
-    // --- Gateway Heartbeat Timeout (DCU -> Instrument) ---
-    const uint32_t timeoutMs = 1500;
-    const bool alive = (lastGatewayHeartbeatMs != 0) && (now - lastGatewayHeartbeatMs <= timeoutMs);
-    if (alive != gatewayAlive) {
-        gatewayAlive = alive;
-        DEBUGLOG_PRINTLN(gatewayAlive ? F("Gateway heartbeat OK") : F("Gateway heartbeat TIMEOUT"));
-        // Optional: Failsafe. Für FuelGauge z.B. Helligkeit runter.
-        if (!gatewayAlive) {
-            fuelGauge->setBrightness(0);
-        }
-    }
 }
 
 void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data)
@@ -139,11 +145,11 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     {
         if (len >= 8)
         {
-            const uint16_t fuelLeftEnc = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
-            const uint16_t fuelRightEnc = (static_cast<uint16_t>(data[2]) << 8) | static_cast<uint16_t>(data[3]);
+            const uint16_t fuelLeftKg100 = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
+            const uint16_t fuelRightKg100 = (static_cast<uint16_t>(data[2]) << 8) | static_cast<uint16_t>(data[3]);
 
-            fuelGauge->moveServo(leftTank, static_cast<float>(fuelLeftEnc) / 100.);
-            fuelGauge->moveServo(rightTank, static_cast<float>(fuelRightEnc) / 100.);
+            fuelGauge->moveServo(leftTank, static_cast<float>(fuelLeftKg100) / 100.);
+            fuelGauge->moveServo(rightTank, static_cast<float>(fuelRightKg100) / 100.);
         }
         break;
     }
@@ -180,7 +186,7 @@ void CAN::sendMessage(CanStateId id, uint8_t len, byte* data)
   uint8_t sndStat = canBus->sendMsgBuf(static_cast<unsigned long>(id), 0, len, data);
   if (sndStat == CAN_OK)
   {
-    DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
+    //DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
   }
   else
   {
