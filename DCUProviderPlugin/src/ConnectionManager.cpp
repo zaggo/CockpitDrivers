@@ -41,16 +41,18 @@ void ConnectionManager::processIO(MessageQueue& queue) {
     
     // ============ TX: Send queued messages ============
     while (queue.hasTxPending()) {
-        auto frame = queue.dequeueTxFrame();
+        std::vector<uint8_t> frame = queue.peekTxFrame();
         if (frame.empty()) {
-            continue;
+            break;
         }
-        
         bool writeOk = serial_.writeBestEffort(frame.data(), frame.size());
         lastWriteOk_ = writeOk;
-        
         if (writeOk) {
             lastTxTime_ = static_cast<float>(std::time(nullptr));
+            queue.popTxFrame();
+        } else {
+            // Bei Fehlschlag Frame nicht entfernen, später erneut versuchen
+            break;
         }
     }
     

@@ -1,7 +1,10 @@
 #include "DCUProvider.h"
 #include "XPLMUtilities.h"
+#include "ConfigUtils.h"
 #include <cstdio>
 #include <ctime>
+#include <thread>
+#include <chrono>
 
 DCUProvider::DCUProvider() = default;
 
@@ -13,27 +16,73 @@ bool DCUProvider::initialize() {
     // Initialize components
     dataRefMgr_ = std::make_unique<DataRefManager>();
     dataRefMgr_->initialize();
-    
+
     msgQueue_ = std::make_unique<MessageQueue>();
-    
-    connMgr_ = std::make_unique<ConnectionManager>(
-        "/dev/cu.usbserial-1420",
-        115200
-    );
-    
+
+
+    // Ports ermitteln und letzten Port laden
+    auto ports = enumerateSerialPorts();
+    std::string lastPort = loadLastUsedPort();
+    currentPort_.clear();
+    // Nur vorwählen, nicht verbinden
+    int preselectIdx = -1;
+    if (!lastPort.empty()) {
+        for (size_t i = 0; i < ports.size(); ++i) {
+            if (ports[i] == lastPort) {
+                preselectIdx = (int)i;
+                currentPort_ = lastPort;
+                break;
+            }
+        }
+    }
+
+    connMgr_.reset();
+    // Nur verbinden, wenn ein Port gesetzt ist
+    if (!currentPort_.empty()) {
+        connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
+        connMgr_->connect();
+    }
+
     statusWin_ = std::make_unique<StatusWindow>();
     statusWin_->initialize();
-    
-    // Try initial connection
-    bool connected = connMgr_->connect();
-    
+    statusWin_->setAvailablePorts(ports);
+    if (preselectIdx >= 0) statusWin_->selectedPortIdx_ = preselectIdx;
+    statusWin_->setPortChangedCallback([this](const std::string& port) {
+        changePort(port);
+    });
+
     char msg[256];
-    std::snprintf(msg, sizeof(msg), 
+    std::snprintf(msg, sizeof(msg),
                   "DCUProvider: Initialized (Connection: %s)\n",
-                  connected ? "OK" : "FAILED");
+                  (connMgr_ && connMgr_->isConnected()) ? "OK" : "FAILED");
     XPLMDebugString(msg);
-    
+
     return true;  // Even if initial connection fails, plugin loads
+}
+
+void DCUProvider::changePort(const std::string& newPort) {
+        saveLastUsedPort(newPort);
+        if (newPort == currentPort_)
+            return;
+        currentPort_ = newPort;
+        if (connMgr_) {
+            connMgr_->disconnect();
+            connMgr_.reset();
+        }
+        // Queue leeren
+        if (msgQueue_) {
+            msgQueue_->resetStats(); // setzt auch Zähler zurück
+            msgQueue_->clearTxQueue();
+            while (msgQueue_->hasRxPending()) msgQueue_->dequeueRx();
+        }
+        if (!currentPort_.empty()) {
+            connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
+            connMgr_->connect();
+            // Längeres Delay nach Port-Öffnung (1 Sekunde) für Arduino-Reset
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
+        // Optionally, update status window immediately
+        updateStatusWindow();
 }
 
 void DCUProvider::shutdown() {
@@ -95,21 +144,14 @@ void DCUProvider::updateDownlink(float dt) {
     
     if (fuelAccumulator_ >= fuelRate) {
         struct FuelData {
-            uint16_t fuelLeft;   // 0.1 liter units
-            uint16_t fuelRight;  // 0.1 liter units
+            float fuelLeft;
+            float fuelRight;
         };
         
-        // Read fuel from X-Plane (in kg, convert to liters)
-        float fuelLKg = dataRefMgr_->getFuelLeft();
-        float fuelRKg = dataRefMgr_->getFuelRight();
-        
-        // Approximate: 1 liter ≈ 0.8 kg (Avgas)
-        float fuelLLiters = fuelLKg / 0.8f;
-        float fuelRLiters = fuelRKg / 0.8f;
-        
+        // Read fuel from X-Plane
         FuelData fuel;
-        fuel.fuelLeft = static_cast<uint16_t>(fuelLLiters * 10.0f);   // 0.1L units
-        fuel.fuelRight = static_cast<uint16_t>(fuelRLiters * 10.0f);
+        fuel.fuelLeft = dataRefMgr_->getFuelLeft();
+        fuel.fuelRight = dataRefMgr_->getFuelRight();
         
         msgQueue_->enqueueTx(MessageType::Fuel, &fuel, sizeof(fuel));
         
@@ -122,21 +164,16 @@ void DCUProvider::updateDownlink(float dt) {
     
     if (lightsAccumulator_ >= lightsRate) {
         struct LightsData {
-            uint8_t panelBrightness;  // 0-255
-            uint8_t radioBrightness;  // 0-255
-            uint8_t domeLight;        // 0=off, 1=on
-            uint8_t reserved;         // padding
+            float panelDim;  // 0..1
+            float radioDim;  // 0..1
+            float domeLightDim; // 0..1
         };
-        
-        float panelBright = dataRefMgr_->getPanelBrightness();
-        float radioBright = dataRefMgr_->getRadioBrightness();
-        bool domeOn = dataRefMgr_->getDomeLightOn();
-        
+                
         LightsData lights;
-        lights.panelBrightness = static_cast<uint8_t>(panelBright * 255.0f);
-        lights.radioBrightness = static_cast<uint8_t>(radioBright * 255.0f);
-        lights.domeLight = domeOn ? 1 : 0;
-        lights.reserved = 0;
+        auto brightness = dataRefMgr_->getPanelBrightness();
+        lights.panelDim = brightness[0];
+        lights.radioDim = brightness[1];
+        lights.domeLightDim = dataRefMgr_->getDomeLightBrightness();
         
         msgQueue_->enqueueTx(MessageType::Lights, &lights, sizeof(lights));
         
@@ -197,14 +234,14 @@ void DCUProvider::updateStatusWindow() {
     
     StatusData data;
     data.isConnected = isConnected();
-    data.devicePath = "/dev/cu.usbserial-1440";
+    data.devicePath = currentPort_;
     data.baudRate = 115200;
-    data.txBytesSent = msgQueue_->getTxBytesSent();
-    data.rxBytesReceived = msgQueue_->getRxBytesReceived();
-    data.lastTxTime = connMgr_->getLastTxTime();
-    data.lastRxTime = connMgr_->getLastRxTime();
-    data.lastWriteOk = connMgr_->getLastWriteOk();
-    data.lastOpenOk = connMgr_->getLastOpenOk();
-    
+    data.txBytesSent = msgQueue_ ? msgQueue_->getTxBytesSent() : 0;
+    data.rxBytesReceived = msgQueue_ ? msgQueue_->getRxBytesReceived() : 0;
+    data.lastTxTime = connMgr_ ? connMgr_->getLastTxTime() : 0.0f;
+    data.lastRxTime = connMgr_ ? connMgr_->getLastRxTime() : 0.0f;
+    data.lastWriteOk = connMgr_ ? connMgr_->getLastWriteOk() : false;
+    data.lastOpenOk = connMgr_ ? connMgr_->getLastOpenOk() : false;
+
     statusWin_->update(data);
 }

@@ -3,6 +3,7 @@
 #include "XPLMDataAccess.h"
 #include <string>
 #include <map>
+#include <vector>
 
 class DataRefManager {
 public:
@@ -23,9 +24,8 @@ public:
     float getFuelRight() const;
     
     // Lights
-    float getPanelBrightness() const;      // 0.0 - 1.0
-    float getRadioBrightness() const;      // 0.0 - 1.0
-    bool  getDomeLightOn() const;          // bool
+    std::vector<float> getPanelBrightness() const;  // [0] and [1], 0.0 - 1.0
+    float getDomeLightBrightness() const;  // 0.0 - 1.0
     
     // ============ UPLINK (Gateway → Plugin) ============
     /// Sets barometer altimeter setting (inHg)
@@ -44,17 +44,15 @@ public:
 private:
     /// Helper: read float from dataref
     static float readFloat(XPLMDataRef dr, float def = 0.0f);
-    
-    /// Helper: read float array at index 0
-    static float readFloatArrayIdx0(XPLMDataRef dr, float def = 0.0f);
-    
+        
+    /// Helper: read multiple floats from array (returns vector)
+    static std::vector<float> readFloatArray(XPLMDataRef dr, int index, int count);
+
     // Cached datarefs (downlink)
     XPLMDataRef dr_fuelL = nullptr;
     XPLMDataRef dr_fuelR = nullptr;
     XPLMDataRef dr_panelDim = nullptr;
-    XPLMDataRef dr_radioDim = nullptr;
-    XPLMDataRef dr_domeArr = nullptr;
-    
-    // Optional: Cache für dynamisch geladene Datarefs
-    std::map<std::string, XPLMDataRef> dataRefCache_;
+    XPLMDataRef dr_domeLightDim = nullptr;
+    XPLMDataRef dr_HeadingBug = nullptr;
+    XPLMDataRef dr_BarometerSetting = nullptr;
 };

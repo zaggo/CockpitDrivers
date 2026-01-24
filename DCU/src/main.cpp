@@ -28,6 +28,7 @@ void setup() {
   if (canBus->begin()) {
     DEBUGLOG_PRINTLN(F("DCU started up"));
   }
+  DEBUGLOG_PRINTLN(F("Waiting for data..."));
 }
 
 void loop() {

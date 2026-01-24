@@ -7,17 +7,15 @@ DataRefManager::~DataRefManager() = default;
 
 void DataRefManager::initialize() {
     // Fuel
-    dr_fuelL = XPLMFindDataRef("sim/flightmodel/weight/fuel/fuel_tank[0]/current_weight_kgs");
-    dr_fuelR = XPLMFindDataRef("sim/flightmodel/weight/fuel/fuel_tank[1]/current_weight_kgs");
+    dr_fuelL = XPLMFindDataRef("sim/cockpit2/fuel/fuel_level_indicated_left");
+    dr_fuelR = XPLMFindDataRef("sim/cockpit2/fuel/fuel_level_indicated_right");
     
     // Panel/Radio brightness and dome light
-    dr_panelDim = XPLMFindDataRef("sim/cockpit/electrical/instrument_brightness");
-    dr_radioDim = XPLMFindDataRef("sim/cockpit2/switches/instrument_brightness_ratio");
-    dr_domeArr  = XPLMFindDataRef("sim/cockpit2/switches/panel_brightness_ratio");
-    
-    // Cache all datarefs for later use
-    // TODO: Load from CSV or config file
-    dataRefCache_.clear();
+    dr_panelDim = XPLMFindDataRef("sim/cockpit2/switches/instrument_brightness_ratio");
+    dr_domeLightDim  = XPLMFindDataRef("sim/cockpit2/switches/panel_brightness_ratio");
+
+    dr_HeadingBug = XPLMFindDataRef("sim/cockpit/autopilot/heading_bug_deg_mag_pil");
+    dr_BarometerSetting = XPLMFindDataRef("sim/cockpit/misc/barometer_setting");
 }
 
 float DataRefManager::getFuelLeft() const {
@@ -28,30 +26,24 @@ float DataRefManager::getFuelRight() const {
     return readFloat(dr_fuelR, 0.0f);
 }
 
-float DataRefManager::getPanelBrightness() const {
-    return readFloat(dr_panelDim, 0.0f);
+std::vector<float> DataRefManager::getPanelBrightness() const {
+    return readFloatArray(dr_panelDim, 0, 2);
 }
 
-float DataRefManager::getRadioBrightness() const {
-    return readFloatArrayIdx0(dr_radioDim, 0.0f);
-}
-
-bool DataRefManager::getDomeLightOn() const {
-    float val = readFloatArrayIdx0(dr_domeArr, 0.0f);
-    return val > 0.5f;
+float DataRefManager::getDomeLightBrightness() const {
+    auto values = readFloatArray(dr_domeLightDim, 1, 1);
+    return values[0];
 }
 
 void DataRefManager::setBarometerSetting(float inHg) {
-    XPLMDataRef dr = XPLMFindDataRef("sim/cockpit/misc/barometer_setting");
-    if (dr) {
-        XPLMSetDataf(dr, inHg);
+    if (dr_BarometerSetting) {
+        XPLMSetDataf(dr_BarometerSetting, inHg);
     }
 }
 
 void DataRefManager::setHeadingBug(float degrees) {
-    XPLMDataRef dr = XPLMFindDataRef("sim/cockpit/autopilot/heading_bug_deg_mag_pil");
-    if (dr) {
-        XPLMSetDataf(dr, degrees);
+    if (dr_HeadingBug) {
+        XPLMSetDataf(dr_HeadingBug, degrees);
     }
 }
 
@@ -62,11 +54,10 @@ float DataRefManager::readFloat(XPLMDataRef dr, float def) {
     return XPLMGetDataf(dr);
 }
 
-float DataRefManager::readFloatArrayIdx0(XPLMDataRef dr, float def) {
-    if (!dr) {
-        return def;
+std::vector<float> DataRefManager::readFloatArray(XPLMDataRef dr, int index, int count) {
+    std::vector<float> result(count, 0.0f);
+    if (dr && count > 0) {
+        XPLMGetDatavf(dr, result.data(), index, count);
     }
-    float val = 0.0f;
-    XPLMGetDatavf(dr, &val, 0, 1);
-    return val;
+    return result;
 }

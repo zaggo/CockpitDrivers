@@ -1,4 +1,12 @@
+
 #include "MessageQueue.h"
+
+void MessageQueue::clearTxQueue() {
+    std::lock_guard<std::mutex> lock(txMutex_);
+    while (!txQueue_.empty()) {
+        txQueue_.pop();
+    }
+}
 
 void MessageQueue::enqueueTx(MessageType type, const void* payload, uint8_t len) {
     // Encode frame
@@ -15,19 +23,20 @@ void MessageQueue::enqueueTx(MessageType type, const void* payload, uint8_t len)
     }
 }
 
-std::vector<uint8_t> MessageQueue::dequeueTxFrame() {
+
+std::vector<uint8_t> MessageQueue::peekTxFrame() const {
     std::lock_guard<std::mutex> lock(txMutex_);
-    
     if (txQueue_.empty()) {
         return {};
     }
-    
-    auto frame = std::move(txQueue_.front());
+    return txQueue_.front();
+}
+
+void MessageQueue::popTxFrame() {
+    std::lock_guard<std::mutex> lock(txMutex_);
+    if (txQueue_.empty()) return;
+    txBytesSent_ += txQueue_.front().size();
     txQueue_.pop();
-    
-    txBytesSent_ += frame.size();
-    
-    return frame;
 }
 
 bool MessageQueue::hasTxPending() const {

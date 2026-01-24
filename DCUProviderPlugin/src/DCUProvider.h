@@ -1,5 +1,6 @@
-#pragma once
 
+#pragma once
+#include "SerialPortUtils.h"
 #include "SerialPort.h"
 #include "ConnectionManager.h"
 #include "DataRefManager.h"
@@ -41,6 +42,11 @@ public:
     bool isConnected() const;
     
 private:
+    // Current serial port path
+    std::string currentPort_;
+
+    // Helper to change port and reconnect
+    void changePort(const std::string& newPort);
     // ============ Internal Updates ============
     
     /// Downlink: Read data from X-Plane datarefs and queue messages for gateway.

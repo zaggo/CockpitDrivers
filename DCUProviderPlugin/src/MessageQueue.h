@@ -25,10 +25,14 @@ public:
     /// @param len Payload length (must be <= 255)
     void enqueueTx(MessageType type, const void* payload, uint8_t len);
     
-    /// Dequeues the next TX frame to send.
-    /// Returns empty vector if queue is empty.
-    /// Automatically increments txBytesSent_ counter.
-    std::vector<uint8_t> dequeueTxFrame();
+    /// Returns the next TX frame without removing it (empty vector if none).
+    std::vector<uint8_t> peekTxFrame() const;
+
+    /// Removes the next TX frame and increments counter (call NUR bei Erfolg!)
+    void popTxFrame();
+
+    /// Entfernt alle TX-Frames aus der Queue (z.B. beim Portwechsel)
+    void clearTxQueue();
     
     /// Returns true if there are pending TX frames.
     bool hasTxPending() const;

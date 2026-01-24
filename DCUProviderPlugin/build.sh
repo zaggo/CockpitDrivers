@@ -128,7 +128,7 @@ fi
 # ============ Display Results ============
 
 echo -e "${YELLOW}╔════════════════════════════════════════╗${NC}"
-echo -e "${YELLOW}║   BUILD SUCCESSFUL                    ║${NC}"
+echo -e "${YELLOW}║   BUILD SUCCESSFUL                     ║${NC}"
 echo -e "${YELLOW}╚════════════════════════════════════════╝${NC}\n"
 
 

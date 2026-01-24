@@ -81,6 +81,8 @@ set(SOURCES
     src/MessageQueue.cpp
     src/ConnectionManager.cpp
     src/StatusWindow.cpp
+    src/SerialPortUtils.cpp
+    src/ConfigUtils.cpp
 )
 
 # Plugin headers
@@ -92,6 +94,8 @@ set(HEADERS
     src/MessageQueue.h
     src/ConnectionManager.h
     src/StatusWindow.h
+    src/SerialPortUtils.h
+    src/ConfigUtils.h
 )
 
 # Create plugin library
