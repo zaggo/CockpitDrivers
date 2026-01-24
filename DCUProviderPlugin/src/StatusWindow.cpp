@@ -59,11 +59,21 @@ void StatusWindow::initialize() {
         return;
     }
     
-    // Create menu item
+    // Create menu
     pluginMenuId_ = XPLMFindPluginsMenu();
     
     if (pluginMenuId_) {
-        menuItemIdx_ = XPLMAppendMenuItem(pluginMenuId_, "DCU Provider", this, 1);
+        // Create a submenu for our plugin
+        int subMenuIdx = XPLMAppendMenuItem(pluginMenuId_, "DCU Provider", nullptr, 1);
+        XPLMMenuID ourMenuId = XPLMCreateMenu("DCU Provider", pluginMenuId_, subMenuIdx, 
+                                               menuCallback, this);
+        
+        // Add "Show Status Window" item to our submenu
+        XPLMAppendMenuItem(ourMenuId, "Show Status Window", this, 1);
+        
+        // Store reference for cleanup
+        menuItemIdx_ = subMenuIdx;
+        pluginMenuId_ = ourMenuId;
     }
     
     XPLMDebugString("DCUProvider: Status window initialized\n");
@@ -75,10 +85,12 @@ void StatusWindow::destroy() {
         windowId_ = nullptr;
     }
     
-    if (menuItemIdx_ >= 0 && pluginMenuId_) {
-        XPLMRemoveMenuItem(pluginMenuId_, menuItemIdx_);
-        menuItemIdx_ = -1;
+    if (pluginMenuId_) {
+        XPLMDestroyMenu(pluginMenuId_);
+        pluginMenuId_ = nullptr;
     }
+    
+    menuItemIdx_ = -1;
 }
 
 void StatusWindow::setVisible(bool visible) {
