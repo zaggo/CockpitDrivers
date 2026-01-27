@@ -31,7 +31,6 @@ CAN::~CAN()
 
 bool CAN::begin()
 {
-    isStarted = true;
     if (canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) != CAN_OK)
     {
         DEBUGLOG_PRINTLN(F("CAN init fail"));
@@ -44,15 +43,15 @@ bool CAN::begin()
     canBus->init_Mask(1, 0, MASK_EXACT); // RXB1
 
     // RXB0: ID 0x270
-    canBus->init_Filt(0, 0, CAN_STD_ID(CanStateId::fuelLevel));
-    canBus->init_Filt(1, 0, CAN_STD_ID(CanStateId::fuelLevel)); // zweiter Filter optional identisch
+    canBus->init_Filt(0, 0, CAN_STD_ID(CanMessageId::fuelLevel));
+    canBus->init_Filt(1, 0, CAN_STD_ID(CanMessageId::fuelLevel)); // zweiter Filter optional identisch
 
     // RXB1: Lights (0x203) und Gateway Heartbeat (0x300)
-    canBus->init_Filt(2, 0, CAN_STD_ID(CanStateId::lights));
-    canBus->init_Filt(3, 0, CAN_STD_ID(CanStateId::gatewayHeartbeat));
+    canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::lights));
+    canBus->init_Filt(3, 0, CAN_STD_ID(CanMessageId::gatewayHeartbeat));
     // Optional: weitere Filter-Slots frei lassen / duplizieren (je nach MCP2515-Lib erforderlich)
-    canBus->init_Filt(4, 0, CAN_STD_ID(CanStateId::lights));
-    canBus->init_Filt(5, 0, CAN_STD_ID(CanStateId::gatewayHeartbeat));
+    canBus->init_Filt(4, 0, CAN_STD_ID(CanMessageId::lights));
+    canBus->init_Filt(5, 0, CAN_STD_ID(CanMessageId::gatewayHeartbeat));
 
     canBus->setMode(MCP_NORMAL);
 
@@ -147,9 +146,9 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     (void)ext;
 
     // IDs from mcp_can are the actual 11-bit ID (e.g. 0x270), even though filters use (ID<<16).
-    switch (static_cast<CanStateId>(id))
+    switch (static_cast<CanMessageId>(id))
     {
-    case CanStateId::fuelLevel:
+    case CanMessageId::fuelLevel:
     {
         if (len >= 8)
         {
@@ -163,7 +162,7 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
         break;
     }
 
-    case CanStateId::lights:
+    case CanMessageId::lights:
     {
         if (len >= 8)
         {
@@ -179,7 +178,7 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
         break;
     }
 
-    case CanStateId::gatewayHeartbeat:
+    case CanMessageId::gatewayHeartbeat:
     {
         updateGatewayHeartbeat(len, data);
         break;
@@ -190,7 +189,7 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     }
 }
 
-void CAN::sendMessage(CanStateId id, uint8_t len, byte* data)
+void CAN::sendMessage(CanMessageId id, uint8_t len, byte* data)
 {
   // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
   uint8_t sndStat = canBus->sendMsgBuf(static_cast<unsigned long>(id), 0, len, data);
@@ -219,7 +218,7 @@ void CAN::sendInstrumentHeartbeat() {
     data[6] = (uint8_t)((uptime10 >> 8) & 0xFF);
     data[7] = (uint8_t)(uptime10 & 0xFF);
 
-    sendMessage(CanStateId::instrumentHeartbeat, 8, data);
+    sendMessage(CanMessageId::instrumentHeartbeat, 8, data);
 }
 
 void CAN::updateGatewayHeartbeat(uint8_t len, const uint8_t* data) {

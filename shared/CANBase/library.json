@@ -1,0 +1,18 @@
+{
+  "name": "CanBase",
+  "version": "0.1.0",
+  "description": "Base CAN definitions for message and node IDs",
+  "keywords": "can, canbus, automotive, embedded",
+  "frameworks": "arduino",
+  "platforms": "*",
+  "build": {
+    "includeDir": "include",
+    "flags": ["-Wall", "-Wextra"]
+  },
+  "export": {
+    "include": [
+      "include/*",
+      "library.json"
+    ]
+  }
+}

@@ -158,9 +158,9 @@ void DCUProvider::updateDownlink(float dt) {
         fuelAccumulator_ = 0.0f;
     }
     
-    // ============ Lights Data (2 Hz) ============
+    // ============ Lights Data (10 Hz) ============
     lightsAccumulator_ += dt;
-    float lightsRate = 1.0f / 2.0f;  // 2 Hz = every 0.5s
+    float lightsRate = 1.0f / 10.0f;  // 10 Hz = every 0.1s
     
     if (lightsAccumulator_ >= lightsRate) {
         struct LightsData {

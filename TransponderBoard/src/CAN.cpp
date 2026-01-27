@@ -5,7 +5,7 @@
 volatile bool CAN::canIrq = false;
 CAN *CAN::instance = nullptr;
 
-CAN::CAN(FuelGauge *fuelGauge) : fuelGauge(fuelGauge)
+CAN::CAN(LCD *lcd) : lcd(lcd)
 {
     canBus = new MCP_CAN(kCanCSPin);
 
@@ -19,6 +19,7 @@ CAN::CAN(FuelGauge *fuelGauge) : fuelGauge(fuelGauge)
     attachInterrupt(digitalPinToInterrupt(kCanIntPin), CAN::onCanInterrupt, FALLING);
 
     DEBUGLOG_PRINTLN(F("CAN initialized"));
+    lcd->printSecondLine(F("CAN initialized"));
 }
 
 CAN::~CAN()
@@ -30,9 +31,11 @@ CAN::~CAN()
 
 bool CAN::begin()
 {
+    isStarted = true;
     if (canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) != CAN_OK)
     {
         DEBUGLOG_PRINTLN(F("CAN init fail"));
+        lcd->printSecondLine(F("CAN init fail"));
         return false;
     }
 
@@ -41,21 +44,20 @@ bool CAN::begin()
     canBus->init_Mask(1, 0, MASK_EXACT); // RXB1
 
     // RXB0: ID 0x270
-    canBus->init_Filt(0, 0, CAN_STD_ID(CanMessageId::fuelLevel));
-    canBus->init_Filt(1, 0, CAN_STD_ID(CanMessageId::fuelLevel)); // zweiter Filter optional identisch
+    canBus->init_Filt(0, 0, CAN_STD_ID(CanStateId::fuelLevel));
+    canBus->init_Filt(1, 0, CAN_STD_ID(CanStateId::fuelLevel)); // zweiter Filter optional identisch
 
     // RXB1: Lights (0x203) und Gateway Heartbeat (0x300)
-    canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::lights));
-    canBus->init_Filt(3, 0, CAN_STD_ID(CanMessageId::gatewayHeartbeat));
+    canBus->init_Filt(2, 0, CAN_STD_ID(CanStateId::lights));
+    canBus->init_Filt(3, 0, CAN_STD_ID(CanStateId::gatewayHeartbeat));
     // Optional: weitere Filter-Slots frei lassen / duplizieren (je nach MCP2515-Lib erforderlich)
-    canBus->init_Filt(4, 0, CAN_STD_ID(CanMessageId::lights));
-    canBus->init_Filt(5, 0, CAN_STD_ID(CanMessageId::gatewayHeartbeat));
+    canBus->init_Filt(4, 0, CAN_STD_ID(CanStateId::lights));
+    canBus->init_Filt(5, 0, CAN_STD_ID(CanStateId::gatewayHeartbeat));
 
     canBus->setMode(MCP_NORMAL);
 
-    fuelGauge->moveServo(leftTank, 0);
-    fuelGauge->moveServo(rightTank, 0);
-    fuelGauge->setBrightness(0);
+    lcd->printFirstLine(String(F("L: ")) + String(0) + String(F(" R: ")) + String(0));
+    lcd->printSecondLine(String(F("Light PWM: ")) + String(0));
 
     isStarted = true;
     return true;
@@ -63,12 +65,16 @@ bool CAN::begin()
 
 void CAN::onCanInterrupt()
 {
+    if (instance == nullptr || instance->isStarted == false) {
+        return;
+    }
+
     // Keep ISR tiny: no SPI, no Serial.
     canIrq = true;
 }
 
 void CAN::loop()
-{    
+{
     if (!isStarted) {
         return;
     }
@@ -95,9 +101,11 @@ void CAN::loop()
         DEBUGLOG_PRINTLN(gatewayAlive ? F("Gateway heartbeat OK") : F("Gateway heartbeat TIMEOUT"));
         // Optional: Failsafe. Für FuelGauge z.B. Helligkeit runter.
         if (!gatewayAlive) {
-            fuelGauge->setBrightness(0);
+            lcd->printSecondLine(String(F("Gateway lost")));
+            lcd->setBacklightPWM(0);
         } else {
-            fuelGauge->setBrightness(255);
+            lcd->printSecondLine(String(F("Gateway OK")));
+            lcd->setBacklightPWM(255);
         }
     }
 
@@ -133,28 +141,29 @@ void CAN::loop()
 
 void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data)
 {
-    DEBUGLOG_PRINTLN(String(F("CAN Message received: ID ")) + id);
+    // DEBUGLOG_PRINTLN(String(F("CAN Message received: ID ")) + id);
 
     // We currently expect standard frames only (ext == 0).
     (void)ext;
 
     // IDs from mcp_can are the actual 11-bit ID (e.g. 0x270), even though filters use (ID<<16).
-    switch (static_cast<CanMessageId>(id))
+    switch (static_cast<CanStateId>(id))
     {
-    case CanMessageId::fuelLevel:
+    case CanStateId::fuelLevel:
     {
         if (len >= 8)
         {
             const uint16_t fuelLeftKg100 = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
             const uint16_t fuelRightKg100 = (static_cast<uint16_t>(data[2]) << 8) | static_cast<uint16_t>(data[3]);
 
-            fuelGauge->moveServo(leftTank, static_cast<float>(fuelLeftKg100) / 100.);
-            fuelGauge->moveServo(rightTank, static_cast<float>(fuelRightKg100) / 100.);
+            const float fuelLeftGalons = static_cast<float>(fuelLeftKg100) / 100. * gallonsPerKg;
+            const float fuelRightGalons = static_cast<float>(fuelRightKg100) / 100. * gallonsPerKg; 
+            lcd->printFirstLine(String(F("L:")) + String(fuelLeftGalons, 1) + String(F(" R: ")) + String(fuelRightGalons, 1));
         }
         break;
     }
 
-    case CanMessageId::lights:
+    case CanStateId::lights:
     {
         if (len >= 8)
         {
@@ -164,12 +173,13 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
             // const uint16_t domeLightDim1000 = (static_cast<uint16_t>(data[4]) << 8) | static_cast<uint16_t>(data[5]);
             float ratio = constrain(static_cast<float>(panelDim1000) / 1000., 0., 1.);
             uint8_t pwm = static_cast<uint8_t>(ratio * 255.);
-            fuelGauge->setBrightness(pwm);
+            lcd->printSecondLine(String(F("Light PWM: ")) + String(pwm));
+            lcd->setBacklightPWM(pwm);
         }
         break;
     }
 
-    case CanMessageId::gatewayHeartbeat:
+    case CanStateId::gatewayHeartbeat:
     {
         updateGatewayHeartbeat(len, data);
         break;
@@ -180,13 +190,13 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     }
 }
 
-void CAN::sendMessage(CanMessageId id, uint8_t len, byte* data)
+void CAN::sendMessage(CanStateId id, uint8_t len, byte* data)
 {
   // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
   uint8_t sndStat = canBus->sendMsgBuf(static_cast<unsigned long>(id), 0, len, data);
   if (sndStat == CAN_OK)
   {
-    //DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
+   // DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
   }
   else
   {
@@ -209,7 +219,7 @@ void CAN::sendInstrumentHeartbeat() {
     data[6] = (uint8_t)((uptime10 >> 8) & 0xFF);
     data[7] = (uint8_t)(uptime10 & 0xFF);
 
-    sendMessage(CanMessageId::instrumentHeartbeat, 8, data);
+    sendMessage(CanStateId::instrumentHeartbeat, 8, data);
 }
 
 void CAN::updateGatewayHeartbeat(uint8_t len, const uint8_t* data) {

@@ -159,7 +159,7 @@ void DCUReceiver::sendFuelLevel()
   data[2] = static_cast<uint8_t>((rightTankLevelKg100 >> 8) & 0xff);
   data[3] = static_cast<uint8_t>(rightTankLevelKg100 & 0xff);
 
-  canBus->sendMessage(CanStateId::fuelLevel, 8, data);
+  canBus->sendMessage(CanMessageId::fuelLevel, 8, data);
   
   // Update last send timestamp for maxAge resync
   fuelLevelMeta.lastSendTimestamp = millis();
@@ -181,7 +181,7 @@ void DCUReceiver::sendCockpitLightLevel()
   data[4] = (uint8_t)((domeLightDim1000 >> 8) & 0xFF);
   data[5] = (uint8_t)(domeLightDim1000 & 0xFF);
 
-  canBus->sendMessage(CanStateId::lights, 8, data);
+  canBus->sendMessage(CanMessageId::lights, 8, data);
   
   // Update last send timestamp for maxAge resync
   cockpitLightMeta.lastSendTimestamp = millis();

@@ -22,6 +22,12 @@ CAN::CAN()
 
     // Configure CAN alarm LED (on = error/not initialized)
     pinMode(kCANAlarmPin, OUTPUT);
+    for (int i=0; i<3; ++i) {
+        digitalWrite(kCANAlarmPin, HIGH);
+        delay(100);
+        digitalWrite(kCANAlarmPin, LOW);
+        delay(100);
+    }
     updateAlarmLED(); // LED on until CAN is successfully initialized
 
     // Hook interrupt to wake our loop when frames arrive.
@@ -52,7 +58,7 @@ bool CAN::begin() {
     canBus->init_Mask(0, 0, MASK_EXACT); // RXB0 exact match
     canBus->init_Mask(1, 0, MASK_EXACT); // RXB1 exact match
 
-    uint32_t filterValue = CAN_STD_ID(CanStateId::instrumentHeartbeat);
+    uint32_t filterValue = CAN_STD_ID(CanMessageId::instrumentHeartbeat);
 
     // RXB0: Instrument heartbeat
     canBus->init_Filt(0, 0, filterValue);
@@ -143,8 +149,8 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t* data
     clearCanIdError(static_cast<uint16_t>(id), CanErrorType::RX_ERROR);
 
     // IDs from mcp_can are the actual 11-bit ID (e.g. 0x270), even though filters use (ID<<16).
-    switch (static_cast<CanStateId>(id)) {
-        case CanStateId::instrumentHeartbeat:
+    switch (static_cast<CanMessageId>(id)) {
+        case CanMessageId::instrumentHeartbeat:
             updateInstrumentHeartbeat(len, data);
             break;
         default:
@@ -152,7 +158,7 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t* data
     }
 }
 
-void CAN::sendMessage(CanStateId id, uint8_t len, byte* data)
+void CAN::sendMessage(CanMessageId id, uint8_t len, byte* data)
 {
   // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
   const uint16_t canId = static_cast<uint16_t>(id);
@@ -187,7 +193,7 @@ void CAN::sendGatewayHeartbeat()
     data[6] = (uint8_t)((uptime10 >> 8) & 0xFF);
     data[7] = (uint8_t)(uptime10 & 0xFF);
 
-    sendMessage(CanStateId::gatewayHeartbeat, 8, data);
+    sendMessage(CanMessageId::gatewayHeartbeat, 8, data);
 }
 
 void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t* data)
@@ -205,7 +211,7 @@ void CAN::checkInstrumentHeartbeats()
 {
     const uint32_t now = millis();
     const uint32_t timeoutMs = 1500;
-    const uint16_t instrumentHeartbeatId = static_cast<uint16_t>(CanStateId::instrumentHeartbeat);
+    const uint16_t instrumentHeartbeatId = static_cast<uint16_t>(CanMessageId::instrumentHeartbeat);
 
     for (uint8_t nodeId = 0; nodeId < kMaxInstrumentNodes; ++nodeId) {
         if (nodeId == kNodeId) continue; // skip gateway itself

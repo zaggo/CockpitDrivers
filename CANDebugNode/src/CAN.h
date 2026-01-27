@@ -5,6 +5,8 @@
 #include <SPI.h>
 #include "LCD.h"
 #include "Configuration.h"
+#include <CanMessageId.h>
+#include <CanNodeId.h>
 
 class CAN {
     public:
@@ -13,7 +15,7 @@ class CAN {
 
         bool begin();
         void loop();
-        void sendMessage(CanStateId id, uint8_t len, byte* data);
+        void sendMessage(CanMessageId id, uint8_t len, byte* data);
 
     private:
         MCP_CAN* canBus;
@@ -21,7 +23,7 @@ class CAN {
         volatile bool isStarted = false;
 
         // Heartbeat (Variante 2)
-        static constexpr uint8_t kNodeId = 1; // FuelGauge
+        static constexpr CanNodeId kNodeId = CanNodeId::debugNodeId; // Debug
         static constexpr uint8_t kFwMajor = 1;
         static constexpr uint8_t kFwMinor = 0;
 

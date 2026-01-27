@@ -4,6 +4,8 @@
 #include <mcp_can.h>
 #include <SPI.h>
 #include "Configuration.h"
+#include <CanMessageId.h>
+#include <CanNodeId.h>
 
 // Error types for CAN ID tracking
 enum class CanErrorType : uint8_t {
@@ -28,14 +30,14 @@ class CAN {
         bool begin();
 
         void loop();
-        void sendMessage(CanStateId id, uint8_t len, byte* data);
+        void sendMessage(CanMessageId id, uint8_t len, byte* data);
 
     private:
         MCP_CAN* canBus;
         volatile bool isStarted = false;
 
         // Heartbeat (Variante 2)
-        static constexpr uint8_t kNodeId = 0; // DCU/Gateway
+        static constexpr CanNodeId kNodeId = CanNodeId::gatewayNodeId; // DCU/Gateway
         static constexpr uint8_t kFwMajor = 1;
         static constexpr uint8_t kFwMinor = 0;
 

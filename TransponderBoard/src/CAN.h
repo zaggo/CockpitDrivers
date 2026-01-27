@@ -3,26 +3,24 @@
 #include <Arduino.h>
 #include <mcp_can.h>
 #include <SPI.h>
-#include "FuelGauge.h"
-#include <CanMessageId.h>
-#include <CanNodeId.h>
+#include "Configuration.h"
 
 class CAN {
     public:
-        CAN(FuelGauge* fuelGauge);
+        CAN(Transponder* transponder);
         ~CAN();
 
         bool begin();
         void loop();
-        void sendMessage(CanMessageId id, uint8_t len, byte* data);
+        void sendMessage(CanStateId id, uint8_t len, byte* data);
 
     private:
         MCP_CAN* canBus;
-        FuelGauge* fuelGauge;
-        bool isStarted = false;
+        Transponder* transponder;
+        volatile bool isStarted = false;
 
         // Heartbeat (Variante 2)
-        static constexpr CanNodeId kNodeId = CanNodeId::fuelGauge; // FuelGauge
+        static constexpr uint8_t kNodeId = 1; // FuelGauge
         static constexpr uint8_t kFwMajor = 1;
         static constexpr uint8_t kFwMinor = 0;
 
