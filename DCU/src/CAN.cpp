@@ -2,15 +2,12 @@
 #include "Configuration.h"
 #include "DebugLog.h"
 
-volatile bool CAN::canIrq = false;
-CAN* CAN::instance = nullptr;
-
 CAN::CAN()
+    : BaseCAN(kCanCSPin, kCanIntPin, {CanNodeId::gatewayNodeId, 1, 0})
 {
-    canBus = new MCP_CAN(kCanCSPin);
-
     // Initialize CAN ID error tracking array
-    for (uint8_t i = 0; i < kMaxCanIdErrors; ++i) {
+    for (uint8_t i = 0; i < kMaxCanIdErrors; ++i)
+    {
         canIdErrors[i].canId = 0;
         canIdErrors[i].hasError = false;
         canIdErrors[i].errorType = CanErrorType::NONE;
@@ -22,7 +19,8 @@ CAN::CAN()
 
     // Configure CAN alarm LED (on = error/not initialized)
     pinMode(kCANAlarmPin, OUTPUT);
-    for (int i=0; i<3; ++i) {
+    for (int i = 0; i < 3; ++i)
+    {
         digitalWrite(kCANAlarmPin, HIGH);
         delay(100);
         digitalWrite(kCANAlarmPin, LOW);
@@ -30,24 +28,18 @@ CAN::CAN()
     }
     updateAlarmLED(); // LED on until CAN is successfully initialized
 
-    // Hook interrupt to wake our loop when frames arrive.
-    // NOTE: class ISR needs a static entry point; we keep a single active instance.
-    instance = this;
-    canIrq = false;
-    attachInterrupt(digitalPinToInterrupt(kCanIntPin), CAN::onCanInterrupt, FALLING); 
-
     DEBUGLOG_PRINTLN(F("CAN initialized"));
 }
 
 CAN::~CAN()
 {
-    detachInterrupt(digitalPinToInterrupt(kCanIntPin));
-    instance = nullptr;
-    delete canBus;
+    // BaseCAN destructor will handle canBus cleanup and interrupt detach
 }
 
-bool CAN::begin() {
-    if (canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) != CAN_OK)
+bool CAN::begin()
+{
+    bool didBegin = BaseCAN::begin();
+    if (!didBegin)
     {
         DEBUGLOG_PRINTLN(F("CAN init fail"));
         updateAlarmLED();
@@ -77,19 +69,10 @@ bool CAN::begin() {
     return true;
 }
 
-void CAN::onCanInterrupt()
-{
-    if (instance == nullptr || instance->isStarted == false) {
-        return;
-    }
-
-    // Keep ISR tiny: no SPI, no Serial.
-    canIrq = true;
-}
-
 void CAN::loop()
 {
-    if (!isStarted) {
+    if (!isStarted)
+    {
         return;
     }
 
@@ -98,14 +81,16 @@ void CAN::loop()
     // --- CAN RX: Handle incoming frames ---
     // Check if messages are available (polling mode since INT pin doesn't work reliably)
     byte receiveStatus = canBus->checkReceive();
-    if (receiveStatus != CAN_NOMSG) {
+    if (receiveStatus != CAN_NOMSG)
+    {
         // Clear interrupt flag if it was set
         noInterrupts();
         canIrq = false;
         interrupts();
 
         // Drain all pending frames
-        while (canBus->checkReceive() != CAN_NOMSG) {
+        while (canBus->checkReceive() != CAN_NOMSG)
+        {
 
             unsigned long rxId = 0;
             byte ext = 0;
@@ -121,12 +106,14 @@ void CAN::loop()
     const uint32_t periodMs = 500;
     const uint32_t offsetMs = 0; // Gateway = 0
 
-    if (lastGatewayHeartbeatSendMs == 0) {
+    if (lastGatewayHeartbeatSendMs == 0)
+    {
         lastGatewayHeartbeatSendMs = now + offsetMs;
     }
 
     // Uncomment to enable Gateway Heartbeat
-    if ((int32_t)(now - lastGatewayHeartbeatSendMs) >= 0) {
+    if ((int32_t)(now - lastGatewayHeartbeatSendMs) >= 0)
+    {
         sendGatewayHeartbeat();
         lastGatewayHeartbeatSendMs += periodMs;
     }
@@ -138,9 +125,9 @@ void CAN::loop()
     updateAlarmLED();
 }
 
-void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t* data)
+void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data)
 {
-    //DEBUGLOG_PRINTLN(String(F("CAN Message received: ID "))+String(id, HEX));
+    // DEBUGLOG_PRINTLN(String(F("CAN Message received: ID "))+String(id, HEX));
 
     // We currently expect standard frames only (ext == 0).
     (void)ext;
@@ -149,32 +136,32 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t* data
     clearCanIdError(static_cast<uint16_t>(id), CanErrorType::RX_ERROR);
 
     // IDs from mcp_can are the actual 11-bit ID (e.g. 0x270), even though filters use (ID<<16).
-    switch (static_cast<CanMessageId>(id)) {
-        case CanMessageId::instrumentHeartbeat:
-            updateInstrumentHeartbeat(len, data);
-            break;
-        default:
-            break;
+    switch (static_cast<CanMessageId>(id))
+    {
+    case CanMessageId::instrumentHeartbeat:
+        updateInstrumentHeartbeat(len, data);
+        break;
+    default:
+        break;
     }
 }
 
-void CAN::sendMessage(CanMessageId id, uint8_t len, byte* data)
+void CAN::sendMessage(CanMessageId id, uint8_t len, byte *data)
 {
-  // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
-  const uint16_t canId = static_cast<uint16_t>(id);
-  uint8_t sndStat = canBus->sendMsgBuf(static_cast<unsigned long>(id), 0, len, data);
-  if (sndStat == CAN_OK)
-  {
-    //DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
-    // Clear error status for this CAN ID on successful send
-    clearCanIdError(canId, CanErrorType::TX_ERROR);
-  }
-  else
-  {
-    DEBUGLOG_PRINTLN(String(F("Error Sending Message:"))+sndStat);
-    // Set error status for this CAN ID
-    setCanIdError(canId, CanErrorType::TX_ERROR);
-  }
+    const uint16_t canId = static_cast<uint16_t>(id);
+    bool success = BaseCAN::sendMessage(id, len, data);
+    if (success)
+    {
+        // DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
+        //  Clear error status for this CAN ID on successful send
+        clearCanIdError(canId, CanErrorType::TX_ERROR);
+    }
+    else
+    {
+        DEBUGLOG_PRINTLN(String(F("Error Sending Message to id 0x")) + String(static_cast<unsigned long>(id), HEX));
+        // Set error status for this CAN ID
+        setCanIdError(canId, CanErrorType::TX_ERROR);
+    }
 }
 
 void CAN::sendGatewayHeartbeat()
@@ -182,9 +169,9 @@ void CAN::sendGatewayHeartbeat()
     // CAN ID 0x300 (gatewayHeartbeat), payload 8 bytes:
     // [0]=nodeId, [1]=fwMajor, [2]=fwMinor, [3]=flags, [4..7]=uptime/10ms (u32, big endian)
     byte data[8] = {0};
-    data[0] = kNodeId;
-    data[1] = kFwMajor;
-    data[2] = kFwMinor;
+    data[0] = fwInfo.nodeId;
+    data[1] = fwInfo.fwMajor;
+    data[2] = fwInfo.fwMinor;
     data[3] = 0x01; // bit0=OK
 
     const uint32_t uptime10 = millis() / 10;
@@ -196,13 +183,15 @@ void CAN::sendGatewayHeartbeat()
     sendMessage(CanMessageId::gatewayHeartbeat, 8, data);
 }
 
-void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t* data)
+void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
 {
     // DEBUGLOG_PRINTLN(String(F("Received Instrument HB")) + String(len) + F(" bytes"));
-    if (len < 8) return;
+    if (len < 8)
+        return;
 
     const uint8_t nodeId = data[0];
-    if (nodeId >= kMaxInstrumentNodes) return;
+    if (nodeId >= kMaxInstrumentNodes)
+        return;
     // DEBUGLOG_PRINTLN(String(F("Received Instrument HB from node ")) + nodeId);
     lastInstrumentHeartbeatMs[nodeId] = millis();
 }
@@ -213,21 +202,27 @@ void CAN::checkInstrumentHeartbeats()
     const uint32_t timeoutMs = 1500;
     const uint16_t instrumentHeartbeatId = static_cast<uint16_t>(CanMessageId::instrumentHeartbeat);
 
-    for (uint8_t nodeId = 0; nodeId < kMaxInstrumentNodes; ++nodeId) {
-        if (nodeId == kNodeId) continue; // skip gateway itself
+    for (uint8_t nodeId = 0; nodeId < kMaxInstrumentNodes; ++nodeId)
+    {
+        if (nodeId == fwInfo.nodeId)
+            continue; // skip gateway itself
 
         const bool alive = (lastInstrumentHeartbeatMs[nodeId] != 0) && (now - lastInstrumentHeartbeatMs[nodeId] <= timeoutMs);
-        if (alive != instrumentAlive[nodeId]) {
+        if (alive != instrumentAlive[nodeId])
+        {
             instrumentAlive[nodeId] = alive;
             // For now: log state changes. Later can propagate to USB status/annunciators.
             // DEBUGLOG_PRINTLN(String(F("Instrument HB node ")) + nodeId + (alive ? F(" OK") : F(" TIMEOUT")));
-            
+
             // Update error tracking: Use instrumentHeartbeat CAN ID with node-specific offset
             // to distinguish different nodes (ID + nodeId)
             const uint16_t nodeSpecificId = instrumentHeartbeatId + nodeId;
-            if (alive) {
+            if (alive)
+            {
                 clearCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);
-            } else {
+            }
+            else
+            {
                 setCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);
             }
         }
@@ -237,11 +232,16 @@ void CAN::checkInstrumentHeartbeats()
 void CAN::setCanIdError(uint16_t canId, CanErrorType errorType)
 {
     // Check if this CAN ID already has an error entry
-    for (uint8_t i = 0; i < canIdErrorCount; ++i) {
-        if (canIdErrors[i].canId == canId) {
-            if (!canIdErrors[i].hasError || canIdErrors[i].errorType != errorType) {
-                const char* errorTypeStr = (errorType == CanErrorType::TX_ERROR) ? "TX" : 
-                                          (errorType == CanErrorType::RX_ERROR) ? "RX" : "HEARTBEAT";
+    for (uint8_t i = 0; i < canIdErrorCount; ++i)
+    {
+        if (canIdErrors[i].canId == canId)
+        {
+            if (!canIdErrors[i].hasError || canIdErrors[i].errorType != errorType)
+            {
+#if DEBUGLOG_ENABLE
+                const char *errorTypeStr = (errorType == CanErrorType::TX_ERROR) ? "TX" : (errorType == CanErrorType::RX_ERROR) ? "RX"
+                                                                                                                                : "HEARTBEAT";
+#endif
                 DEBUGLOG_PRINTLN(String(F("CAN ID 0x")) + String(canId, HEX) + F(" ") + errorTypeStr + F(" ERROR set"));
                 canIdErrors[i].hasError = true;
                 canIdErrors[i].errorType = errorType;
@@ -249,11 +249,14 @@ void CAN::setCanIdError(uint16_t canId, CanErrorType errorType)
             return;
         }
     }
-    
+
     // Add new error entry if space available
-    if (canIdErrorCount < kMaxCanIdErrors) {
-        const char* errorTypeStr = (errorType == CanErrorType::TX_ERROR) ? "TX" : 
-                                  (errorType == CanErrorType::RX_ERROR) ? "RX" : "HEARTBEAT";
+    if (canIdErrorCount < kMaxCanIdErrors)
+    {
+#if DEBUGLOG_ENABLE
+        const char *errorTypeStr = (errorType == CanErrorType::TX_ERROR) ? "TX" : (errorType == CanErrorType::RX_ERROR) ? "RX"
+                                                                                                                        : "HEARTBEAT";
+#endif
         canIdErrors[canIdErrorCount].canId = canId;
         canIdErrors[canIdErrorCount].hasError = true;
         canIdErrors[canIdErrorCount].errorType = errorType;
@@ -266,12 +269,17 @@ void CAN::clearCanIdError(uint16_t canId, CanErrorType errorType)
 {
     // Find and clear error for this CAN ID
     // If errorType is NONE, clear any error type; otherwise only clear matching error type
-    for (uint8_t i = 0; i < canIdErrorCount; ++i) {
-        if (canIdErrors[i].canId == canId && canIdErrors[i].hasError) {
+    for (uint8_t i = 0; i < canIdErrorCount; ++i)
+    {
+        if (canIdErrors[i].canId == canId && canIdErrors[i].hasError)
+        {
             // Check if we should clear this error based on type filter
-            if (errorType == CanErrorType::NONE || canIdErrors[i].errorType == errorType) {
-                const char* errorTypeStr = (canIdErrors[i].errorType == CanErrorType::TX_ERROR) ? "TX" : 
-                                          (canIdErrors[i].errorType == CanErrorType::RX_ERROR) ? "RX" : "HEARTBEAT";
+            if (errorType == CanErrorType::NONE || canIdErrors[i].errorType == errorType)
+            {
+#if DEBUGLOG_ENABLE
+                const char *errorTypeStr = (canIdErrors[i].errorType == CanErrorType::TX_ERROR) ? "TX" : (canIdErrors[i].errorType == CanErrorType::RX_ERROR) ? "RX"
+                                                                                                                                                              : "HEARTBEAT";
+#endif
                 canIdErrors[i].hasError = false;
                 canIdErrors[i].errorType = CanErrorType::NONE;
                 DEBUGLOG_PRINTLN(String(F("CAN ID 0x")) + String(canId, HEX) + F(" ") + errorTypeStr + F(" ERROR cleared"));
@@ -286,21 +294,26 @@ void CAN::updateAlarmLED()
     // LED should be on if:
     // 1. CAN is not started/initialized, OR
     // 2. Any CAN ID has an error status
-    
+
     bool ledOn = false;
-    
-    if (!isStarted) {
+
+    if (!isStarted)
+    {
         // CAN not initialized - LED on
         ledOn = true;
-    } else {
+    }
+    else
+    {
         // Check if any CAN ID has an error
-        for (uint8_t i = 0; i < canIdErrorCount; ++i) {
-            if (canIdErrors[i].hasError) {
+        for (uint8_t i = 0; i < canIdErrorCount; ++i)
+        {
+            if (canIdErrors[i].hasError)
+            {
                 ledOn = true;
                 break;
             }
         }
     }
-    
+
     digitalWrite(kCANAlarmPin, ledOn ? HIGH : LOW);
 }

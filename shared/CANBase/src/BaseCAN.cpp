@@ -12,6 +12,7 @@ BaseCAN::BaseCAN(uint8_t csPin, uint8_t intPin, CANFirmwareInfo fwInfo)
     canIrq = false;
     attachInterrupt(digitalPinToInterrupt(intPin), BaseCAN::onCanInterrupt, FALLING);
 }
+
 BaseCAN::~BaseCAN()
 {
     detachInterrupt(digitalPinToInterrupt(intPin));
@@ -25,7 +26,7 @@ BaseCAN::~BaseCAN()
 
 bool BaseCAN::begin()
 {
-    return canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) != CAN_OK;
+    return canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK;
 }
 
 void BaseCAN::onCanInterrupt()

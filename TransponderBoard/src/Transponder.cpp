@@ -44,9 +44,10 @@ Transponder::Transponder()
     mcp->clearInterrupts();
 
     pinMode(kMCP23017InterruptPin, INPUT_PULLUP);
+    pinMode(kKeyBacklightPin, OUTPUT);
+    analogWrite(kKeyBacklightPin, 50);ƒ
 
-    attachInterrupt(digitalPinToInterrupt(kMCP23017InterruptPin), []()
-                    {
+    attachInterrupt(digitalPinToInterrupt(kMCP23017InterruptPin), []() {
         if (Transponder::instance)
         {
             Transponder::instance->mcpInterrupt = true;

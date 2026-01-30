@@ -11,6 +11,7 @@ enum class CanMessageId : uint16_t {
   // Heartbeats (Variante 2)
   // 0x300: Gateway heartbeat (Instrumente überwachen den DCU)
   gatewayHeartbeat = 0x300,
+  
   // 0x301: Instrument heartbeat (DCU überwacht Instrumente; nodeId im Payload)
   instrumentHeartbeat = 0x301
 };

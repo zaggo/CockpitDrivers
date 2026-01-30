@@ -14,6 +14,7 @@ const uint8_t kTransponderDioPin = 5;
 const uint8_t kCanIntPin = 2;
 const uint8_t kCanCSPin = 10;
 
+const uint8_t kKeyBacklightPin = 9; // Set to 1 to enable I2C pins configuration
 
 const uint8_t kSDA = A4;
 const uint8_t kSCL = A5;

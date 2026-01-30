@@ -1,8 +1,7 @@
 #ifndef CAN_H
 #define CAN_H
 #include <Arduino.h>
-#include <mcp_can.h>
-#include <SPI.h>
+#include <BaseCAN.h>
 #include "Configuration.h"
 #include <CanMessageId.h>
 #include <CanNodeId.h>
@@ -22,25 +21,17 @@ struct CanIdError {
     CanErrorType errorType;
 };
 
-class CAN {
+class CAN : public BaseCAN {
     public:
         CAN();
         ~CAN();
 
-        bool begin();
+        bool begin() override;
 
         void loop();
         void sendMessage(CanMessageId id, uint8_t len, byte* data);
 
     private:
-        MCP_CAN* canBus;
-        volatile bool isStarted = false;
-
-        // Heartbeat (Variante 2)
-        static constexpr CanNodeId kNodeId = CanNodeId::gatewayNodeId; // DCU/Gateway
-        static constexpr uint8_t kFwMajor = 1;
-        static constexpr uint8_t kFwMinor = 0;
-
         uint32_t lastGatewayHeartbeatSendMs = 0;
 
         // Instrument heartbeat monitoring (nodeId -> last seen)
@@ -59,12 +50,6 @@ class CAN {
         void updateAlarmLED();
         void clearCanIdError(uint16_t canId, CanErrorType errorType = CanErrorType::NONE);
         void setCanIdError(uint16_t canId, CanErrorType errorType);
-
-        // MCP2515 /INT is active-low and stays low while RX buffers have pending frames.
-        // Keep ISR minimal: just set a flag. (Do NOT touch SPI or Serial in ISR.)
-        static void onCanInterrupt();
-        static volatile bool canIrq;
-        static CAN* instance;
 
         void handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t* data);
 };

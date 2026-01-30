@@ -9,8 +9,8 @@
 struct CANFirmwareInfo
 {
     CanNodeId nodeId;
-    uint8_t major;
-    uint8_t minor;
+    uint8_t fwMajor;
+    uint8_t fwMinor;
 };
 
 class BaseCAN
@@ -18,7 +18,9 @@ class BaseCAN
 public:
     BaseCAN(uint8_t csPin, uint8_t intPin, CANFirmwareInfo fwInfo);
     virtual ~BaseCAN();
-    bool begin();
+    
+    virtual bool begin();
+
     bool sendMessage(CanMessageId id, uint8_t len, byte* data);
 
 protected:

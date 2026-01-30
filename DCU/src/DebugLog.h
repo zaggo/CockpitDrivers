@@ -1,7 +1,7 @@
 #ifndef DEBUGLOG_H
 #define DEBUGLOG_H
 
-#define DEBUGLOG_ENABLE 0
+#define DEBUGLOG_ENABLE 1
 
 #if DEBUGLOG_ENABLE
 #define DEBUGLOG_INIT(x) Serial.begin(x)
