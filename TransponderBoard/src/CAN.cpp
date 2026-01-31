@@ -71,7 +71,9 @@ void CAN::handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t *
             const uint16_t code = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
             const uint8_t mode = data[2];
             const uint8_t light = data[3];
-
+            DEBUGLOG_PRINTLN(String(F("Received Transponder CAN frame: code=")) + String(code) +
+                              String(F(" mode=")) + String(mode) +
+                              String(F(" light=")) + String(light));
             transponder->setSquawkCode(String(code / 1000 % 10) +
                                        String(code / 100 % 10) +
                                        String(code / 10 % 10) +

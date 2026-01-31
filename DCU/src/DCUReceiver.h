@@ -4,6 +4,7 @@
 #include "Configuration.h"
 #include "CAN.h"
 #include "DCUSender.h"
+#include <SerialMessageId.h>
 
 // Message metadata for maxAge resync
 struct MessageMeta {
@@ -19,7 +20,7 @@ class DCUReceiver {
         void loop();
 
     private:        
-        void handleFrame(uint8_t t, uint8_t l, const uint8_t* p);
+        void handleFrame(MessageType t, uint8_t l, const uint8_t* p);
         void checkMaxAgeResync();
 
         bool readBytes(uint8_t* dst, size_t n);
@@ -39,8 +40,8 @@ class DCUReceiver {
         uint16_t domeLightDim1000 = 0;
 
         // Transponder
-        uint16_t transponderCode = 10;
-        uint8_t transponderMode = 2;
+        uint16_t transponderCode = 0;
+        uint8_t transponderMode = 3;
         uint8_t transponderLight = 0;
 
         // Message metadata for maxAge resync

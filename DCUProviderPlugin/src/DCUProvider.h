@@ -72,7 +72,9 @@ private:
     
     float fuelAccumulator_ = 0.0f;
     float lightsAccumulator_ = 0.0f;
+    float transponderAccumulator_ = 0.0f;
     
     static constexpr float FUEL_RATE = 5.0f;    // Hz
-    static constexpr float LIGHTS_RATE = 2.0f;  // Hz
+    static constexpr float LIGHTS_RATE = 10.0f;  // Hz
+    static constexpr float TRANSPONDER_RATE = 10.0f; // Hz
 };

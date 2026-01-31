@@ -5,6 +5,7 @@
 #include <ctime>
 #include <thread>
 #include <chrono>
+#include <SerialMessageId.h>
 
 DCUProvider::DCUProvider() = default;
 
@@ -153,14 +154,14 @@ void DCUProvider::updateDownlink(float dt) {
         fuel.fuelLeft = dataRefMgr_->getFuelLeft();
         fuel.fuelRight = dataRefMgr_->getFuelRight();
         
-        msgQueue_->enqueueTx(MessageType::Fuel, &fuel, sizeof(fuel));
-        
+        msgQueue_->enqueueTx(MessageType::SerialMessageFuel, &fuel, sizeof(fuel));
+
         fuelAccumulator_ = 0.0f;
     }
     
     // ============ Lights Data (10 Hz) ============
     lightsAccumulator_ += dt;
-    float lightsRate = 1.0f / 10.0f;  // 10 Hz = every 0.1s
+    float lightsRate = 1.0f / LIGHTS_RATE;  // 10 Hz = every 0.1s
     
     if (lightsAccumulator_ >= lightsRate) {
         struct LightsData {
@@ -175,9 +176,30 @@ void DCUProvider::updateDownlink(float dt) {
         lights.radioDim = brightness[1];
         lights.domeLightDim = dataRefMgr_->getDomeLightBrightness();
         
-        msgQueue_->enqueueTx(MessageType::Lights, &lights, sizeof(lights));
+        msgQueue_->enqueueTx(MessageType::SerialMessageLights, &lights, sizeof(lights));
         
         lightsAccumulator_ = 0.0f;
+    }
+
+    // ============ Transponder Data (10 Hz) ============
+    transponderAccumulator_ += dt;
+    float transponderRate = 1.0f / TRANSPONDER_RATE;  // 10 Hz = every 0.1s
+
+    if (transponderAccumulator_ >= transponderRate) {
+        struct TransponderData {
+            uint16_t code;
+            uint8_t mode;
+            uint8_t light;
+        };
+
+        TransponderData transponder;
+        transponder.code = static_cast<uint16_t>(dataRefMgr_->getTransponderCode());
+        transponder.mode = static_cast<uint8_t>(dataRefMgr_->getTransponderMode());
+        transponder.light = dataRefMgr_->getTransponderLight() > 0 ? true : false;
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageTransponder, &transponder, sizeof(transponder));
+
+        transponderAccumulator_ = 0.0f;
     }
     
     // TODO: Add more downlink data based on CAN Message IDs
@@ -202,12 +224,12 @@ void DCUProvider::updateUplink() {
         
         // Route message by type
         switch (msg->type) {
-            case MessageType::Fuel:
+            case MessageType::SerialMessageFuel:
                 // Gateway → Plugin: This would be for reading fuel from a device
                 // (not typical for Piper Arrow, but possible)
                 break;
             
-            case MessageType::Lights:
+            case MessageType::SerialMessageLights:
                 // Gateway → Plugin: This would be for reading light switches from device
                 // (not typical for Piper Arrow, but possible)
                 break;

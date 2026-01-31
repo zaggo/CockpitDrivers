@@ -16,9 +16,9 @@ std::vector<uint8_t> TransportLayer::encodeFrame(MessageType type, const void* p
     frame.push_back(FRAME_SYNC_0);  // 0xAA
     frame.push_back(FRAME_SYNC_1);  // 0x55
     
-    // Message type
+    // Message type - cast enum to uint8_t
     frame.push_back(static_cast<uint8_t>(type));
-    
+
     // Payload length
     frame.push_back(len);
     

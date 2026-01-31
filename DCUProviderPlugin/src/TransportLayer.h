@@ -3,12 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <optional>
-
-enum class MessageType : uint8_t {
-    Fuel   = 0x01,
-    Lights = 0x02,
-    // TODO: Add more types based on CAN Message IDs
-};
+#include <SerialMessageId.h>
 
 struct Message {
     MessageType type;

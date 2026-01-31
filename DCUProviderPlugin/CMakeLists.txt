@@ -106,6 +106,7 @@ target_include_directories(DCUProvider PRIVATE
     ${XPLANE_INCLUDE_DIR}
     ${XPLANE_UTIL_INCLUDE_DIR}
     src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/CANBase/include
 )
 
 # ============ PLATFORM DEFINITIONS ============

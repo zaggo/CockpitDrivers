@@ -6,6 +6,8 @@ EXPORTS
     XPLMFindDataRef
     XPLMGetDataf
     XPLMSetDataf
+    XPLMGetDatai
+    XPLMSetDatai
     XPLMGetDatavf
     XPLMCreateWindowEx
     XPLMDestroyWindow

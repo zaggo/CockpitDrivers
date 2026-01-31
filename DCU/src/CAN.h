@@ -53,9 +53,11 @@ class CAN : public BaseCAN {
         // Reference to DCUSender for sending messages back to DCUProvider Plugin
         DCUSender* dcuSender = nullptr;
 
-        void sendGatewayHeartbeat();
+        // Handle incoming Serial Message frames
         void updateInstrumentHeartbeat(uint8_t len, const uint8_t* data);
-        void updateTransponderInput(uint8_t len, const uint8_t* data);
+        void updateTransponder(uint8_t len, const uint8_t* data);
+
+        void sendGatewayHeartbeat();
         void checkInstrumentHeartbeats();
         void updateAlarmLED();
         void clearCanIdError(uint16_t canId, CanErrorType errorType = CanErrorType::NONE);

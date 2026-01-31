@@ -26,6 +26,14 @@ public:
     // Lights
     std::vector<float> getPanelBrightness() const;  // [0] and [1], 0.0 - 1.0
     float getDomeLightBrightness() const;  // 0.0 - 1.0
+
+    // Transponder
+    uint16_t getTransponderCode() const;
+    uint8_t getTransponderMode() const;
+    bool getTransponderLight() const;
+    void setTransponderCode(uint16_t code);
+    void setTransponderMode(uint8_t mode);
+    void setTransponderIdent(bool ident);
     
     // ============ UPLINK (Gateway → Plugin) ============
     /// Sets barometer altimeter setting (inHg)
@@ -55,4 +63,9 @@ private:
     XPLMDataRef dr_domeLightDim = nullptr;
     XPLMDataRef dr_HeadingBug = nullptr;
     XPLMDataRef dr_BarometerSetting = nullptr;
+    XPLMDataRef dr_TransponderCode = nullptr;
+    XPLMDataRef dr_TransponderMode = nullptr;
+    XPLMDataRef dr_TransponderLight = nullptr;
+    XPLMDataRef dr_TransponderIdent = nullptr;
+
 };

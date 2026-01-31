@@ -175,16 +175,16 @@ void Transponder::tick()
         {
         case no_error:
             bufferMode(currentMode, identActive);
-            if (displayMode == off && currentMode != off)
+            if (currentMode != off)
             {
                 bufferSquawk(displaySquakCode);
+            } else {
+                for (int i = 0; i < 4; ++i)
+                {
+                    data[squakIndex[i]] = 0x00;
+                }
             }
-            if (displayIdentActive && !identActive)
-            {
-                bufferSquawk(displaySquakCode);
-            }
-            displayMode = currentMode;
-            displayIdentActive = identActive;
+            bufferMode(currentMode, identActive);
             updated = true;
             break;
         case can_fail:

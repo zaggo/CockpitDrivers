@@ -1,11 +1,6 @@
 #include "DCUReceiver.h"
 #include "DebugLog.h"
 
-// Message type constants
-static constexpr uint8_t MSG_FUEL = 0x01;
-static constexpr uint8_t MSG_LIGHTS = 0x02;
-static constexpr uint8_t MSG_TRANSPONDER = 0x03;
-
 enum class RxState : uint8_t
 {
   SyncAA,
@@ -16,7 +11,7 @@ enum class RxState : uint8_t
 };
 
 static RxState state = RxState::SyncAA;
-static uint8_t type = 0;
+static MessageType type = static_cast<MessageType>(0);
 static uint8_t len = 0;
 static uint8_t buf[32];
 static uint8_t idx = 0;
@@ -30,9 +25,9 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   canBus->setDCUSender(dcuSender);
   
   // Initialize message metadata with maxAge of 5 seconds
-  fuelLevelMeta = {0, 10000};
-  cockpitLightMeta = {0, 10000};
-  transponderMeta = {1, 10000};
+  fuelLevelMeta = {0, 5000};
+  cockpitLightMeta = {0, 5000};
+  transponderMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -63,7 +58,7 @@ void DCUReceiver::loop()
       break;
 
     case RxState::Type:
-      type = b;
+      type = static_cast<MessageType>(b);
       state = RxState::Len;
       break;
 
@@ -92,12 +87,12 @@ void DCUReceiver::loop()
   }
 }
 
-void DCUReceiver::handleFrame(uint8_t type, uint8_t len, const uint8_t *payload)
+void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payload)
 {
   // DEBUGLOG_PRINTLN(String(F("DCUReceiver::handleFrame type:")) + String(type) + String(F(" len:")) + String(len));
   switch (type)
   {
-  case MSG_FUEL:
+  case MessageType::SerialMessageFuel:
   {
     // Payload: float fuelL, float fuelR (8 bytes)
     if (len != 8)
@@ -120,7 +115,7 @@ void DCUReceiver::handleFrame(uint8_t type, uint8_t len, const uint8_t *payload)
     break;
   }
 
-  case MSG_LIGHTS:
+  case MessageType::SerialMessageLights:
   {
     if (len != 12)
       return;
@@ -149,7 +144,7 @@ void DCUReceiver::handleFrame(uint8_t type, uint8_t len, const uint8_t *payload)
     break;
   }
 
-  case MSG_TRANSPONDER:
+  case MessageType::SerialMessageTransponder :
   {
     if (len != 4)
       return;

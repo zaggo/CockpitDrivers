@@ -143,7 +143,7 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
         updateInstrumentHeartbeat(len, data);
         break;
     case CanMessageId::transponderInput:
-        updateTransponderInput(len, data);
+        updateTransponder(len, data);
         break;
     default:
         break;
@@ -206,7 +206,7 @@ void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
     lastInstrumentHeartbeatMs[nodeId] = millis();
 }
 
-void CAN::updateTransponderInput(uint8_t len, const uint8_t *data)
+void CAN::updateTransponder(uint8_t len, const uint8_t *data)
 {
     // Handle transponder input frame (not implemented yet)
     if (len < 8)

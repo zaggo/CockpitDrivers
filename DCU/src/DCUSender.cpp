@@ -19,17 +19,17 @@ void DCUSender::sendTransponderInput(uint16_t code, uint8_t mode, uint8_t ident)
     payload[2] = mode;
     payload[3] = ident;
 
-    sendFrame(MSG_TRANSPONDER_INPUT, 4, payload);
+    sendFrame(MessageType::SerialMessageTransponder, sizeof(payload), payload);
     
     DEBUGLOG_PRINTLN(String(F("Sent Transponder Input: code ")) + String(code) + String(F(" mode ")) + String(mode) + String(F(" ident ")) + String(ident));
 }
 
-void DCUSender::sendFrame(uint8_t type, uint8_t len, const uint8_t* payload)
+void DCUSender::sendFrame(MessageType type, uint8_t len, const uint8_t* payload)
 {
     // Frame format: 0xAA 0x55 TYPE LEN PAYLOAD
     Serial.write(0xAA);
     Serial.write(0x55);
-    Serial.write(type);
+    Serial.write(static_cast<uint8_t>(type));
     Serial.write(len);
     
     for (uint8_t i = 0; i < len; ++i)
