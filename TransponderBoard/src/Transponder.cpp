@@ -339,7 +339,7 @@ void Transponder::tick()
         }
     }
 
-    if (transponderLightOn != displayTransponderLightOn && !identActive)
+    if (transponderLightOn != displayTransponderLightOn && !identActive && currentMode != off && currentMode != stdby)
     {
         if (1 < kLEDDigits) // Bounds check
         {
