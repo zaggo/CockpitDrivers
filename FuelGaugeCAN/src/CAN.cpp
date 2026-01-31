@@ -2,40 +2,21 @@
 #include "Configuration.h"
 #include "DebugLog.h"
 
-volatile bool CAN::canIrq = false;
-CAN *CAN::instance = nullptr;
-
-CAN::CAN(FuelGauge *fuelGauge) : fuelGauge(fuelGauge)
+CAN::CAN(FuelGauge *fuelGauge) 
+    : InstrumentCAN(kCanCSPin, kCanIntPin,{CanNodeId::fuelGaugeNodeId, 1, 0}),
+      fuelGauge(fuelGauge)
 {
-    canBus = new MCP_CAN(kCanCSPin);
-
-    // MCP2515 /INT is open-drain, active-low. Use pull-up.
-    pinMode(kCanIntPin, INPUT_PULLUP);
-
-    // Hook interrupt to wake our loop when frames arrive.
-    // NOTE: class ISR needs a static entry point; we keep a single active instance.
-    instance = this;
-    canIrq = false;
-    attachInterrupt(digitalPinToInterrupt(kCanIntPin), CAN::onCanInterrupt, FALLING);
-
     DEBUGLOG_PRINTLN(F("CAN initialized"));
 }
 
-CAN::~CAN()
+void CAN::onStartupFail()
 {
-    detachInterrupt(digitalPinToInterrupt(kCanIntPin));
-    instance = nullptr;
-    delete canBus;
+    DEBUGLOG_PRINTLN(F("CAN startup FAIL"));
+    fuelGauge->setBrightness(0);
 }
 
-bool CAN::begin()
+bool CAN::instrumentBegin()
 {
-    if (canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) != CAN_OK)
-    {
-        DEBUGLOG_PRINTLN(F("CAN init fail"));
-        return false;
-    }
-
     // Beide RX-Buffer vergleichen alle ID-Bits
     canBus->init_Mask(0, 0, MASK_EXACT); // RXB0
     canBus->init_Mask(1, 0, MASK_EXACT); // RXB1
@@ -57,89 +38,18 @@ bool CAN::begin()
     fuelGauge->moveServo(rightTank, 0);
     fuelGauge->setBrightness(0);
 
-    isStarted = true;
     return true;
 }
 
-void CAN::onCanInterrupt()
+void CAN::handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t *data)
 {
-    // Keep ISR tiny: no SPI, no Serial.
-    canIrq = true;
-}
-
-void CAN::loop()
-{    
-    if (!isStarted) {
-        return;
-    }
-
-    // --- Heartbeat TX (Instrument -> DCU), 2 Hz mit kleinem Offset pro Node ---
-    const uint32_t now = millis();
-    const uint32_t periodMs = 500;
-    const uint32_t offsetMs = (uint32_t)kNodeId * 20; // vermeidet gleichzeitige HBs
-
-    if (lastInstrumentHeartbeatSendMs == 0) {
-        lastInstrumentHeartbeatSendMs = now + offsetMs; // erster Sendetermin
-    }
-
-    if ((int32_t)(now - lastInstrumentHeartbeatSendMs) >= 0) {
-        sendInstrumentHeartbeat();
-        lastInstrumentHeartbeatSendMs += periodMs;
-    }
-
-    // --- Gateway Heartbeat Timeout (DCU -> Instrument) ---
-    const uint32_t timeoutMs = 1500;
-    const bool alive = (lastGatewayHeartbeatMs != 0) && (now - lastGatewayHeartbeatMs <= timeoutMs);
-    if (alive != gatewayAlive) {
-        gatewayAlive = alive;
-        DEBUGLOG_PRINTLN(gatewayAlive ? F("Gateway heartbeat OK") : F("Gateway heartbeat TIMEOUT"));
-        // Optional: Failsafe. Für FuelGauge z.B. Helligkeit runter.
-        if (!gatewayAlive) {
-            fuelGauge->setBrightness(0);
-        } else {
-            fuelGauge->setBrightness(255);
-        }
-    }
-
-    // Fast path: no interrupt seen and line is high -> nothing to do.
-    if (!canIrq && digitalRead(kCanIntPin) == HIGH)
-    {
-        return;
-    }
-
-    // Clear flag early; if more frames arrive while draining, ISR will set it again.
-    noInterrupts();
-    canIrq = false;
-    interrupts();
-
-    // Drain all pending frames. INT stays low while RX buffers contain unread frames.
-    while (digitalRead(kCanIntPin) == LOW)
-    {
-        if (canBus->checkReceive() != CAN_MSGAVAIL)
-        {
-            // Sometimes INT can lag a tiny bit; break to avoid busy-loop.
-            break;
-        }
-
-        unsigned long rxId = 0;
-        byte ext = 0;
-        byte len = 0;
-        byte buf[8] = {0};
-
-        canBus->readMsgBuf(&rxId, &ext, &len, buf);
-        handleFrame(rxId, ext, len, buf);
-    }
-}
-
-void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data)
-{
-    DEBUGLOG_PRINTLN(String(F("CAN Message received: ID ")) + id);
+    DEBUGLOG_PRINTLN(String(F("CAN Message received: ID 0x")) + String(static_cast<uint16_t>(id), HEX));
 
     // We currently expect standard frames only (ext == 0).
     (void)ext;
 
     // IDs from mcp_can are the actual 11-bit ID (e.g. 0x270), even though filters use (ID<<16).
-    switch (static_cast<CanMessageId>(id))
+    switch (id)
     {
     case CanMessageId::fuelLevel:
     {
@@ -169,57 +79,19 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
         break;
     }
 
-    case CanMessageId::gatewayHeartbeat:
-    {
-        updateGatewayHeartbeat(len, data);
-        break;
-    }
-
     default:
         break;
     }
 }
 
-void CAN::sendMessage(CanMessageId id, uint8_t len, byte* data)
+void CAN::onGatewayHeartbeatTimeout()
 {
-  // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
-  uint8_t sndStat = canBus->sendMsgBuf(static_cast<unsigned long>(id), 0, len, data);
-  if (sndStat == CAN_OK)
-  {
-    //DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
-  }
-  else
-  {
-    DEBUGLOG_PRINTLN(String(F("Error Sending Message:"))+sndStat);
-  }
+    DEBUGLOG_PRINTLN(F("Gateway heartbeat TIMEOUT"));
+    fuelGauge->setBrightness(0);
 }
 
-void CAN::sendInstrumentHeartbeat() {
-    // CAN ID 0x301 (instrumentHeartbeat), payload 8 bytes:
-    // [0]=nodeId, [1]=fwMajor, [2]=fwMinor, [3]=flags, [4..7]=uptime/10ms (u32, big endian)
-    byte data[8] = {0};
-    data[0] = kNodeId;
-    data[1] = kFwMajor;
-    data[2] = kFwMinor;
-    data[3] = gatewayAlive ? 0x01 : 0x00; // bit0=OK (optional)
-
-    const uint32_t uptime10 = millis() / 10;
-    data[4] = (uint8_t)((uptime10 >> 24) & 0xFF);
-    data[5] = (uint8_t)((uptime10 >> 16) & 0xFF);
-    data[6] = (uint8_t)((uptime10 >> 8) & 0xFF);
-    data[7] = (uint8_t)(uptime10 & 0xFF);
-
-    sendMessage(CanMessageId::instrumentHeartbeat, 8, data);
-}
-
-void CAN::updateGatewayHeartbeat(uint8_t len, const uint8_t* data) {
-    if (len < 8) return;
-
-    // Validate nodeId for gateway (expected 0). If you ever change it, adjust here.
-    const uint8_t nodeId = data[0];
-    if (nodeId != 0) return;
-
-    lastGatewayHeartbeatMs = millis();
-
-    // Optional: you could parse version/flags/uptime here if needed.
+void CAN::onGatewayHeartbeatDiscovered()
+{
+    DEBUGLOG_PRINTLN(F("Gateway heartbeat OK"));
+    fuelGauge->setBrightness(255);
 }
