@@ -378,7 +378,7 @@ void Transponder::commitSquawk()
     {
         data[squakIndex[i]] = 0x00;
     }
-    commitTimer = millis() + squawkEntryTimeout; // Small delay before updating display
+    commitTimer = millis() + squawkEntryBlinkInterval; // Small delay before updating display
     display->setSegments(data, kLEDDigits);
     squawkCodeUpdated = true;
 }
