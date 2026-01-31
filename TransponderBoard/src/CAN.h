@@ -1,43 +1,27 @@
 #ifndef CAN_H
 #define CAN_H
 #include <Arduino.h>
-#include <mcp_can.h>
-#include <SPI.h>
+#include <InstrumentCAN.h>
 #include "Configuration.h"
+#include <CanMessageId.h>
+#include <CanNodeId.h>
+#include "Transponder.h"
 
-class CAN {
+class CAN : public InstrumentCAN {
     public:
         CAN(Transponder* transponder);
         ~CAN();
 
-        bool begin();
-        void loop();
-        void sendMessage(CanStateId id, uint8_t len, byte* data);
+        void sendTransponderState(uint16_t code, uint8_t mode, uint8_t ident);
+    protected:
+        // Override from InstrumentCAN
+        bool instrumentBegin() override;
+        void onStartupFail() override;
+        void handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t* data) override;
+        void onGatewayHeartbeatTimeout() override;
+        void onGatewayHeartbeatDiscovered() override;
 
     private:
-        MCP_CAN* canBus;
         Transponder* transponder;
-        volatile bool isStarted = false;
-
-        // Heartbeat (Variante 2)
-        static constexpr uint8_t kNodeId = 1; // FuelGauge
-        static constexpr uint8_t kFwMajor = 1;
-        static constexpr uint8_t kFwMinor = 0;
-
-        uint32_t lastGatewayHeartbeatMs = 0;
-        uint32_t lastInstrumentHeartbeatSendMs = 0;
-        bool gatewayAlive = false;
-
-        void sendInstrumentHeartbeat();
-        void updateGatewayHeartbeat(uint8_t len, const uint8_t* data);
-
-        // MCP2515 /INT is active-low and stays low while RX buffers have pending frames.
-        // Keep ISR minimal: just set a flag. (Do NOT touch SPI or Serial in ISR.)
-        static void onCanInterrupt();
-        static volatile bool canIrq;
-        static CAN* instance;
-
-        void handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t* data);
 };
-
-#endif
+#endif // CAN_H

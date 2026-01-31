@@ -4,6 +4,7 @@
 // Message type constants
 static constexpr uint8_t MSG_FUEL = 0x01;
 static constexpr uint8_t MSG_LIGHTS = 0x02;
+static constexpr uint8_t MSG_TRANSPONDER = 0x03;
 
 enum class RxState : uint8_t
 {
@@ -27,6 +28,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   // Initialize message metadata with maxAge of 5 seconds
   fuelLevelMeta = {0, 10000};
   cockpitLightMeta = {0, 10000};
+  transponderMeta = {1, 10000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -115,7 +117,6 @@ void DCUReceiver::handleFrame(uint8_t type, uint8_t len, const uint8_t *payload)
 
   case MSG_LIGHTS:
   {
-    // Payload: u16 panelDim1000, u16 radioDim1000, u8 domeOn, u8[3] pad
     if (len != 12)
       return;
 
@@ -143,6 +144,29 @@ void DCUReceiver::handleFrame(uint8_t type, uint8_t len, const uint8_t *payload)
     break;
   }
 
+  case MSG_TRANSPONDER:
+  {
+    if (len != 4)
+      return;
+
+    uint16_t code;
+    uint8_t mode;
+    uint8_t light;
+
+    memcpy(&code, payload + 0, 2);
+    memcpy(&mode, payload + 2, 1);
+    memcpy(&light, payload + 3, 1);
+
+    if (code != transponderCode || mode != transponderMode || light != transponderLight)
+    {
+      transponderCode = code;
+      transponderMode = mode;
+      transponderLight = light;
+      DEBUGLOG_PRINTLN(String(F("Received MSG_TRANSPONDER Datagram code: ")) + String(code) + String(F(" mode: ")) + String(mode) + String(F(" light: ")) + String(light));
+      sendTransponder();
+    }
+    break;
+  }
   default:
     // Unknown message type -> ignore
     break;
@@ -187,6 +211,22 @@ void DCUReceiver::sendCockpitLightLevel()
   cockpitLightMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendTransponder()
+{
+  byte data[8] = {0};
+
+  data[0] = static_cast<uint8_t>((transponderCode >> 8) & 0xff);
+  data[1] = static_cast<uint8_t>(transponderCode & 0xff);
+
+  data[2] = transponderMode;
+  data[3] = transponderLight;
+
+  canBus->sendMessage(CanMessageId::transponder, 8, data);
+  
+  // Update last send timestamp for maxAge resync
+  transponderMeta.lastSendTimestamp = millis();
+}
+
 bool DCUReceiver::readBytes(uint8_t *dst, size_t n)
 {
   size_t got = 0;
@@ -219,4 +259,12 @@ void DCUReceiver::checkMaxAgeResync()
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for cockpitLights")));
     sendCockpitLightLevel();
   }
-}
+
+  // Check transponder message
+  if (transponderMeta.lastSendTimestamp > 0 && 
+      (now - transponderMeta.lastSendTimestamp) >= transponderMeta.maxAgeMs)
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for transponder")));
+    sendTransponder();
+  }
+} 

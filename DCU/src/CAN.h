@@ -29,6 +29,7 @@ class CAN : public BaseCAN {
         bool begin() override;
 
         void loop();
+
         void sendMessage(CanMessageId id, uint8_t len, byte* data);
 
     private:

@@ -50,17 +50,17 @@ bool CAN::begin()
     canBus->init_Mask(0, 0, MASK_EXACT); // RXB0 exact match
     canBus->init_Mask(1, 0, MASK_EXACT); // RXB1 exact match
 
-    uint32_t filterValue = CAN_STD_ID(CanMessageId::instrumentHeartbeat);
+    uint32_t instrumentHeartbeat = CAN_STD_ID(CanMessageId::instrumentHeartbeat);
 
     // RXB0: Instrument heartbeat
-    canBus->init_Filt(0, 0, filterValue);
-    canBus->init_Filt(1, 0, filterValue);
+    canBus->init_Filt(0, 0, instrumentHeartbeat);
+    canBus->init_Filt(1, 0, instrumentHeartbeat);
 
     // RXB1: (reserved for future inputs)
-    canBus->init_Filt(2, 0, filterValue);
-    canBus->init_Filt(3, 0, filterValue);
-    canBus->init_Filt(4, 0, filterValue);
-    canBus->init_Filt(5, 0, filterValue);
+    canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::transponderInput));
+    canBus->init_Filt(3, 0, instrumentHeartbeat);
+    canBus->init_Filt(4, 0, instrumentHeartbeat);
+    canBus->init_Filt(5, 0, instrumentHeartbeat);
 
     canBus->setMode(MCP_NORMAL);
     isStarted = true;
@@ -141,6 +141,17 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     case CanMessageId::instrumentHeartbeat:
         updateInstrumentHeartbeat(len, data);
         break;
+    case CanMessageId::transponderInput:
+    {
+        // Handle transponder input frame (not implemented yet)
+        if (len < 8)
+            return;
+        uint16_t code = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
+        uint8_t mode = data[2];
+        uint8_t ident = data[3];
+        DEBUGLOG_PRINTLN(String(F("Received Transponder Input: code ")) + String(code) + String(F(" mode ")) + String(mode) + String(F(" ident ")) + String(ident));
+        break;
+    }
     default:
         break;
     }

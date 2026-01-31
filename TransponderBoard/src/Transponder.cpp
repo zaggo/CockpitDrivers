@@ -2,7 +2,6 @@
 #include "DebugLog.h"
 #include <Wire.h>
 
-
 Transponder *Transponder::instance = nullptr;
 // ISR(PCINT1_vect) // Comp Interrupt
 // {
@@ -45,9 +44,10 @@ Transponder::Transponder()
 
     pinMode(kMCP23017InterruptPin, INPUT_PULLUP);
     pinMode(kKeyBacklightPin, OUTPUT);
-    analogWrite(kKeyBacklightPin, 50);ƒ
+    analogWrite(kKeyBacklightPin, 50);
 
-    attachInterrupt(digitalPinToInterrupt(kMCP23017InterruptPin), []() {
+        attachInterrupt(digitalPinToInterrupt(kMCP23017InterruptPin), []()
+                        {
         if (Transponder::instance)
         {
             Transponder::instance->mcpInterrupt = true;
@@ -60,19 +60,19 @@ Transponder::Transponder()
 Transponder::~Transponder()
 {
     detachInterrupt(digitalPinToInterrupt(kMCP23017InterruptPin));
-    
+
     if (display)
     {
         delete display;
         display = nullptr;
     }
-    
+
     if (mcp)
     {
         delete mcp;
         mcp = nullptr;
     }
-    
+
     instance = nullptr;
 }
 
@@ -108,7 +108,7 @@ void Transponder::bufferSquawk(const String &squawk)
     {
         if (squakIndex[i] >= kLEDDigits)
             continue; // Bounds check to prevent buffer overflow
-        
+
         char c = squawk.charAt(i);
         if (c >= '0' && c <= '9')
         {
@@ -127,8 +127,8 @@ void Transponder::bufferMode(TransponderMode mode, bool identActive)
     {
         if (2 < kLEDDigits && 1 < kLEDDigits) // Bounds check
         {
-            data[2] = SEG_ID[0];                        // 'I'
-            data[1] = SEG_ID[1];                        // 'd'
+            data[2] = SEG_ID[0]; // 'I'
+            data[1] = SEG_ID[1]; // 'd'
         }
         flashTimer = millis() + identFlashInterval; // Start flashing timer
         return;
@@ -138,8 +138,8 @@ void Transponder::bufferMode(TransponderMode mode, bool identActive)
     case stdby:
         if (2 < kLEDDigits && 1 < kLEDDigits) // Bounds check
         {
-            data[2] = SEG_SBY[0];                      // 'S'
-            data[1] = SEG_SBY[1];                      // 'b'
+            data[2] = SEG_SBY[0]; // 'S'
+            data[1] = SEG_SBY[1]; // 'b'
         }
         flashTimer = millis() + stbyFlashInterval; // Start flashing timer
         return;
@@ -225,6 +225,38 @@ void Transponder::tick()
         }
     }
 
+    if (displayError != currentError)
+    {
+        displayError = currentError;
+        switch (displayError)
+        {
+        case no_error:
+            bufferMode(currentMode, identActive);
+            if (displayMode == off && currentMode != off)
+            {
+                bufferSquawk(displaySquakCode);
+            }
+            if (displayIdentActive && !identActive)
+            {
+                bufferSquawk(displaySquakCode);
+            }
+            displayMode = currentMode;
+            displayIdentActive = identActive;
+            updated = true;
+            break;
+        case can_fail:
+            // Display SEG_CAN_FAIL
+            memcpy(data, SEG_CAN_FAIL, sizeof(data)); // Safe copy     
+            display->setSegments(data, kLEDDigits);
+            return;
+        case can_gateway_timeout:
+            // Display SEG_CAN_GW_TIMEOUT
+            memcpy(data, SEG_CAN_TIMEOUT, sizeof(data)); // Safe copy     
+            display->setSegments(data, kLEDDigits);
+            return;
+        } 
+    }
+
     if (displaySquakCode != currentSquawkCode && currentMode != off)
     {
         displaySquakCode = currentSquawkCode;
@@ -297,7 +329,7 @@ void Transponder::tick()
             {
                 data[squakIndex[squawkEntryPosition]] ^= SEG_DP; // Toggle segments
             }
-            squawkEntryBlinkTimer = now + squawkEntryBlinkInterval;              // Blink every 0.5 seconds
+            squawkEntryBlinkTimer = now + squawkEntryBlinkInterval; // Blink every 0.5 seconds
             updated = true;
         }
     }
@@ -422,7 +454,7 @@ void Transponder::handleInterrupt()
 {
     if (!mcp)
         return;
-        
+
     uint8_t captureA, captureB;
     mcp->clearInterrupts(captureA, captureB);
     mcpInterrupt = false;
@@ -447,6 +479,11 @@ void Transponder::handleInterrupt()
         }
         currentButtonState = newButtonState;
     }
+}
+
+void Transponder::setKeyBacklight(uint8_t level)
+{
+    analogWrite(kKeyBacklightPin, level);
 }
 
 #if BENCHDEBUG

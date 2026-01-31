@@ -11,7 +11,7 @@ const uint32_t kHeartbeatInterval = 1000L; // 1 second
 const uint8_t kTransponderClkPin = 4;
 const uint8_t kTransponderDioPin = 5;
 
-const uint8_t kCanIntPin = 2;
+const uint8_t kCanIntPin = 3;
 const uint8_t kCanCSPin = 10;
 
 const uint8_t kKeyBacklightPin = 9; // Set to 1 to enable I2C pins configuration
@@ -23,6 +23,9 @@ const uint8_t kMCP23017Address = 0x20; // Default I2C address
 const uint8_t kMCP23017InterruptPin = 2; // Pin connected to MCP23017 INT output
 
 const uint8_t kLEDDigits = 6;
+
+// Exakte ID-Matches (alle 11 Bits relevant)
+const uint32_t MASK_EXACT = 0x07FF0000;
 
 // const uint32_t kPwrButtonLongPressDuration = 2000L; // 2 seconds
 // const uint32_t kIdentDuration = 3000L;               // 3 seconds

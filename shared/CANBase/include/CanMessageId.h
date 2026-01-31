@@ -7,13 +7,16 @@
 enum class CanMessageId : uint16_t {
   fuelLevel = 0x202,
   lights = 0x203,
+  transponder = 0x201,
 
   // Heartbeats (Variante 2)
   // 0x300: Gateway heartbeat (Instrumente überwachen den DCU)
   gatewayHeartbeat = 0x300,
-  
+
   // 0x301: Instrument heartbeat (DCU überwacht Instrumente; nodeId im Payload)
-  instrumentHeartbeat = 0x301
+  instrumentHeartbeat = 0x301,
+
+  transponderInput = 0x311,
 };
 
 // Filtering
