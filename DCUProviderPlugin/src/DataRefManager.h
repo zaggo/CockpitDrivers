@@ -20,6 +20,10 @@ public:
     /// Must be called once during plugin startup.
     void initialize();
     
+    /// Called when a new aircraft is loaded.
+    /// Reinitializes datarefs to match the new aircraft.
+    void onAircraftLoaded();
+    
     // ============ DOWNLINK (Plugin → Gateway) ============
     // Fuel system
     float getFuelLeft() const;

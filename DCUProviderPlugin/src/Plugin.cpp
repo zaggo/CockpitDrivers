@@ -1,6 +1,7 @@
 #include "DCUProvider.h"
 #include "XPLMPlugin.h"
 #include "XPLMProcessing.h"
+#include "XPLMUtilities.h"
 #include <memory>
 #include <cstring>
 
@@ -35,6 +36,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
     // Register flight loop callback
     XPLMRegisterFlightLoopCallback(FlightLoopCB, -1.0f, nullptr);
     
+
     XPLMDebugString("DCUProvider: Plugin started successfully\n");
     return 1;
 }
@@ -68,9 +70,13 @@ PLUGIN_API int XPluginEnable(void) {
 }
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFromWho, int inMessage, void* inParam) {
-    // Handle inter-plugin messages
-    // For now, we don't need to handle any
     (void)inFromWho;
-    (void)inMessage;
     (void)inParam;
+    
+    if (inMessage == XPLM_MSG_PLANE_LOADED) {
+        XPLMDebugString("DCUProvider: Aircraft loaded - reinitializing datarefs\n");
+        if (gProvider) {
+            gProvider->onAircraftLoaded();
+        }
+    }
 }

@@ -36,6 +36,10 @@ public:
     /// @param elapsedTime Time since last frame (seconds)
     void onFlightLoopTick(float elapsedTime);
     
+    /// Called when a new aircraft is loaded.
+    /// Reinitializes datarefs to match the new aircraft.
+    void onAircraftLoaded();
+    
     // ============ Status ============
     
     /// Returns true if serial connection to gateway is active.

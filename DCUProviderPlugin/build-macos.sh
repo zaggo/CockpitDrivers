@@ -10,15 +10,28 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}╔════════════════════════════════════════╗${NC}"
-echo -e "${YELLOW}║   DCU Provider Plugin - Build Script   ║${NC}"
-echo -e "${YELLOW}╚════════════════════════════════════════╝${NC}\n"
+# Check if debug mode is requested
+BUILD_TYPE="Release"
+if [ "$1" == "debug" ]; then
+    BUILD_TYPE="Debug"
+    echo -e "${YELLOW}╔════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║   DCU Plugin - DEBUG Build             ║${NC}"
+    echo -e "${YELLOW}╚════════════════════════════════════════╝${NC}\n"
+else
+    echo -e "${YELLOW}╔════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║   DCU Provider Plugin - Build Script   ║${NC}"
+    echo -e "${YELLOW}╚════════════════════════════════════════╝${NC}\n"
+fi
 
 # Get script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Build directory
-BUILD_DIR="${SCRIPT_DIR}/build-macos"
+if [ "$BUILD_TYPE" == "Debug" ]; then
+    BUILD_DIR="${SCRIPT_DIR}/build-debug"
+else
+    BUILD_DIR="${SCRIPT_DIR}/build-macos"
+fi
 
 # Output directory
 OUTPUT_DIR="${BUILD_DIR}/output"
@@ -84,7 +97,7 @@ cd "$BUILD_DIR"
 
 cmake \
     -DXPLANE_SDK="${XPLANE_SDK}" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
     -DXPLANE_PLUGINS_DIR="${XPLANE_PLUGINS_DIR}" \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++ \
@@ -99,6 +112,8 @@ if [ $? -ne 0 ]; then
     echo -e "\n${RED}✗ CMake failed${NC}"
     exit 1
 fi
+
+echo -e "${BLUE}Build Type: ${BUILD_TYPE}${NC}"
 
 echo ""
 

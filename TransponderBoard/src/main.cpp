@@ -31,6 +31,7 @@ void setup() {
   #endif
 }
 
+#if !BENCHDEBUG
 void sendChangesToDCU()
 {
     if (canBus == nullptr)
@@ -62,6 +63,7 @@ void sendChangesToDCU()
         canBus->sendMessage(CanMessageId::transponderInput, sizeof(msg), reinterpret_cast<uint8_t*>(&msg));
     }
 }
+#endif
 
 void loop() {
   #if BENCHDEBUG

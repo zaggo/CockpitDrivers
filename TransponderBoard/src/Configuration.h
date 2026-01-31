@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <avr/pgmspace.h>
 
-#define BENCHDEBUG 0
+#define BENCHDEBUG 1
 
 const uint32_t kHeartbeatInterval = 1000L; // 1 second
 

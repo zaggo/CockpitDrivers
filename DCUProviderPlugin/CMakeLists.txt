@@ -151,6 +151,12 @@ if(APPLE)
         -Wno-deprecated
     )
     
+    # Add debug symbols for Debug builds
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(DCUProvider PRIVATE -g -O0)
+        message(STATUS "Building with debug symbols")
+    endif()
+    
 elseif(WIN32)
     # Windows
     target_compile_definitions(DCUProvider PRIVATE

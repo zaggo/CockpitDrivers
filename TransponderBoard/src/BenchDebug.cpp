@@ -3,7 +3,9 @@ const int kLedPin = 13;
 
 BenchDebug::BenchDebug() : transponder(NULL)
 {
+    #if !DEBUGLOG_ENABLE
     Serial.begin(115200);
+    #endif
     Serial.println("TransponderBenchTest alive!");
 
     inputBuffer = "";

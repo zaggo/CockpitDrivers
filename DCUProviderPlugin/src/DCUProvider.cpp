@@ -116,6 +116,13 @@ void DCUProvider::shutdown()
     dataRefMgr_.reset();
 }
 
+void DCUProvider::onAircraftLoaded()
+{
+    if (dataRefMgr_) {
+        dataRefMgr_->onAircraftLoaded();
+    }
+}
+
 void DCUProvider::onFlightLoopTick(float elapsedTime)
 {
     if (!connMgr_ || !msgQueue_ || !dataRefMgr_)
