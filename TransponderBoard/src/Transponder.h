@@ -60,7 +60,14 @@ public:
         isSquawkEntryMode = false;
     }
 
-    void setSquawkCode(const String squawk) { currentSquawkCode = squawk; }
+    void setSquawkCode(const String squawk)
+    {
+        // Ignore incoming squawk code if user is currently entering one manually
+        if (!isSquawkEntryMode)
+        {
+            currentSquawkCode = squawk;
+        }
+    }
     void setMode(TransponderMode mode) { currentMode = mode; }
     void setError(TransponderError error) { currentError = error; }
     void setBrightness(uint8_t level)

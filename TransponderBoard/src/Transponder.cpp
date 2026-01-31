@@ -167,6 +167,44 @@ void Transponder::bufferMode(TransponderMode mode, bool identActive)
 
 void Transponder::tick()
 {
+    bool updated = false;
+    if (displayError != currentError)
+    {
+        displayError = currentError;
+        switch (displayError)
+        {
+        case no_error:
+            bufferMode(currentMode, identActive);
+            if (displayMode == off && currentMode != off)
+            {
+                bufferSquawk(displaySquakCode);
+            }
+            if (displayIdentActive && !identActive)
+            {
+                bufferSquawk(displaySquakCode);
+            }
+            displayMode = currentMode;
+            displayIdentActive = identActive;
+            updated = true;
+            break;
+        case can_fail:
+            // Display SEG_CAN_FAIL
+            memcpy(data, SEG_CAN_FAIL, sizeof(data)); // Safe copy     
+            display->setSegments(data, kLEDDigits);
+            return;
+        case can_gateway_timeout:
+            // Display SEG_CAN_GW_TIMEOUT
+            memcpy(data, SEG_CAN_TIMEOUT, sizeof(data)); // Safe copy     
+            display->setSegments(data, kLEDDigits);
+            return;
+        } 
+    }
+
+    if (currentError != no_error)
+    {
+        return; // Do not update display if there is an error
+    }
+
     uint32_t now = millis();
 
     if (pwrButtonLongPressTimer != 0L && now > pwrButtonLongPressTimer)
@@ -210,7 +248,6 @@ void Transponder::tick()
     }
 #endif
 
-    bool updated = false;
     if (commitTimer != 0L)
     {
         if (now < commitTimer)
@@ -223,38 +260,6 @@ void Transponder::tick()
             bufferSquawk(displaySquakCode);
             updated = true;
         }
-    }
-
-    if (displayError != currentError)
-    {
-        displayError = currentError;
-        switch (displayError)
-        {
-        case no_error:
-            bufferMode(currentMode, identActive);
-            if (displayMode == off && currentMode != off)
-            {
-                bufferSquawk(displaySquakCode);
-            }
-            if (displayIdentActive && !identActive)
-            {
-                bufferSquawk(displaySquakCode);
-            }
-            displayMode = currentMode;
-            displayIdentActive = identActive;
-            updated = true;
-            break;
-        case can_fail:
-            // Display SEG_CAN_FAIL
-            memcpy(data, SEG_CAN_FAIL, sizeof(data)); // Safe copy     
-            display->setSegments(data, kLEDDigits);
-            return;
-        case can_gateway_timeout:
-            // Display SEG_CAN_GW_TIMEOUT
-            memcpy(data, SEG_CAN_TIMEOUT, sizeof(data)); // Safe copy     
-            display->setSegments(data, kLEDDigits);
-            return;
-        } 
     }
 
     if (displaySquakCode != currentSquawkCode && currentMode != off)
