@@ -373,7 +373,6 @@ void Transponder::commitSquawk()
 {
     if (!isSquawkEntryMode)
         return;
-    isSquawkEntryMode = false;
     for (int i = 0; i < 4; ++i)
     {
         data[squakIndex[i]] = 0x00;
@@ -381,6 +380,7 @@ void Transponder::commitSquawk()
     commitTimer = millis() + squawkEntryBlinkInterval; // Small delay before updating display
     display->setSegments(data, kLEDDigits);
     squawkCodeUpdated = true;
+    isSquawkEntryMode = false;
 }
 
 void Transponder::didPressButton(TransponderButton button)
