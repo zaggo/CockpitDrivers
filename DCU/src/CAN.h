@@ -6,6 +6,9 @@
 #include <CanMessageId.h>
 #include <CanNodeId.h>
 
+// Forward declaration
+class DCUSender;
+
 // Error types for CAN ID tracking
 enum class CanErrorType : uint8_t {
     NONE = 0,
@@ -31,6 +34,8 @@ class CAN : public BaseCAN {
         void loop();
 
         void sendMessage(CanMessageId id, uint8_t len, byte* data);
+        
+        void setDCUSender(DCUSender* sender);
 
     private:
         uint32_t lastGatewayHeartbeatSendMs = 0;
@@ -45,8 +50,12 @@ class CAN : public BaseCAN {
         CanIdError canIdErrors[kMaxCanIdErrors];
         uint8_t canIdErrorCount = 0;
 
+        // Reference to DCUSender for sending messages back to DCUProvider Plugin
+        DCUSender* dcuSender = nullptr;
+
         void sendGatewayHeartbeat();
         void updateInstrumentHeartbeat(uint8_t len, const uint8_t* data);
+        void updateTransponderInput(uint8_t len, const uint8_t* data);
         void checkInstrumentHeartbeats();
         void updateAlarmLED();
         void clearCanIdError(uint16_t canId, CanErrorType errorType = CanErrorType::NONE);

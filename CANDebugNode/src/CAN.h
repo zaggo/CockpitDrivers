@@ -10,7 +10,6 @@
 class CAN : public InstrumentCAN {
     public:
         CAN(LCD* lcd);
-        ~CAN();
 
     protected:
         // Override from InstrumentCAN

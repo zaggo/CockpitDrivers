@@ -1,6 +1,7 @@
 #include "CAN.h"
 #include "Configuration.h"
 #include "DebugLog.h"
+#include "DCUSender.h"
 
 CAN::CAN()
     : BaseCAN(kCanCSPin, kCanIntPin, {CanNodeId::gatewayNodeId, 1, 0})
@@ -142,16 +143,8 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
         updateInstrumentHeartbeat(len, data);
         break;
     case CanMessageId::transponderInput:
-    {
-        // Handle transponder input frame (not implemented yet)
-        if (len < 8)
-            return;
-        uint16_t code = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
-        uint8_t mode = data[2];
-        uint8_t ident = data[3];
-        DEBUGLOG_PRINTLN(String(F("Received Transponder Input: code ")) + String(code) + String(F(" mode ")) + String(mode) + String(F(" ident ")) + String(ident));
+        updateTransponderInput(len, data);
         break;
-    }
     default:
         break;
     }
@@ -173,6 +166,12 @@ void CAN::sendMessage(CanMessageId id, uint8_t len, byte *data)
         // Set error status for this CAN ID
         setCanIdError(canId, CanErrorType::TX_ERROR);
     }
+}
+
+void CAN::setDCUSender(DCUSender* sender)
+{
+    dcuSender = sender;
+    DEBUGLOG_PRINTLN(F("DCUSender set in CAN"));
 }
 
 void CAN::sendGatewayHeartbeat()
@@ -205,6 +204,24 @@ void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
         return;
     // DEBUGLOG_PRINTLN(String(F("Received Instrument HB from node ")) + nodeId);
     lastInstrumentHeartbeatMs[nodeId] = millis();
+}
+
+void CAN::updateTransponderInput(uint8_t len, const uint8_t *data)
+{
+    // Handle transponder input frame (not implemented yet)
+    if (len < 8)
+        return;
+
+    uint16_t code = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
+    uint8_t mode = data[2];
+    uint8_t ident = data[3];
+    DEBUGLOG_PRINTLN(String(F("Received Transponder Input: code ")) + String(code) + String(F(" mode ")) + String(mode) + String(F(" ident ")) + String(ident));
+    
+    // Send transponder input back to DCUProvider Plugin via DCUSender
+    if (dcuSender != nullptr)
+    {
+        dcuSender->sendTransponderInput(code, mode, ident);
+    }
 }
 
 void CAN::checkInstrumentHeartbeats()

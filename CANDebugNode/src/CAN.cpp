@@ -10,10 +10,6 @@ CAN::CAN(LCD *lcd)
     lcd->printSecondLine(F("CAN initialized"));
 }
 
-CAN::~CAN()
-{
-}
-
 void CAN::onStartupFail()
 {
     DEBUGLOG_PRINTLN(F("CAN startup FAIL"));

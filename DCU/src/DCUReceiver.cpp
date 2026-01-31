@@ -25,6 +25,10 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
 {
   Serial.begin(115200);
   
+  // Create DCUSender instance and register it with CAN
+  dcuSender = new DCUSender();
+  canBus->setDCUSender(dcuSender);
+  
   // Initialize message metadata with maxAge of 5 seconds
   fuelLevelMeta = {0, 10000};
   cockpitLightMeta = {0, 10000};
@@ -33,6 +37,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
 
 DCUReceiver::~DCUReceiver()
 {
+  delete dcuSender;
 }
 
 void DCUReceiver::loop()

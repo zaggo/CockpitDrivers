@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "Configuration.h"
 #include "CAN.h"
+#include "DCUSender.h"
 
 // Message metadata for maxAge resync
 struct MessageMeta {
@@ -49,5 +50,8 @@ class DCUReceiver {
         
         // Reference to CAN bus
         CAN* canBus;
+        
+        // DCUSender instance for sending data back to DCUProvider Plugin
+        DCUSender* dcuSender;
 };
 #endif // DCURECEIVER_H
