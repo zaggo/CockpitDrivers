@@ -78,6 +78,10 @@ private:
     float reconnectAccumulator_ = 0.0f;
     static constexpr float RECONNECT_INTERVAL = 2.0f;
     
+    // RX Frame reassembly buffer
+    std::vector<uint8_t> rxBuffer_;
+    static constexpr size_t MAX_RX_BUFFER = 2048;
+    
     // Statistics
     float lastTxTime_ = 0.0f;
     float lastRxTime_ = 0.0f;

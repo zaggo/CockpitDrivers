@@ -9,17 +9,18 @@
 
 DCUProvider::DCUProvider() = default;
 
-DCUProvider::~DCUProvider() {
+DCUProvider::~DCUProvider()
+{
     shutdown();
 }
 
-bool DCUProvider::initialize() {
+bool DCUProvider::initialize()
+{
     // Initialize components
     dataRefMgr_ = std::make_unique<DataRefManager>();
     dataRefMgr_->initialize();
 
     msgQueue_ = std::make_unique<MessageQueue>();
-
 
     // Ports ermitteln und letzten Port laden
     auto ports = enumerateSerialPorts();
@@ -27,9 +28,12 @@ bool DCUProvider::initialize() {
     currentPort_.clear();
     // Nur vorwählen, nicht verbinden
     int preselectIdx = -1;
-    if (!lastPort.empty()) {
-        for (size_t i = 0; i < ports.size(); ++i) {
-            if (ports[i] == lastPort) {
+    if (!lastPort.empty())
+    {
+        for (size_t i = 0; i < ports.size(); ++i)
+        {
+            if (ports[i] == lastPort)
+            {
                 preselectIdx = (int)i;
                 currentPort_ = lastPort;
                 break;
@@ -39,7 +43,8 @@ bool DCUProvider::initialize() {
 
     connMgr_.reset();
     // Nur verbinden, wenn ein Port gesetzt ist
-    if (!currentPort_.empty()) {
+    if (!currentPort_.empty())
+    {
         connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
         connMgr_->connect();
     }
@@ -47,10 +52,10 @@ bool DCUProvider::initialize() {
     statusWin_ = std::make_unique<StatusWindow>();
     statusWin_->initialize();
     statusWin_->setAvailablePorts(ports);
-    if (preselectIdx >= 0) statusWin_->selectedPortIdx_ = preselectIdx;
-    statusWin_->setPortChangedCallback([this](const std::string& port) {
-        changePort(port);
-    });
+    if (preselectIdx >= 0)
+        statusWin_->selectedPortIdx_ = preselectIdx;
+    statusWin_->setPortChangedCallback([this](const std::string &port)
+                                       { changePort(port); });
 
     char msg[256];
     std::snprintf(msg, sizeof(msg),
@@ -58,135 +63,155 @@ bool DCUProvider::initialize() {
                   (connMgr_ && connMgr_->isConnected()) ? "OK" : "FAILED");
     XPLMDebugString(msg);
 
-    return true;  // Even if initial connection fails, plugin loads
+    return true; // Even if initial connection fails, plugin loads
 }
 
-void DCUProvider::changePort(const std::string& newPort) {
-        saveLastUsedPort(newPort);
-        if (newPort == currentPort_)
-            return;
-        currentPort_ = newPort;
-        if (connMgr_) {
-            connMgr_->disconnect();
-            connMgr_.reset();
-        }
-        // Queue leeren
-        if (msgQueue_) {
-            msgQueue_->resetStats(); // setzt auch Zähler zurück
-            msgQueue_->clearTxQueue();
-            while (msgQueue_->hasRxPending()) msgQueue_->dequeueRx();
-        }
-        if (!currentPort_.empty()) {
-            connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
-            connMgr_->connect();
-            // Längeres Delay nach Port-Öffnung (1 Sekunde) für Arduino-Reset
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        }
-        // Optionally, update status window immediately
-        updateStatusWindow();
-}
-
-void DCUProvider::shutdown() {
-    XPLMDebugString("DCUProvider: Shutting down\n");
-    
-    if (statusWin_) {
-        statusWin_->destroy();
-        statusWin_.reset();
-    }
-    
-    if (connMgr_) {
+void DCUProvider::changePort(const std::string &newPort)
+{
+    saveLastUsedPort(newPort);
+    if (newPort == currentPort_)
+        return;
+    currentPort_ = newPort;
+    if (connMgr_)
+    {
         connMgr_->disconnect();
         connMgr_.reset();
     }
-    
+    // Queue leeren
+    if (msgQueue_)
+    {
+        msgQueue_->resetStats(); // setzt auch Zähler zurück
+        msgQueue_->clearTxQueue();
+        while (msgQueue_->hasRxPending())
+            msgQueue_->dequeueRx();
+    }
+    if (!currentPort_.empty())
+    {
+        connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
+        connMgr_->connect();
+        // Längeres Delay nach Port-Öffnung (1 Sekunde) für Arduino-Reset
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+    // Optionally, update status window immediately
+    updateStatusWindow();
+}
+
+void DCUProvider::shutdown()
+{
+    XPLMDebugString("DCUProvider: Shutting down\n");
+
+    if (statusWin_)
+    {
+        statusWin_->destroy();
+        statusWin_.reset();
+    }
+
+    if (connMgr_)
+    {
+        connMgr_->disconnect();
+        connMgr_.reset();
+    }
+
     msgQueue_.reset();
     dataRefMgr_.reset();
 }
 
-void DCUProvider::onFlightLoopTick(float elapsedTime) {
-    if (!connMgr_ || !msgQueue_ || !dataRefMgr_) {
+void DCUProvider::onFlightLoopTick(float elapsedTime)
+{
+    if (!connMgr_ || !msgQueue_ || !dataRefMgr_)
+    {
         return;
     }
-    
+
     // ============ Connection Management ============
     connMgr_->update(elapsedTime);
-    
+
     // ============ I/O Processing ============
     connMgr_->processIO(*msgQueue_);
-    
+
     // ============ Downlink: X-Plane → Gateway ============
     updateDownlink(elapsedTime);
-    
+
     // ============ Uplink: Gateway → X-Plane ============
     updateUplink();
-    
+
     // ============ Status Window Update (1Hz) ============
     static float statusUpdateAccum = 0.0f;
     statusUpdateAccum += elapsedTime;
-    
-    if (statusUpdateAccum >= 1.0f) {
+
+    if (statusUpdateAccum >= 1.0f)
+    {
         updateStatusWindow();
         statusUpdateAccum = 0.0f;
     }
 }
 
-bool DCUProvider::isConnected() const {
+bool DCUProvider::isConnected() const
+{
     return connMgr_ && connMgr_->isConnected();
 }
 
-void DCUProvider::updateDownlink(float dt) {
-    if (!isConnected()) {
+void DCUProvider::updateDownlink(float dt)
+{
+    if (!isConnected())
+    {
         return;
     }
-    
+
     // ============ Fuel Data (5 Hz) ============
     fuelAccumulator_ += dt;
-    float fuelRate = 1.0f / 5.0f;  // 5 Hz = every 0.2s
-    
-    if (fuelAccumulator_ >= fuelRate) {
-        struct FuelData {
+    float fuelRate = 1.0f / 5.0f; // 5 Hz = every 0.2s
+
+    if (fuelAccumulator_ >= fuelRate)
+    {
+        struct FuelData
+        {
             float fuelLeft;
             float fuelRight;
         };
-        
+
         // Read fuel from X-Plane
         FuelData fuel;
         fuel.fuelLeft = dataRefMgr_->getFuelLeft();
         fuel.fuelRight = dataRefMgr_->getFuelRight();
-        
+
         msgQueue_->enqueueTx(MessageType::SerialMessageFuel, &fuel, sizeof(fuel));
 
         fuelAccumulator_ = 0.0f;
     }
-    
+
     // ============ Lights Data (10 Hz) ============
     lightsAccumulator_ += dt;
-    float lightsRate = 1.0f / LIGHTS_RATE;  // 10 Hz = every 0.1s
-    
-    if (lightsAccumulator_ >= lightsRate) {
-        struct LightsData {
-            float panelDim;  // 0..1
-            float radioDim;  // 0..1
+    float lightsRate = 1.0f / LIGHTS_RATE; // 10 Hz = every 0.1s
+
+    if (lightsAccumulator_ >= lightsRate)
+    {
+        struct LightsData
+        {
+            float panelDim;     // 0..1
+            float radioDim;     // 0..1
             float domeLightDim; // 0..1
         };
-                
+
         LightsData lights;
         auto brightness = dataRefMgr_->getPanelBrightness();
         lights.panelDim = brightness[0];
         lights.radioDim = brightness[1];
         lights.domeLightDim = dataRefMgr_->getDomeLightBrightness();
-        
+
         msgQueue_->enqueueTx(MessageType::SerialMessageLights, &lights, sizeof(lights));
-        
+
         lightsAccumulator_ = 0.0f;
     }
 
     // ============ Transponder Data (10 Hz) ============
     transponderAccumulator_ += dt;
-    float transponderRate = 1.0f / TRANSPONDER_RATE;  // 10 Hz = every 0.1s
+    float transponderRate = 1.0f / TRANSPONDER_RATE; // 10 Hz = every 0.1s
 
-    if (transponderAccumulator_ >= transponderRate) {
-        struct TransponderData {
+    if (transponderAccumulator_ >= transponderRate)
+    {
+        struct TransponderData
+        {
             uint16_t code;
             uint8_t mode;
             uint8_t light;
@@ -201,7 +226,7 @@ void DCUProvider::updateDownlink(float dt) {
 
         transponderAccumulator_ = 0.0f;
     }
-    
+
     // TODO: Add more downlink data based on CAN Message IDs
     // - Altimeter settings
     // - Heading bug
@@ -209,51 +234,65 @@ void DCUProvider::updateDownlink(float dt) {
     // - etc.
 }
 
-void DCUProvider::updateUplink() {
-    if (!msgQueue_) {
+void DCUProvider::updateUplink()
+{
+    if (!msgQueue_)
+    {
         return;
     }
-    
+
     // Process all received messages
-    while (msgQueue_->hasRxPending()) {
+    while (msgQueue_->hasRxPending())
+    {
         auto msg = msgQueue_->dequeueRx();
-        
-        if (!msg) {
+
+        if (!msg)
+        {
             continue;
         }
-        
+
         // Route message by type
-        switch (msg->type) {
-            case MessageType::SerialMessageFuel:
-                // Gateway → Plugin: This would be for reading fuel from a device
-                // (not typical for Piper Arrow, but possible)
-                break;
-            
-            case MessageType::SerialMessageLights:
-                // Gateway → Plugin: This would be for reading light switches from device
-                // (not typical for Piper Arrow, but possible)
-                break;
-            
-            // TODO: Handle more message types
-            // - Barometer setting from altimeter
-            // - Heading bug from HSI
-            // - Course selector from CDI
-            // - Button presses from panels
-            // - Encoder values
-            // etc.
-            
-            default:
-                // Unknown message type
-                break;
+        switch (msg->type)
+        {
+        case MessageType::SerialMessageLights:
+            // Gateway → Plugin: This would be for reading light switches from device
+            // (not typical for Piper Arrow, but possible)
+            break;
+
+        case MessageType::SerialMessageTransponder:
+            // Gateway → Plugin: This would be for reading transponder controls from device
+            if (msg->payload.size() >= sizeof(TransponderToDcuMessage))
+            {
+                const TransponderToDcuMessage *message = reinterpret_cast<const TransponderToDcuMessage *>(msg->payload.data());
+                if (message->command & TransponderToDcuCommandSetCode)
+                {
+                    dataRefMgr_->setTransponderCode(message->code);
+                }
+                if (message->command & TransponderToDcuCommandSetMode)
+                {
+                    dataRefMgr_->setTransponderMode(message->mode);
+                }
+                if (message->command & TransponderToDcuCommandIdent)
+                {
+                    dataRefMgr_->transponderIdentOnce();
+                }
+            }
+            break;
+
+        default:
+            // Unknown message type
+            break;
         }
     }
 }
 
-void DCUProvider::updateStatusWindow() {
-    if (!statusWin_) {
+void DCUProvider::updateStatusWindow()
+{
+    if (!statusWin_)
+    {
         return;
     }
-    
+
     StatusData data;
     data.isConnected = isConnected();
     data.devicePath = currentPort_;

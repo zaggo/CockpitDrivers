@@ -1,6 +1,5 @@
 #include "DataRefManager.h"
 #include <cstdio>
-#include "XPLMUtilities.h"
 
 DataRefManager::DataRefManager() = default;
 
@@ -19,9 +18,11 @@ void DataRefManager::initialize() {
     dr_BarometerSetting = XPLMFindDataRef("sim/cockpit/misc/barometer_setting");
 
     dr_TransponderCode = XPLMFindDataRef("sim/cockpit2/radios/actuators/transponder_code");
-    dr_TransponderMode = XPLMFindDataRef("sim/cockpit/radios/transponder_mode");
+    dr_TransponderModeR = XPLMFindDataRef("sim/cockpit/radios/transponder_mode");
+    dr_TransponderModeW = XPLMFindDataRef("VFLYTEAIR/AXP340/AXP340_MODE");
     dr_TransponderLight = XPLMFindDataRef("sim/cockpit/radios/transponder_light");
-    dr_TransponderIdent = XPLMFindDataRef("sim/transponder/transponder_ident");
+
+    cr_TransponderIdent = XPLMFindCommand("sim/transponder/transponder_ident");
 }
 
 // Fuel
@@ -63,7 +64,7 @@ uint16_t DataRefManager::getTransponderCode() const {
 }
 
 uint8_t DataRefManager::getTransponderMode() const {
-    return static_cast<uint8_t>(XPLMGetDatai(dr_TransponderMode));
+    return static_cast<uint8_t>(XPLMGetDatai(dr_TransponderModeR));
 }
 
 bool DataRefManager::getTransponderLight() const {
@@ -77,16 +78,16 @@ void DataRefManager::setTransponderCode(uint16_t code) {
 }
 
 void DataRefManager::setTransponderMode(uint8_t mode) {
-    (void)mode;
-    if (dr_TransponderMode) {
-        //XPLMSetDatai(dr_TransponderMode, static_cast<int>(mode));
+    int timeout = 10;
+    XPLMCommandRef cmd = XPLMFindCommand("sim/transponder/transponder_ident");
+    while (cmd != nullptr && mode != getTransponderMode() && timeout-- > 0) {
+        XPLMCommandOnce(cmd);   
     }
 }
 
-void DataRefManager::setTransponderIdent(bool ident) {
-    if (dr_TransponderIdent) {
-        XPLMSetDatai(dr_TransponderIdent, ident ? 1 : 0);
-    }
+void DataRefManager::transponderIdentOnce() {
+    if (cr_TransponderIdent)
+        XPLMCommandOnce(cr_TransponderIdent);   
 }
 
 // ----

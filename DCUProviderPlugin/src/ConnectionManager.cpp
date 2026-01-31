@@ -28,6 +28,7 @@ bool ConnectionManager::connect() {
 void ConnectionManager::disconnect() {
     serial_.closePort();
     reconnectAccumulator_ = 0.0f;
+    rxBuffer_.clear();  // Clear any partial frames
 }
 
 bool ConnectionManager::isConnected() const {
@@ -57,18 +58,49 @@ void ConnectionManager::processIO(MessageQueue& queue) {
     }
     
     // ============ RX: Read incoming data ============
-    uint8_t rxBuffer[256];
-    size_t rxLen = serial_.readNonBlocking(rxBuffer, sizeof(rxBuffer));
+    uint8_t tempBuffer[256];
+    size_t rxLen = serial_.readNonBlocking(tempBuffer, sizeof(tempBuffer));
     
     if (rxLen > 0) {
         lastRxTime_ = static_cast<float>(std::time(nullptr));
         
-        // Try to decode frame(s)
-        // Note: For now, assume one complete frame per read
-        // TODO: Implement frame reassembly for partial frames
-        auto msg = TransportLayer::decodeFrame(rxBuffer, rxLen);
-        if (msg) {
-            queue.enqueueRx(*msg);
+        // Append new data to reassembly buffer
+        rxBuffer_.insert(rxBuffer_.end(), tempBuffer, tempBuffer + rxLen);
+        
+        // Try to decode all complete frames from buffer
+        while (rxBuffer_.size() >= 4) {  // Minimum frame size
+            // Check for sync bytes
+            if (rxBuffer_[0] != 0xAA || rxBuffer_[1] != 0x55) {
+                // Invalid sync - discard first byte and try again
+                rxBuffer_.erase(rxBuffer_.begin());
+                continue;
+            }
+            
+            // We have valid sync bytes, check if we have complete frame
+            uint8_t payloadLen = rxBuffer_[3];
+            size_t frameSize = 4 + payloadLen;
+            
+            if (rxBuffer_.size() < frameSize) {
+                // Incomplete frame - wait for more data
+                break;
+            }
+            
+            // Try to decode the frame
+            auto msg = TransportLayer::decodeFrame(rxBuffer_.data(), frameSize);
+            if (msg) {
+                queue.enqueueRx(*msg);
+                // Remove processed frame from buffer
+                rxBuffer_.erase(rxBuffer_.begin(), rxBuffer_.begin() + frameSize);
+            } else {
+                // Decode failed despite having enough bytes - discard first byte
+                rxBuffer_.erase(rxBuffer_.begin());
+            }
+        }
+        
+        // Prevent buffer from growing indefinitely
+        if (rxBuffer_.size() > MAX_RX_BUFFER) {
+            XPLMDebugString("DCUProvider: RX buffer overflow, clearing\n");
+            rxBuffer_.clear();
         }
     }
 }

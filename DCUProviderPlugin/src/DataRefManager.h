@@ -1,6 +1,8 @@
 #pragma once
 
 #include "XPLMDataAccess.h"
+#include "XPLMUtilities.h"
+
 #include <string>
 #include <map>
 #include <vector>
@@ -33,7 +35,7 @@ public:
     bool getTransponderLight() const;
     void setTransponderCode(uint16_t code);
     void setTransponderMode(uint8_t mode);
-    void setTransponderIdent(bool ident);
+    void transponderIdentOnce();
     
     // ============ UPLINK (Gateway → Plugin) ============
     /// Sets barometer altimeter setting (inHg)
@@ -64,8 +66,9 @@ private:
     XPLMDataRef dr_HeadingBug = nullptr;
     XPLMDataRef dr_BarometerSetting = nullptr;
     XPLMDataRef dr_TransponderCode = nullptr;
-    XPLMDataRef dr_TransponderMode = nullptr;
+    XPLMDataRef dr_TransponderModeR = nullptr;
+    XPLMDataRef dr_TransponderModeW = nullptr;
     XPLMDataRef dr_TransponderLight = nullptr;
-    XPLMDataRef dr_TransponderIdent = nullptr;
 
+    XPLMCommandRef cr_TransponderIdent = nullptr;
 };

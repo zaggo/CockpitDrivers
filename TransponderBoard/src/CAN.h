@@ -12,7 +12,6 @@ class CAN : public InstrumentCAN {
         CAN(Transponder* transponder);
         ~CAN();
 
-        void sendTransponderState(uint16_t code, uint8_t mode, uint8_t ident);
     protected:
         // Override from InstrumentCAN
         bool instrumentBegin() override;

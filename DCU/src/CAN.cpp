@@ -208,19 +208,22 @@ void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
 
 void CAN::updateTransponder(uint8_t len, const uint8_t *data)
 {
-    // Handle transponder input frame (not implemented yet)
-    if (len < 8)
+    // Handle transponder input frame
+    if (len < sizeof(TransponderToDcuMessage) && sizeof(TransponderToDcuMessage) < 8)
         return;
 
-    uint16_t code = (static_cast<uint16_t>(data[0]) << 8) | static_cast<uint16_t>(data[1]);
-    uint8_t mode = data[2];
-    uint8_t ident = data[3];
-    DEBUGLOG_PRINTLN(String(F("Received Transponder Input: code ")) + String(code) + String(F(" mode ")) + String(mode) + String(F(" ident ")) + String(ident));
+    #if DEBUGLOG_ENABLE
+        const TransponderToDcuMessage* message = reinterpret_cast<const TransponderToDcuMessage*>(data);
+        DEBUGLOG_PRINTLN(String(F("Received Transponder Input: command: ")) + 
+                         String(static_cast<uint8_t>(message->command), BIN) + 
+                         String(F(" code ")) + String(message->code) + 
+                         String(F(" mode ")) + String(message->mode));
+    #endif
     
     // Send transponder input back to DCUProvider Plugin via DCUSender
     if (dcuSender != nullptr)
     {
-        dcuSender->sendTransponderInput(code, mode, ident);
+       dcuSender->sendFrame(MessageType::SerialMessageTransponder, sizeof(TransponderToDcuMessage), data);
     }
 }
 

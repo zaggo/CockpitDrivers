@@ -102,14 +102,3 @@ void CAN::handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t *
         break;
     }
 }
-
-void CAN::sendTransponderState(uint16_t code, uint8_t mode, uint8_t ident)
-{
-    uint8_t data[8] = { static_cast<uint8_t>(code >> 8),
-                        static_cast<uint8_t>(code & 0xff),
-                        mode,
-                        ident,
-                        0, 0, 0, 0 }; // Padding bytes
-
-    sendMessage(CanMessageId::transponderInput, 8, data);
-}

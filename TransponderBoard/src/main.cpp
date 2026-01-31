@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "Configuration.h"
 #include "DebugLog.h"
+#include <SerialMessageId.h>
 
 #if BENCHDEBUG
 #include "BenchDebug.h"
@@ -30,25 +31,50 @@ void setup() {
   #endif
 }
 
+void sendChangesToDCU()
+{
+    if (canBus == nullptr)
+    {
+      return;
+    }
+
+    TransponderToDcuMessage msg = {};
+    if (transponder->squawkCodeUpdated)
+    {
+        msg.command = static_cast<TransponderToDCUCommand>(msg.command | TransponderToDcuCommandSetCode);
+        msg.code = static_cast<uint16_t>(transponder->getSquawkCode().toInt());
+        transponder->squawkCodeUpdated = false;
+    }
+
+    if (transponder->modeUpdated) {
+        msg.command = static_cast<TransponderToDCUCommand>(msg.command | TransponderToDcuCommandSetMode);
+        msg.mode = static_cast<uint8_t>(transponder->getMode());
+        transponder->modeUpdated = false; 
+    }
+
+    if (transponder->identRequest) {
+        msg.command = static_cast<TransponderToDCUCommand>(msg.command | TransponderToDcuCommandIdent);
+        transponder->identRequest = false;
+    }
+
+    if (msg.command != 0)
+    {
+        canBus->sendMessage(CanMessageId::transponderInput, sizeof(msg), reinterpret_cast<uint8_t*>(&msg));
+    }
+}
+
 void loop() {
   #if BENCHDEBUG
   benchDebug->loop();
   #else
-  if (canBus != NULL)
+  if (canBus != nullptr)
   {
     canBus->loop();
   }
-  if (transponder != NULL)
+  if (transponder != nullptr)
   {
     transponder->tick();
-
-    if (transponder->squawkCodeUpdated || transponder->identRequest || transponder->modeUpdated)
-    {
-      canBus->sendTransponderState(transponder->getSquawkCode().toInt(), static_cast<uint8_t>(transponder->getMode()), transponder->identRequest ? 1 : 0);
-      transponder->squawkCodeUpdated = false;
-      transponder->identRequest = false;
-      transponder->modeUpdated = false;
-    }
+    sendChangesToDCU();
   }
   #endif
 }

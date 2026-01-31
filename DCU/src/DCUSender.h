@@ -9,9 +9,6 @@ class DCUSender {
         DCUSender();
         ~DCUSender();
 
-        void sendTransponderInput(uint16_t code, uint8_t mode, uint8_t ident);
-
-    private:
         void sendFrame(MessageType type, uint8_t len, const uint8_t* payload);
 };
 
