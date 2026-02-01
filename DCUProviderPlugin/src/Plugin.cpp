@@ -74,7 +74,6 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFromWho, int inMessage, voi
     (void)inParam;
     
     if (inMessage == XPLM_MSG_PLANE_LOADED) {
-        XPLMDebugString("DCUProvider: Aircraft loaded - reinitializing datarefs\n");
         if (gProvider) {
             gProvider->onAircraftLoaded();
         }

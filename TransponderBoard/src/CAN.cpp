@@ -7,6 +7,7 @@ CAN::CAN(Transponder *transponder)
       transponder(transponder)
 {
     DEBUGLOG_PRINTLN(F("CAN initialized"));
+    transponder->displayFWVersion(fwInfo.fwMajor, fwInfo.fwMinor);
 }
 
 CAN::~CAN()

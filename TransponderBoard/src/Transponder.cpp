@@ -76,6 +76,37 @@ Transponder::~Transponder()
     instance = nullptr;
 }
 
+void Transponder::displayFWVersion(uint8_t fwMajor, uint8_t fwMinor)
+{
+    // Display firmware version as "FvX.YY"
+    if (!display)
+        return;
+
+    display->setBrightness(0x07);
+
+    // Display Segments for "FvX.YY"
+    data[2] = SEG_A | SEG_F | SEG_B | SEG_G | SEG_E; // 'P'
+    data[1] = SEG_F | SEG_E;
+    data[0] = SEG_A | SEG_F | SEG_B | SEG_G | SEG_E;
+    data[5] = SEG_A | SEG_F | SEG_G | SEG_E | SEG_D;;
+    data[4] = SEG_E | SEG_G;
+    data[3] = 0x00; // Blank
+
+    display->setSegments(data, kLEDDigits);
+    delay(2000); // Display for 2 seconds
+
+    data[2] = SEG_A | SEG_F | SEG_G | SEG_E; // 'F'
+    data[1] = 0x00; // Blank
+    data[0] = display->encodeDigit(fwMajor / 10);
+    data[5] = display->encodeDigit(fwMajor % 10);
+    data[5] |= SEG_DP; // Decimal point
+    data[4] = display->encodeDigit(fwMinor / 10);
+    data[3] = display->encodeDigit(fwMinor % 10);
+
+    display->setSegments(data, kLEDDigits);
+    delay(3000); // Display for 3 seconds
+}
+
 void Transponder::pressNumberButton(uint8_t button)
 {
     if (button > 9 || currentMode == off)

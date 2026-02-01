@@ -54,6 +54,8 @@ public:
 
     void tick();
 
+    void displayFWVersion(uint8_t fwMajor, uint8_t fwMinor);
+
     void setIdent(bool ident)
     {
         identActive = ident;

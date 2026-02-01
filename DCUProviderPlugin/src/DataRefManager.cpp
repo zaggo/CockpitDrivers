@@ -29,8 +29,6 @@ void DataRefManager::onAircraftLoaded()
     dr_TransponderLight = XPLMFindDataRef("sim/cockpit/radios/transponder_light");
 
     cr_TransponderIdent = XPLMFindCommand("sim/transponder/transponder_ident");
-
-    XPLMDebugString("DataRefManager: Datarefs initialized/reinitialized\n");
 }
 
 // Fuel

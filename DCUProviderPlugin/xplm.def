@@ -21,3 +21,5 @@ EXPORTS
     XPLMRemoveMenuItem
     XPLMCreateMenu
     XPLMDestroyMenu
+    XPLMFindCommand
+    XPLMCommandOnce

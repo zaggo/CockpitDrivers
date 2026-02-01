@@ -9,3 +9,9 @@ std::string loadLastUsedPort();
 
 // Saves the last used port to config file.
 void saveLastUsedPort(const std::string& port);
+
+// Loads the last status window visibility state. Returns true if no saved state (default: visible).
+bool loadStatusWindowVisible();
+
+// Saves the status window visibility state.
+void saveStatusWindowVisible(bool visible);

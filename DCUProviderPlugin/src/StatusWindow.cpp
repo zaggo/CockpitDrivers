@@ -1,5 +1,6 @@
 
 #include "StatusWindow.h"
+#include "ConfigUtils.h"
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
@@ -29,6 +30,9 @@ StatusWindow::~StatusWindow() {
 }
 
 void StatusWindow::initialize() {
+    // Load last visibility state from config
+    bool shouldBeVisible = loadStatusWindowVisible();
+    
     // Create window using new X-Plane API
     XPLMCreateWindow_t params = {};
     params.structSize = sizeof(XPLMCreateWindow_t);
@@ -36,7 +40,7 @@ void StatusWindow::initialize() {
     params.top = 500;
     params.right = 500;
     params.bottom = 200;
-    params.visible = 1;
+    params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
     // Mouse callback must return int, so use a static adapter
@@ -96,6 +100,8 @@ void StatusWindow::destroy() {
 void StatusWindow::setVisible(bool visible) {
     if (windowId_) {
         XPLMSetWindowIsVisible(windowId_, visible ? 1 : 0);
+        // Save the new visibility state
+        saveStatusWindowVisible(visible);
     }
 }
 
