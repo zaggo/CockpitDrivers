@@ -8,7 +8,7 @@
 
 struct CANFirmwareInfo
 {
-    CanNodeId nodeId;
+    uint16_t nodeId;
     uint8_t fwMajor;
     uint8_t fwMinor;
 };
@@ -21,7 +21,7 @@ public:
     
     virtual bool begin();
 
-    bool sendMessage(CanMessageId id, uint8_t len, byte* data);
+    bool sendMessage(uint16_t id, uint8_t len, byte* data);
 
 protected:
     MCP_CAN *canBus = nullptr;

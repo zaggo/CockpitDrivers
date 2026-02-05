@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 // Node_IDs for CAN messages
-enum CanNodeId : uint8_t {
+enum class CanNodeId : uint8_t {
   gatewayNodeId = 0x00,
   debugNodeId = 0x01,
   fuelGaugeNodeId = 0x02,

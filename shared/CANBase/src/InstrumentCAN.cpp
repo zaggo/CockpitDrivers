@@ -114,7 +114,7 @@ void InstrumentCAN::sendInstrumentHeartbeat()
     // CAN ID 0x301 (instrumentHeartbeat), payload 8 bytes:
     // [0]=nodeId, [1]=fwMajor, [2]=fwMinor, [3]=flags, [4..7]=uptime/10ms (u32, big endian)
     byte data[8] = {0};
-    data[0] = fwInfo.nodeId;
+    data[0] = static_cast<uint8_t>(fwInfo.nodeId);
     data[1] = fwInfo.fwMajor;
     data[2] = fwInfo.fwMinor;
     data[3] = gatewayAlive ? 0x01 : 0x00; // bit0=OK (optional)
@@ -125,7 +125,7 @@ void InstrumentCAN::sendInstrumentHeartbeat()
     data[6] = (uint8_t)((uptime10 >> 8) & 0xFF);
     data[7] = (uint8_t)(uptime10 & 0xFF);
 
-    sendMessage(CanMessageId::instrumentHeartbeat, 8, data);
+    sendMessage(static_cast<uint16_t>(CanMessageId::instrumentHeartbeat), 8, data);
 }
 
 void InstrumentCAN::updateGatewayHeartbeat(uint8_t len, const uint8_t *data)

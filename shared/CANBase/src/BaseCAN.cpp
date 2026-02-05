@@ -40,7 +40,7 @@ void BaseCAN::onCanInterrupt()
     canIrq = true;
 }
 
-bool BaseCAN::sendMessage(CanMessageId id, uint8_t len, byte* data)
+bool BaseCAN::sendMessage(uint16_t id, uint8_t len, byte* data)
 {
   // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
   uint8_t sndStat = canBus->sendMsgBuf(static_cast<unsigned long>(id), 0, len, data);

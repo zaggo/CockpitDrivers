@@ -1,10 +1,10 @@
 #include "CAN.h"
 #include "Configuration.h"
 #include "DebugLog.h"
-#include "DCUSender.h"
+#include "MotionSender.h"
 
 CAN::CAN()
-    : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint8_t>(CanNodeId::gatewayNodeId), 1, 0})
+    : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint16_t>(MotionNodeId::gatewayNodeId), 1, 0})
 {
     // Initialize CAN ID error tracking array
     for (uint8_t i = 0; i < kMaxCanIdErrors; ++i)
@@ -47,21 +47,21 @@ bool CAN::begin()
         return false;
     }
 
-    // Filters: receive Instrument Heartbeat (0x301) in RXB0.
+    // Filters: receive Actor Heartbeat (0x301) in RXB0.
     canBus->init_Mask(0, 0, MASK_EXACT); // RXB0 exact match
     canBus->init_Mask(1, 0, MASK_EXACT); // RXB1 exact match
 
-    uint32_t instrumentHeartbeat = CAN_STD_ID(CanMessageId::instrumentHeartbeat);
+    uint32_t actorHeartbeat = CAN_STD_ID(MotionMessageId::actorHeartbeat);
 
-    // RXB0: Instrument heartbeat
-    canBus->init_Filt(0, 0, instrumentHeartbeat);
-    canBus->init_Filt(1, 0, instrumentHeartbeat);
+    // RXB0: Actor heartbeat
+    canBus->init_Filt(0, 0, actorHeartbeat);
+    canBus->init_Filt(1, 0, actorHeartbeat);
 
     // RXB1: (reserved for future inputs)
-    canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::transponderInput));
-    canBus->init_Filt(3, 0, instrumentHeartbeat);
-    canBus->init_Filt(4, 0, instrumentHeartbeat);
-    canBus->init_Filt(5, 0, instrumentHeartbeat);
+    canBus->init_Filt(2, 0, actorHeartbeat);
+    canBus->init_Filt(3, 0, actorHeartbeat);
+    canBus->init_Filt(4, 0, actorHeartbeat);
+    canBus->init_Filt(5, 0, actorHeartbeat);
 
     canBus->setMode(MCP_NORMAL);
     isStarted = true;
@@ -119,8 +119,8 @@ void CAN::loop()
         lastGatewayHeartbeatSendMs += periodMs;
     }
 
-    // --- Instrument heartbeat timeout checks ---
-    checkInstrumentHeartbeats();
+    // --- Actor heartbeat timeout checks ---
+    checkActorHeartbeats();
 
     // --- Update CAN alarm LED based on error status ---
     updateAlarmLED();
@@ -137,26 +137,23 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     clearCanIdError(static_cast<uint16_t>(id), CanErrorType::RX_ERROR);
 
     // IDs from mcp_can are the actual 11-bit ID (e.g. 0x270), even though filters use (ID<<16).
-    switch (static_cast<CanMessageId>(id))
+    switch (static_cast<MotionMessageId>(id))
     {
-    case CanMessageId::instrumentHeartbeat:
-        updateInstrumentHeartbeat(len, data);
-        break;
-    case CanMessageId::transponderInput:
-        updateTransponder(len, data);
+    case MotionMessageId::actorHeartbeat:
+        updateActorHeartbeat(len, data);
         break;
     default:
         break;
     }
 }
 
-void CAN::sendMessage(CanMessageId id, uint8_t len, byte *data)
+void CAN::sendMessage(MotionMessageId id, uint8_t len, byte *data)
 {
     const uint16_t canId = static_cast<uint16_t>(id);
     bool success = BaseCAN::sendMessage(canId, len, data);
     if (success)
     {
-        // DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(canId), HEX));
+        // DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
         //  Clear error status for this CAN ID on successful send
         clearCanIdError(canId, CanErrorType::TX_ERROR);
     }
@@ -168,10 +165,10 @@ void CAN::sendMessage(CanMessageId id, uint8_t len, byte *data)
     }
 }
 
-void CAN::setDCUSender(DCUSender* sender)
+void CAN::setMotionSender(MotionSender* sender)
 {
-    dcuSender = sender;
-    DEBUGLOG_PRINTLN(F("DCUSender set in CAN"));
+    motionSender = sender;
+    DEBUGLOG_PRINTLN(F("MotionSender set in CAN"));
 }
 
 void CAN::sendGatewayHeartbeat()
@@ -179,7 +176,7 @@ void CAN::sendGatewayHeartbeat()
     // CAN ID 0x300 (gatewayHeartbeat), payload 8 bytes:
     // [0]=nodeId, [1]=fwMajor, [2]=fwMinor, [3]=flags, [4..7]=uptime/10ms (u32, big endian)
     byte data[8] = {0};
-    data[0] = static_cast<uint8_t>(fwInfo.nodeId);
+    data[0] = fwInfo.nodeId;
     data[1] = fwInfo.fwMajor;
     data[2] = fwInfo.fwMinor;
     data[3] = 0x01; // bit0=OK
@@ -190,64 +187,43 @@ void CAN::sendGatewayHeartbeat()
     data[6] = (uint8_t)((uptime10 >> 8) & 0xFF);
     data[7] = (uint8_t)(uptime10 & 0xFF);
 
-    sendMessage(CanMessageId::gatewayHeartbeat, 8, data);
+    sendMessage(MotionMessageId::gatewayHeartbeat, 8, data);
 }
 
-void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
+void CAN::updateActorHeartbeat(uint8_t len, const uint8_t *data)
 {
-    // DEBUGLOG_PRINTLN(String(F("Received Instrument HB")) + String(len) + F(" bytes"));
+    // DEBUGLOG_PRINTLN(String(F("Received Actor HB")) + String(len) + F(" bytes"));
     if (len < 8)
         return;
 
     const uint8_t nodeId = data[0];
-    if (nodeId >= kMaxInstrumentNodes)
+    if (nodeId >= kMaxActorNodes)
         return;
-    // DEBUGLOG_PRINTLN(String(F("Received Instrument HB from node ")) + nodeId);
-    lastInstrumentHeartbeatMs[nodeId] = millis();
+    // DEBUGLOG_PRINTLN(String(F("Received Actor HB from node ")) + nodeId);
+    lastActorHeartbeatMs[nodeId] = millis();
 }
 
-void CAN::updateTransponder(uint8_t len, const uint8_t *data)
-{
-    // Handle transponder input frame
-    if (len < sizeof(TransponderToDcuMessage) && sizeof(TransponderToDcuMessage) < 8)
-        return;
-
-    #if DEBUGLOG_ENABLE
-        const TransponderToDcuMessage* message = reinterpret_cast<const TransponderToDcuMessage*>(data);
-        DEBUGLOG_PRINTLN(String(F("Received Transponder Input: command: ")) + 
-                         String(static_cast<uint8_t>(message->command), BIN) + 
-                         String(F(" code ")) + String(message->code) + 
-                         String(F(" mode ")) + String(message->mode));
-    #endif
-    
-    // Send transponder input back to DCUProvider Plugin via DCUSender
-    if (dcuSender != nullptr)
-    {
-       dcuSender->sendFrame(MessageType::SerialMessageTransponder, sizeof(TransponderToDcuMessage), data);
-    }
-}
-
-void CAN::checkInstrumentHeartbeats()
+void CAN::checkActorHeartbeats()
 {
     const uint32_t now = millis();
     const uint32_t timeoutMs = 1500;
-    const uint16_t instrumentHeartbeatId = static_cast<uint16_t>(CanMessageId::instrumentHeartbeat);
+    const uint16_t actorHeartbeatId = static_cast<uint16_t>(MotionMessageId::actorHeartbeat);
 
-    for (uint8_t nodeId = 0; nodeId < kMaxInstrumentNodes; ++nodeId)
+    for (uint8_t nodeId = 0; nodeId < kMaxActorNodes; ++nodeId)
     {
-        if (nodeId == static_cast<uint8_t>(fwInfo.nodeId))
+        if (nodeId == fwInfo.nodeId)
             continue; // skip gateway itself
 
-        const bool alive = (lastInstrumentHeartbeatMs[nodeId] != 0) && (now - lastInstrumentHeartbeatMs[nodeId] <= timeoutMs);
-        if (alive != instrumentAlive[nodeId])
+        const bool alive = (lastActorHeartbeatMs[nodeId] != 0) && (now - lastActorHeartbeatMs[nodeId] <= timeoutMs);
+        if (alive != actorAlive[nodeId])
         {
-            instrumentAlive[nodeId] = alive;
+            actorAlive[nodeId] = alive;
             // For now: log state changes. Later can propagate to USB status/annunciators.
-            // DEBUGLOG_PRINTLN(String(F("Instrument HB node ")) + nodeId + (alive ? F(" OK") : F(" TIMEOUT")));
+            // DEBUGLOG_PRINTLN(String(F("Actor HB node ")) + nodeId + (alive ? F(" OK") : F(" TIMEOUT")));
 
-            // Update error tracking: Use instrumentHeartbeat CAN ID with node-specific offset
+            // Update error tracking: Use actorHeartbeat CAN ID with node-specific offset
             // to distinguish different nodes (ID + nodeId)
-            const uint16_t nodeSpecificId = instrumentHeartbeatId + static_cast<uint16_t>(nodeId);
+            const uint16_t nodeSpecificId = actorHeartbeatId + nodeId;
             if (alive)
             {
                 clearCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);

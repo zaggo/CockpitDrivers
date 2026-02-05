@@ -14,7 +14,7 @@ enum class MessageType : uint8_t {
 };
 
 // Message Payload for Transponder > DCU
-enum TransponderToDCUCommand : uint8_t {
+enum class TransponderToDCUCommand : uint8_t {
     TransponderToDcuCommandSetCode = 0x01 << 0,
     TransponderToDcuCommandSetMode = 0x01 << 1,
     TransponderToDcuCommandIdent = 0x01 << 2,
