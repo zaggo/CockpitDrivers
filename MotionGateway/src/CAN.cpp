@@ -17,16 +17,11 @@ CAN::CAN()
     // MCP2515 /INT is open-drain, active-low. Use pull-up.
     pinMode(kCanIntPin, INPUT_PULLUP);
 
-    // Configure CAN alarm LED (on = error/not initialized)
-    pinMode(kCANAlarmPin, OUTPUT);
-    for (int i = 0; i < 3; ++i)
-    {
-        digitalWrite(kCANAlarmPin, HIGH);
-        delay(100);
-        digitalWrite(kCANAlarmPin, LOW);
-        delay(100);
-    }
-    updateAlarmLED(); // LED on until CAN is successfully initialized
+    // Configure status LEDs (for system state)
+    pinMode(kStatusLedRedPin, OUTPUT);
+    pinMode(kStatusLedGreenPin, OUTPUT);
+    digitalWrite(kStatusLedRedPin, LOW);
+    digitalWrite(kStatusLedGreenPin, LOW);
 
     DEBUGLOG_PRINTLN(F("CAN initialized"));
 }
@@ -42,7 +37,6 @@ bool CAN::begin()
     if (!didBegin)
     {
         DEBUGLOG_PRINTLN(F("CAN init fail"));
-        updateAlarmLED();
         return false;
     }
 
@@ -64,7 +58,6 @@ bool CAN::begin()
 
     canBus->setMode(MCP_NORMAL);
     isStarted = true;
-    updateAlarmLED(); // Update LED state (should turn off now)
     DEBUGLOG_PRINTLN(F("CAN did begin"));
     return true;
 }
@@ -121,8 +114,9 @@ void CAN::loop()
     // --- Actor heartbeat timeout checks ---
     checkActorHeartbeats();
 
-    // --- Update CAN alarm LED based on error status ---
-    updateAlarmLED();
+    // --- Calculate system state and update status LED ---
+    currentSystemState = calculateSystemState();
+    updateStatusLED();
 }
 
 void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data)
@@ -189,11 +183,21 @@ void CAN::updateActorHeartbeat(uint8_t len, const uint8_t *data)
     if (len < 8)
         return;
 
+    // CAN ID 0x301 (actorHeartbeat), payload 8 bytes:
+    // [0]=nodeId, [1]=fwMajor, [2]=fwMinor, [3]=state, [4..7]=uptime/10ms (u32, big endian)
     const uint8_t nodeId = data[0];
     if (nodeId >= kMaxActorNodes)
         return;
+    
+    const uint8_t stateValue = data[3];
+    
     // DEBUGLOG_PRINTLN(String(F("Received Actor HB from node ")) + nodeId);
     lastActorHeartbeatMs[nodeId] = millis();
+    
+    // Update actor state
+    if (stateValue < 4) {
+        actorState[nodeId] = static_cast<MotionActorState>(stateValue);
+    }
 }
 
 void CAN::checkActorHeartbeats()
@@ -289,31 +293,168 @@ void CAN::clearCanIdError(uint16_t canId, CanErrorType errorType)
     }
 }
 
-void CAN::updateAlarmLED()
+SystemState CAN::calculateSystemState()
 {
-    // LED should be on if:
-    // 1. CAN is not started/initialized, OR
-    // 2. Any CAN ID has an error status
-
-    bool ledOn = false;
-
+    // Priority 0: CAN Error - CAN not initialized or CAN ID errors exist
     if (!isStarted)
     {
-        // CAN not initialized - LED on
-        ledOn = true;
+        return SystemState::canError;
     }
-    else
+
+    // Check if any CAN ID has an error
+    for (uint8_t i = 0; i < canIdErrorCount; ++i)
     {
-        // Check if any CAN ID has an error
-        for (uint8_t i = 0; i < canIdErrorCount; ++i)
+        if (canIdErrors[i].hasError)
         {
-            if (canIdErrors[i].hasError)
+            return SystemState::canError;
+        }
+    }
+
+    // Count actors by state (only count actors that are alive)
+    uint8_t activeCount = 0;
+    uint8_t stoppedCount = 0;
+    uint8_t homingCount = 0;
+    uint8_t homingFailedCount = 0;
+    uint8_t aliveCount = 0;
+
+    for (uint8_t nodeId = 0; nodeId < kMaxActorNodes; ++nodeId)
+    {
+        if (nodeId == fwInfo.nodeId)
+            continue; // skip gateway itself
+
+        if (actorAlive[nodeId])
+        {
+            aliveCount++;
+            switch (actorState[nodeId])
             {
-                ledOn = true;
+            case MotionActorState::active:
+                activeCount++;
+                break;
+            case MotionActorState::stopped:
+                stoppedCount++;
+                break;
+            case MotionActorState::homing:
+                homingCount++;
+                break;
+            case MotionActorState::homingFailed:
+                homingFailedCount++;
                 break;
             }
         }
     }
 
-    digitalWrite(kCANAlarmPin, ledOn ? HIGH : LOW);
+    // Priority based logic (lower number = higher priority)
+    // canError = 0, motionError = 1, homing = 2, stopping = 3, stopped = 4, active = 5
+
+    // Priority 1: Motion Error - at least one actor failed
+    if (homingFailedCount > 0)
+    {
+        return SystemState::motionError;
+    }
+
+    // Priority 2: Homing - at least one actor homing
+    if (homingCount > 0)
+    {
+        return SystemState::homing;
+    }
+
+    // Priority 3: Stopping - at least one stopped, but not all
+    if (stoppedCount > 0 && stoppedCount < aliveCount)
+    {
+        return SystemState::stopping;
+    }
+
+    // Priority 4: Stopped - all actors stopped
+    if (aliveCount > 0 && stoppedCount == aliveCount)
+    {
+        return SystemState::stopped;
+    }
+
+    // Priority 5: Active - all actors active
+    if (aliveCount > 0 && activeCount == aliveCount)
+    {
+        return SystemState::active;
+    }
+
+    // Default: stopped (e.g., no actors alive yet)
+    return SystemState::stopped;
+}
+
+void CAN::updateStatusLED()
+{
+    // LED behavior based on system state:
+    // - canError -> red blink
+    // - motionError -> red
+    // - stopped -> yellow (red + green)
+    // - stopping -> yellow blink
+    // - homing -> green blink
+    // - active -> green
+
+    const uint32_t now = millis();
+    const uint32_t blinkPeriodMs = 500; // 500ms on, 500ms off
+
+    bool redOn = false;
+    bool greenOn = false;
+
+    switch (currentSystemState)
+    {
+    case SystemState::canError:
+        // Red blink
+        if (now - lastStatusLedToggleMs >= blinkPeriodMs)
+        {
+            statusLedBlinkState = !statusLedBlinkState;
+            lastStatusLedToggleMs = now;
+        }
+        redOn = statusLedBlinkState;
+        greenOn = false;
+        break;
+
+    case SystemState::motionError:
+        // Red
+        redOn = true;
+        greenOn = false;
+        break;
+
+    case SystemState::stopped:
+        // Yellow (red + green)
+        redOn = true;
+        greenOn = true;
+        break;
+
+    case SystemState::stopping:
+        // Yellow blink
+        if (now - lastStatusLedToggleMs >= blinkPeriodMs)
+        {
+            statusLedBlinkState = !statusLedBlinkState;
+            lastStatusLedToggleMs = now;
+        }
+        redOn = statusLedBlinkState;
+        greenOn = statusLedBlinkState;
+        break;
+
+    case SystemState::homing:
+        // Green blink
+        if (now - lastStatusLedToggleMs >= blinkPeriodMs)
+        {
+            statusLedBlinkState = !statusLedBlinkState;
+            lastStatusLedToggleMs = now;
+        }
+        redOn = false;
+        greenOn = statusLedBlinkState;
+        break;
+
+    case SystemState::active:
+        // Green
+        redOn = false;
+        greenOn = true;
+        break;
+    }
+
+    digitalWrite(kStatusLedRedPin, redOn ? HIGH : LOW);
+    digitalWrite(kStatusLedGreenPin, greenOn ? HIGH : LOW);
+}
+
+bool CAN::isSystemActive() const
+{
+    return currentSystemState == SystemState::active;
 }

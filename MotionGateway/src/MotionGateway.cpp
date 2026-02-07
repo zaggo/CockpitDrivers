@@ -106,7 +106,10 @@ void MotionGateway::handleFrame(const uint8_t *data)
     uint32_t pairDemand = (static_cast<uint32_t>(demand[i*2]) << 16) | demand[i*2 + 1];
     if (actorDemand[i] != pairDemand) {
       actorDemand[i] = pairDemand;
-      sendActorPairDemand(static_cast<MotionNodeId>(i+1), demand[i*2], demand[i*2 + 1]);
+      // Only send actorPairDemand if system is active
+      if (canBus->isSystemActive()) {
+        sendActorPairDemand(static_cast<MotionNodeId>(i+1), demand[i*2], demand[i*2 + 1]);
+      }
     }
   }
 }
@@ -137,11 +140,14 @@ void MotionGateway::checkMaxAgeResync()
     if (actorDemandMeta[i].lastSendTimestamp > 0 && 
         (now - actorDemandMeta[i].lastSendTimestamp) >= actorDemandMeta[i].maxAgeMs)
     {
-      DEBUGLOG_PRINTLN(String(F("MaxAge resync for Actor Node ")) + (i+1));
-      // Resend last known demand for this actor pair
-      uint16_t act1Demand = (actorDemand[i] >> 16) & 0xFFFF;
-      uint16_t act2Demand = actorDemand[i] & 0xFFFF;
-      sendActorPairDemand(static_cast<MotionNodeId>(i+1), act1Demand, act2Demand);
+      // Only resend if system is active
+      if (canBus->isSystemActive()) {
+        DEBUGLOG_PRINTLN(String(F("MaxAge resync for Actor Node ")) + (i+1));
+        // Resend last known demand for this actor pair
+        uint16_t act1Demand = (actorDemand[i] >> 16) & 0xFFFF;
+        uint16_t act2Demand = actorDemand[i] & 0xFFFF;
+        sendActorPairDemand(static_cast<MotionNodeId>(i+1), act1Demand, act2Demand);
+      }
     }
   }
 } 
