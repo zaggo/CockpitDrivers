@@ -14,6 +14,9 @@ enum class MotionMessageId : uint16_t
 
     // 0x301: Actor heartbeat (Gateway überwacht Actors; nodeId im Payload)
     actorHeartbeat = 0x301,
+
+    actorPairHome = 0x380,
+    actorPairStop = 0x381,
 };
 
 // Filtering

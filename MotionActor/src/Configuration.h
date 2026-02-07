@@ -2,14 +2,16 @@
 #define CONFIGURATION_H
 
 #include <Arduino.h>
+#include <MotionNodeId.h>
 
 #define BENCHDEBUG 0                                           
 
-const uint8_t kStatusLedRedPin = 6;
-const uint8_t kSstatusLedGreenPin  = 7;
+const MotionNodeId kNodeId = MotionNodeId::actorPair2;
+const byte kActorAddress = 129; // Default Packet Serial address for Kangaroo is 128. Adjust if needed.
+const uint32_t kKangarooBaudRate = 9600;
 
-const uint8_t kCanIntPin = 48; // MCP2515 /INT pin
-const uint8_t kCanCSPin = 53;
+const uint8_t kCanIntPin = 3;
+const uint8_t kCanCSPin = 10;
 
 const uint8_t kCANAlarmPin = 49; // LED on if CAN error/not initialized
 

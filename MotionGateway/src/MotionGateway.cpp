@@ -17,12 +17,7 @@ static uint8_t idx = 0;
 MotionGateway::MotionGateway(CAN *canBus) : canBus(canBus)
 {
   Serial.begin(115200);
-  
-  // Create MotionSender instance and register it with CAN
-  motionSender = new MotionSender();
-
-  canBus->setMotionSender(motionSender);
-  
+    
   for (uint8_t i = 0; i < kActorNodeCount; ++i)
   {
     actorDemandMeta[i] = {0, 5000}; // maxAge of 5 seconds for resync
@@ -31,7 +26,6 @@ MotionGateway::MotionGateway(CAN *canBus) : canBus(canBus)
 
 MotionGateway::~MotionGateway()
 {
-  delete motionSender;
 }
 
 void MotionGateway::loop()

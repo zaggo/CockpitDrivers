@@ -1,7 +1,6 @@
 #include "CAN.h"
 #include "Configuration.h"
 #include "DebugLog.h"
-#include "MotionSender.h"
 
 CAN::CAN()
     : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint16_t>(MotionNodeId::gatewayNodeId), 1, 0})
@@ -163,12 +162,6 @@ void CAN::sendMessage(MotionMessageId id, uint8_t len, byte *data)
         // Set error status for this CAN ID
         setCanIdError(canId, CanErrorType::TX_ERROR);
     }
-}
-
-void CAN::setMotionSender(MotionSender* sender)
-{
-    motionSender = sender;
-    DEBUGLOG_PRINTLN(F("MotionSender set in CAN"));
 }
 
 void CAN::sendGatewayHeartbeat()

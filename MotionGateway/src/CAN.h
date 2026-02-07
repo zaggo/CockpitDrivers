@@ -6,9 +6,6 @@
 #include <MotionMessageId.h>
 #include <MotionNodeId.h>
 
-// Forward declaration
-class MotionSender;
-
 // Error types for CAN ID tracking
 enum class CanErrorType : uint8_t {
     NONE = 0,
@@ -34,9 +31,6 @@ class CAN : public BaseCAN {
         void loop();
 
         void sendMessage(MotionMessageId id, uint8_t len, byte* data);
-        
-        void setMotionSender(MotionSender* sender);
-
     private:
         uint32_t lastGatewayHeartbeatSendMs = 0;
 
@@ -49,9 +43,6 @@ class CAN : public BaseCAN {
         static constexpr uint8_t kMaxCanIdErrors = 8;
         CanIdError canIdErrors[kMaxCanIdErrors];
         uint8_t canIdErrorCount = 0;
-
-        // Reference to MotionSender for sending messages back to MotionGateway Plugin
-        MotionSender* motionSender = nullptr;
 
         // Handle incoming Serial Message frames
         void updateActorHeartbeat(uint8_t len, const uint8_t* data);

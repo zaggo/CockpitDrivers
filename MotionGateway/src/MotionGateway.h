@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include "Configuration.h"
 #include "CAN.h"
-#include "MotionSender.h"
 #include <SerialMessageId.h>
 
 // Message metadata for maxAge resync
@@ -36,8 +35,5 @@ class MotionGateway {
         
         // Reference to CAN bus
         CAN* canBus;
-        
-        // MotionSender instance for sending data back to MotionGateway Plugin
-        MotionSender* motionSender;
 };
 #endif // MOTIONGATEWAY_H

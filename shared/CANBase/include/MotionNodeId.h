@@ -12,4 +12,11 @@ enum class MotionNodeId : uint8_t {
 
 static const uint8_t kActorNodeCount = 3; // Anzahl der Actor-Paare (ohne Gateway)
 
+enum class MotionActorState {
+    stopped,
+    homing,
+    active,
+    homingFailed
+};
+
 #endif // MOTION_ACTOR_NODE_ID_H
