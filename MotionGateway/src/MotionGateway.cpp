@@ -3,14 +3,15 @@
 
 enum class RxState : uint8_t
 {
-  SyncBC,
+  SyncB,
+  SyncC,
   Reserved,
   Data,
   CR
 };
 
 static const size_t kMaxDataSize = 12;
-static RxState state = RxState::SyncBC;
+static RxState state = RxState::SyncB;
 static uint8_t data[kMaxDataSize];
 static uint8_t idx = 0;
 
@@ -62,24 +63,6 @@ void MotionGateway::loop()
       break;
     }
 
-    // Flash 1 time green for mode1, 2 times for mode2
-    // uint8_t flashCount = (newMode == MotionMode::mode1) ? 1 : (newMode == MotionMode::mode2) ? 2
-    //                                                                                          : 0;
-    // digitalWrite(kStatusLedGreenPin, LOW);
-    // digitalWrite(kStatusLedRedPin, LOW);
-    // delay(500);
-
-    // for (uint8_t i = 0; i < flashCount; ++i)
-    // {
-    //   digitalWrite(kStatusLedGreenPin, HIGH);
-    //   delay(500);
-    //   digitalWrite(kStatusLedGreenPin, LOW);
-    //   delay(500);
-    // }
-    // digitalWrite(kStatusLedGreenPin, LOW);
-    // digitalWrite(kStatusLedRedPin, LOW);
-    // delay(500);
-
     mode = newMode;
   }
 
@@ -99,8 +82,11 @@ void MotionGateway::handleSerialInput()
 
       switch (state)
       {
-      case RxState::SyncBC:
-        state = (b == 0xBC) ? RxState::Reserved : RxState::SyncBC;
+      case RxState::SyncB:
+        state = (b == 'B') ? RxState::SyncC : RxState::SyncB;
+        break;
+      case RxState::SyncC:
+        state = (b == 'C') ? RxState::Reserved : RxState::SyncB;
         break;
 
       case RxState::Reserved:
@@ -124,7 +110,7 @@ void MotionGateway::handleSerialInput()
           {
             handleBFFFrame(data);
           }
-          state = RxState::SyncBC;
+          state = RxState::SyncB;
         }
         break;
       }
@@ -161,12 +147,12 @@ void MotionGateway::handleSerialInput()
 // Act1 16bit demand  = (b2 * 256) + b8,   in 0 to 65280 range, with 32640 mid range position
 void MotionGateway::handleBFFFrame(const uint8_t *data)
 {
-  DEBUGLOG_PRINTLN(F("Received BFF frame"));
+  //DEBUGLOG_PRINTLN(F("Received BFF frame"));
   uint16_t demand[kMaxDataSize / 2] = {0};
   for (uint8_t i = 0; i < kMaxDataSize / 2; ++i)
   {
     demand[i] = ((uint16_t)data[i] << 8) | data[i + kMaxDataSize / 2];
-    DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
+    //DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
   }
 
   for (uint8_t i = 0; i < kActorNodeCount; ++i)
@@ -179,7 +165,7 @@ void MotionGateway::handleBFFFrame(const uint8_t *data)
       if (canBus->isSystemActive())
       {
         sendActorPairDemand(static_cast<MotionNodeId>(i + 1), demand[i * 2], demand[i * 2 + 1]);
-        DEBUGLOG_PRINTLN(String(F("Sent actorPairDemand for Actor Node ")) + (i + 1) + String(F(": Act1=")) + demand[i * 2] + String(F(", Act2=")) + demand[i * 2 + 1]);
+        //DEBUGLOG_PRINTLN(String(F("Sent actorPairDemand for Actor Node ")) + (i + 1) + String(F(": Act1=")) + demand[i * 2] + String(F(", Act2=")) + demand[i * 2 + 1));
       }
     }
   }
