@@ -11,6 +11,12 @@ struct MessageMeta {
     unsigned long maxAgeMs;
 };
 
+enum class MotionMode: uint8_t {
+    mode0 = 0, // Off
+    mode1 = 1, // BFF Motion Driver compatible mode (0-100% mapped to 0-65280 demand range)
+    mode2 = 2  // Sim Mode
+};
+
 class MotionGateway {
     public:
         MotionGateway(CAN* canBus);
@@ -19,12 +25,20 @@ class MotionGateway {
         void loop();
 
     private:        
-        void handleFrame(const uint8_t *data);
+        void handleSerialInput();
+        void handleBFFFrame(const uint8_t *data);
+        void handleSimFrame(const uint8_t *data);
+
         void checkMaxAgeResync();
 
         bool readBytes(uint8_t* dst, size_t n);
 
         void sendActorPairDemand(MotionNodeId nodeId, uint16_t act1Demand, uint16_t act2Demand);
+
+        void sendHome();
+        void sendStop();
+
+        MotionMode mode = MotionMode::mode0;
 
         // RX state machine
         // Fuel Gauge

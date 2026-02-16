@@ -47,6 +47,23 @@ void MotionActor::home()
         minPosition2 += margin2 / 2;
         maxPosition2 -= margin2 / 2;
 
+        DEBUGLOG_PRINTLN(F("Homing successful"));
+        DEBUGLOG_PRINTLN(F("Min/Max/Range Actor 1:"));
+        DEBUGLOG_PRINT(F("Min: "));
+        DEBUGLOG_PRINTLN(minPosition1);
+        DEBUGLOG_PRINT(F("Max: "));
+        DEBUGLOG_PRINTLN(maxPosition1);
+        DEBUGLOG_PRINT(F("Range: "));
+        DEBUGLOG_PRINTLN(range1);
+
+        DEBUGLOG_PRINTLN(F("Min/Max/Range Actor 2:"));
+        DEBUGLOG_PRINT(F("Min: "));
+        DEBUGLOG_PRINTLN(minPosition2);
+        DEBUGLOG_PRINT(F("Max: "));
+        DEBUGLOG_PRINTLN(maxPosition2);
+        DEBUGLOG_PRINT(F("Range: "));
+        DEBUGLOG_PRINTLN(range2);
+
         if (minPosition1 < 200 || maxPosition1 < 10000 || range1 < 8000 ||
             minPosition2 < 200 || maxPosition2 < 10000 || range2 < 8000)
         {
@@ -55,7 +72,8 @@ void MotionActor::home()
             return;
         }
 
-        DEBUGLOG_PRINTLN(F("Homing successful"));
+        actor1.p(minPosition1, range1 / 10);
+        actor2.p(minPosition2, range2 / 10);
         state = MotionActorState::active;
     }
     else
@@ -80,9 +98,24 @@ void MotionActor::setDemands(uint16_t demand1, uint16_t demand2)
         DEBUGLOG_PRINTLN(F("Cannot set demands: not active"));
         return;
     }
+    DEBUGLOG_PRINTLN(F("Min/Max/Range Actor 1:"));
+    DEBUGLOG_PRINT(F("Min: "));
+    DEBUGLOG_PRINTLN(minPosition1);
+    DEBUGLOG_PRINT(F("Max: "));
+    DEBUGLOG_PRINTLN(maxPosition1);
 
-    int32_t pos = map(demand1, 0, 0xffff, minPosition1,  maxPosition1);
+    DEBUGLOG_PRINTLN(F("Min/Max/Range Actor 2:"));
+    DEBUGLOG_PRINT(F("Min: "));
+    DEBUGLOG_PRINTLN(minPosition2);
+    DEBUGLOG_PRINT(F("Max: "));
+    DEBUGLOG_PRINTLN(maxPosition2);
+
+    int32_t pos = map(demand1, 0, 0xffff, minPosition1, maxPosition1);
+    DEBUGLOG_PRINT(F("Set Actor 1 pos "));
+    DEBUGLOG_PRINTLN(String(static_cast<int>(pos)));
     actor1.p(pos);
-    pos = map(demand2, 0, 0xffff, minPosition2,  maxPosition2);
+    pos = map(demand2, 0, 0xffff, minPosition2, maxPosition2);
+    DEBUGLOG_PRINT(F("Set Actor 2 pos "));
+    DEBUGLOG_PRINTLN(String(static_cast<int>(pos)));
     actor2.p(pos);
 }

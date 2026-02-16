@@ -4,11 +4,15 @@
 #include <Arduino.h>
 
 #define BENCHDEBUG 0                                           
+const uint32_t kHeartbeatInterval = 1000L; // 1 second
 
-const uint8_t kStatusLedRedPin = 6;
-const uint8_t kStatusLedGreenPin = 7;
+const uint8_t kStatusLedRedPin = 22;
+const uint8_t kStatusLedGreenPin = 23;
 
-const uint8_t kCanIntPin = 48; // MCP2515 /INT pin
+const uint8_t kMode1Pin = 25; // Mode pin 1
+const uint8_t kMode2Pin = 24; // Mode pin 2
+
+const uint8_t kCanIntPin = 2; // MCP2515 /INT pin
 const uint8_t kCanCSPin = 53;
 
 // Exakte ID-Matches (alle 11 Bits relevant)

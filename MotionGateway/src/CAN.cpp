@@ -20,7 +20,24 @@ CAN::CAN()
     // Configure status LEDs (for system state)
     pinMode(kStatusLedRedPin, OUTPUT);
     pinMode(kStatusLedGreenPin, OUTPUT);
-    digitalWrite(kStatusLedRedPin, LOW);
+
+
+    // Welcome LED blink to indicate startup (can be removed later if not needed)
+    // Cycle 3 times through red, green, yellow (red+green)
+    for (int i = 0; i < 3; ++i)
+    {
+        digitalWrite(kStatusLedRedPin, HIGH);
+        digitalWrite(kStatusLedGreenPin, LOW);
+        delay(500);
+        digitalWrite(kStatusLedRedPin, LOW);
+        digitalWrite(kStatusLedGreenPin, HIGH);
+        delay(500);
+        digitalWrite(kStatusLedRedPin, HIGH);
+        digitalWrite(kStatusLedGreenPin, HIGH);
+        delay(500);
+    }
+
+    digitalWrite(kStatusLedRedPin, HIGH);
     digitalWrite(kStatusLedGreenPin, LOW);
 
     DEBUGLOG_PRINTLN(F("CAN initialized"));
