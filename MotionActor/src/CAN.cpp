@@ -6,6 +6,11 @@ CAN::CAN(MotionActor *motionActor)
     : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint16_t>(kNodeId), 1, 0}),
       motionActor(motionActor)
 {
+    pinMode(kRedLEDPin, OUTPUT);
+    pinMode(kGreenLEDPin, OUTPUT);
+    digitalWrite(kRedLEDPin, HIGH);
+    digitalWrite(kGreenLEDPin, LOW);
+
     // MCP2515 /INT is open-drain, active-low. Use pull-up.
     pinMode(kCanIntPin, INPUT_PULLUP);
 
@@ -52,6 +57,7 @@ void CAN::loop()
 {
     if (!isStarted)
     {
+        updateStatusLeds();
         return;
     }
 
@@ -71,7 +77,7 @@ void CAN::loop()
     }
 
     // --- Gateway Heartbeat Timeout (DCU -> Instrument) ---
-    const bool alive = /*(lastGatewayHeartbeat != 0) &&*/ (now - lastGatewayHeartbeat <= GATEWAY_TIMEOUT);
+    const bool alive = gatewayHeartbeatSeen && (now - lastGatewayHeartbeat <= GATEWAY_TIMEOUT);
     if (alive != gatewayAlive)
     {
         gatewayAlive = alive;
@@ -84,6 +90,8 @@ void CAN::loop()
             onGatewayHeartbeatDiscovered();
         }
     }
+
+    updateStatusLeds();
 
     // Fast path: no interrupt seen and line is high -> nothing to do.
     if (!canIrq && digitalRead(intPin) == HIGH)
@@ -145,9 +153,35 @@ void CAN::updateGatewayHeartbeat(uint8_t len, const uint8_t *data)
     if (nodeId != 0)
         return;
 
+    gatewayHeartbeatSeen = true;
     lastGatewayHeartbeat = millis();
 
     // Optional: you could parse version/flags/uptime here if needed.
+}
+
+void CAN::updateStatusLeds()
+{
+    if (motionActor->state == MotionActorState::homing)
+    {
+        const uint32_t now = millis();
+        if ((now - lastLedBlinkToggle) >= LED_BLINK_INTERVAL)
+        {
+            lastLedBlinkToggle = now;
+            ledBlinkStateOn = !ledBlinkStateOn;
+        }
+
+        digitalWrite(kRedLEDPin, ledBlinkStateOn ? HIGH : LOW);
+        digitalWrite(kGreenLEDPin, ledBlinkStateOn ? HIGH : LOW);
+        return;
+    }
+
+    const bool isReadyForDemand =
+        isStarted &&
+        gatewayAlive &&
+        (motionActor->state == MotionActorState::active);
+
+    digitalWrite(kGreenLEDPin, isReadyForDemand ? HIGH : LOW);
+    digitalWrite(kRedLEDPin, isReadyForDemand ? LOW : HIGH);
 }
 
 void CAN::onGatewayHeartbeatTimeout()
