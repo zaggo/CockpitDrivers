@@ -14,7 +14,7 @@ CAN *canBus;
 MotionActor *motionActor;
 
 void setup() {
-  DEBUGLOG_INIT(115200);
+  DEBUGLOG_INIT(kDebugBaudRate);
   delay(200);
   DEBUGLOG_PRINTLN(F("MotionActor initializing..."));
 

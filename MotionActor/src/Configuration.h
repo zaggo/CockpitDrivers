@@ -5,9 +5,10 @@
 #include <MotionNodeId.h>
 
 #define BENCHDEBUG 0                                           
+#define DEBUGLOG_ENABLE 1
 
-const MotionNodeId kNodeId = MotionNodeId::actorPair2;
-const byte kActorAddress = 129; // Default Packet Serial address for Kangaroo is 128. Adjust if needed.
+const MotionNodeId kNodeId = MotionNodeId::actorPair3;
+const byte kActorAddress = 130; // Default Packet Serial address for Kangaroo is 128. Adjust if needed.
 const uint32_t kKangarooBaudRate = 19200; // Default baud rate for Kangaroo. Adjust if needed.
 
 const uint8_t kCanIntPin = 2;
@@ -18,7 +19,10 @@ const uint8_t kCanCSPin = 10;
 #endif
 
 const uint8_t kRedLEDPin = 4; // LED on if CAN error/not initialized
-const uint8_t kGreenLEDPin = 3; // LED 
+const uint8_t kGreenLEDPin = 3; // LED on if CAN initialized and running
+const uint8_t kDebugLogRxPin = 8;
+const uint8_t kDebugLogTxPin = 9;
+const uint32_t kDebugBaudRate = 9600; // Baud rate for debug logging. Adjust as needed.
 
 // Exakte ID-Matches (alle 11 Bits relevant)
 const uint32_t MASK_EXACT = 0x07FF0000;

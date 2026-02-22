@@ -1,12 +1,12 @@
 #ifndef DEBUGLOG_H
 #define DEBUGLOG_H
 
-#define DEBUGLOG_ENABLE 0
+#include "Configuration.h"
 
 // Prozessor erkennen
 #if defined(__AVR_ATmega328P__)
     #include <SoftwareSerial.h>
-    static SoftwareSerial DebugSoftSerial(8, 9); // RX, TX 
+    extern SoftwareSerial DebugSoftSerial;
     #define DEBUGLOG_PORT DebugSoftSerial
 #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
     #define DEBUGLOG_PORT Serial1
