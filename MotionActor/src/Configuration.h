@@ -5,10 +5,10 @@
 #include <MotionNodeId.h>
 
 #define BENCHDEBUG 0                                           
-#define DEBUGLOG_ENABLE 1
+#define DEBUGLOG_ENABLE 0
 
-const MotionNodeId kNodeId = MotionNodeId::actorPair3;
-const byte kActorAddress = 130; // Default Packet Serial address for Kangaroo is 128. Adjust if needed.
+const MotionNodeId kNodeId = MotionNodeId::actorPair1;
+const byte kActorAddress = 128; // Default Packet Serial address for Kangaroo is 128. Adjust if needed.
 const uint32_t kKangarooBaudRate = 19200; // Default baud rate for Kangaroo. Adjust if needed.
 
 const uint8_t kCanIntPin = 2;

@@ -1,6 +1,28 @@
 #include "MotionGateway.h"
 #include "DebugLog.h"
 
+// Actor mapping tables for different modes
+// Each entry defines where actor 1-6 maps to: {nodeId, motorIndex (0=m1, 1=m2)}
+// Mode 1: BFF Motion Driver compatible mode
+const ActorMapping MotionGateway::actorMappingMode1[6] = {
+    {MotionNodeId::actorPair2, 1}, // actor 1 → actorPair 1, motor 1
+    {MotionNodeId::actorPair3, 0}, // actor 2 → actorPair 1, motor 2
+    {MotionNodeId::actorPair3, 1}, // actor 3 → actorPair 2, motor 1
+    {MotionNodeId::actorPair1, 0}, // actor 4 → actorPair 2, motor 2
+    {MotionNodeId::actorPair1, 1}, // actor 5 → actorPair 3, motor 1
+    {MotionNodeId::actorPair2, 0}  // actor 6 → actorPair 3, motor 2
+};
+
+// Mode 2: SimTools
+const ActorMapping MotionGateway::actorMappingMode2[6] = {
+    {MotionNodeId::actorPair1, 1}, // actor 1 → actorPair 1, motor 1
+    {MotionNodeId::actorPair2, 0}, // actor 2 → actorPair 1, motor 2
+    {MotionNodeId::actorPair2, 1}, // actor 3 → actorPair 2, motor 1
+    {MotionNodeId::actorPair3, 0}, // actor 4 → actorPair 2, motor 2
+    {MotionNodeId::actorPair3, 1}, // actor 5 → actorPair 3, motor 1
+    {MotionNodeId::actorPair1, 0}  // actor 6 → actorPair 3, motor 2
+};
+
 enum class RxState : uint8_t
 {
   SyncB,
@@ -76,6 +98,29 @@ void MotionGateway::handleSerialInput()
 {
   if (mode == MotionMode::mode1)
   {
+    // Handle a complete frame of 12 data bytes (actor demands)
+    // BIN2B output format is - “BC” b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 0x0D (CR)
+    // "BC" - start of data identifier for the receiving micro controller
+    // byte1 - reserved
+
+    // byte2 - 8 bit binary number giving act1 demand MSB in 0-255 scale
+    // byte3 - 8 bit binary number giving act2 demand MSB in 0-255 scale
+    // byte4 - 8 bit binary number giving act3 demand MSB in 0-255 scale
+    // byte5 - 8 bit binary number giving act4 demand MSB in 0-255 scale
+    // byte6 - 8 bit binary number giving act5 demand MSB in 0-255 scale
+    // byte7 - 8 bit binary number giving act6 demand MSB in 0-255 scale
+
+    // byte8 - 8 bit binary number giving act1 demand LSB in 0-255 scale
+    // byte9 - 8 bit binary number giving act2 demand LSB in 0-255 scale
+    // byte10 - 8 bit binary number giving act3 demand LSB in 0-255 scale
+    // byte11 - 8 bit binary number giving act4 demand LSB in 0-255 scale
+    // byte12 - 8 bit binary number giving act5 demand LSB in 0-255 scale
+    // byte13 - 8 bit binary number giving act6 demand LSB in 0-255 scale
+
+    // 0x0D - single byte Carriage Return data terminator
+
+    // The 16 bit value is read by combining the MSB & LSB for each actuator, eg for Act 1 -
+    // Act1 16bit demand  = (b2 * 256) + b8,   in 0 to 65280 range, with 32640 mid range position
     while (Serial.available() > 0)
     {
       uint8_t b = (uint8_t)Serial.read();
@@ -122,57 +167,69 @@ void MotionGateway::handleSerialInput()
   }
 }
 
-// Handle a complete frame of 12 data bytes (actor demands)
-// BIN2B output format is - “BC” b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 0x0D (CR)
-// "BC" - start of data identifier for the receiving micro controller
-// byte1 - reserved
-
-// byte2 - 8 bit binary number giving act1 demand MSB in 0-255 scale
-// byte3 - 8 bit binary number giving act2 demand MSB in 0-255 scale
-// byte4 - 8 bit binary number giving act3 demand MSB in 0-255 scale
-// byte5 - 8 bit binary number giving act4 demand MSB in 0-255 scale
-// byte6 - 8 bit binary number giving act5 demand MSB in 0-255 scale
-// byte7 - 8 bit binary number giving act6 demand MSB in 0-255 scale
-
-// byte8 - 8 bit binary number giving act1 demand LSB in 0-255 scale
-// byte9 - 8 bit binary number giving act2 demand LSB in 0-255 scale
-// byte10 - 8 bit binary number giving act3 demand LSB in 0-255 scale
-// byte11 - 8 bit binary number giving act4 demand LSB in 0-255 scale
-// byte12 - 8 bit binary number giving act5 demand LSB in 0-255 scale
-// byte13 - 8 bit binary number giving act6 demand LSB in 0-255 scale
-
-// 0x0D - single byte Carriage Return data terminator
-
-// The 16 bit value is read by combining the MSB & LSB for each actuator, eg for Act 1 -
-// Act1 16bit demand  = (b2 * 256) + b8,   in 0 to 65280 range, with 32640 mid range position
 void MotionGateway::handleBFFFrame(const uint8_t *data)
 {
-  //DEBUGLOG_PRINTLN(F("Received BFF frame"));
+  // DEBUGLOG_PRINTLN(F("Received BFF frame"));
+
+  // Extract the 6 individual actor demands from the serial data
   uint16_t demand[kMaxDataSize / 2] = {0};
   for (uint8_t i = 0; i < kMaxDataSize / 2; ++i)
   {
     demand[i] = ((uint16_t)data[i] << 8) | data[i + kMaxDataSize / 2];
-    //DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
+    // DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
   }
 
-  for (uint8_t i = 0; i < kActorNodeCount; ++i)
-  {
-    uint32_t pairDemand = (static_cast<uint32_t>(demand[i * 2]) << 16) | demand[i * 2 + 1];
-    if (actorDemand[i] != pairDemand)
-    {
-      actorDemand[i] = pairDemand;
-      // Only send actorPairDemand if system is active
-      if (canBus->isSystemActive())
-      {
-        sendActorPairDemand(static_cast<MotionNodeId>(i + 1), demand[i * 2], demand[i * 2 + 1]);
-        //DEBUGLOG_PRINTLN(String(F("Sent actorPairDemand for Actor Node ")) + (i + 1) + String(F(": Act1=")) + demand[i * 2] + String(F(", Act2=")) + demand[i * 2 + 1));
-      }
-    }
-  }
+  processDemands(demand);
 }
 
 void MotionGateway::handleSimFrame(const uint8_t *data)
 {
+}
+
+void MotionGateway::processDemands(const uint16_t demand[6])
+{
+  // Select the appropriate mapping based on current mode
+  const ActorMapping *mapping = nullptr;
+  switch (mode)
+  {
+  case MotionMode::mode1:
+    mapping = actorMappingMode1;
+    break;
+  case MotionMode::mode2:
+    mapping = actorMappingMode2;
+    break;
+  default:
+    return; // No mapping for this mode
+  }
+
+  // Build demands for each actor pair based on the mapping
+  // pairDemands[nodeId-1][motorIndex] = demand value
+  uint16_t pairDemands[kActorNodeCount][2] = {0};
+
+  for (uint8_t actorIdx = 0; actorIdx < 6; ++actorIdx)
+  {
+    const ActorMapping &map = mapping[actorIdx];
+    uint8_t pairIdx = static_cast<uint8_t>(map.nodeId) - 1; // Convert nodeId to index (0-2)
+    pairDemands[pairIdx][map.motorIndex] = demand[actorIdx];
+  }
+
+  // Send demands for each actor pair if changed
+  for (uint8_t pairIdx = 0; pairIdx < kActorNodeCount; ++pairIdx)
+  {
+    uint32_t pairDemand = (static_cast<uint32_t>(pairDemands[pairIdx][0]) << 16) | pairDemands[pairIdx][1];
+
+    // Only send actorPairDemand if system is active and values have changed to reduce CAN bus load
+    if (actorDemand[pairIdx] != pairDemand && canBus->isSystemActive())
+    {
+      actorDemand[pairIdx] = pairDemand;
+      sendActorPairDemand(static_cast<MotionNodeId>(pairIdx + 1),
+                          pairDemands[pairIdx][0],
+                          pairDemands[pairIdx][1]);
+      // DEBUGLOG_PRINTLN(String(F("Sent actorPairDemand for Actor Node ")) + (pairIdx + 1) +
+      //                  String(F(": Act1=")) + pairDemands[pairIdx][0] +
+      //                  String(F(", Act2=")) + pairDemands[pairIdx][1]);
+    }
+  }
 }
 
 void MotionGateway::sendActorPairDemand(MotionNodeId nodeId, uint16_t act1Demand, uint16_t act2Demand)
