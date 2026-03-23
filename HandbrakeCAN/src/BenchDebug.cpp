@@ -25,15 +25,19 @@ BenchDebug::~BenchDebug()
 const int kMaxCommandLength = 10;
 bool BenchDebug::handleHandbrakeInput(String command) {
     if (command.startsWith("mi")) {
-        // Calibrate minimum position
+        Serial.println(F("Sampling min position (release handbrake)..."));
+        handbrake->calibrateMin();
+        Serial.println(F("Min position calibrated."));
         return true;
     }  else if (command.startsWith("ma")) {
-        // Calibrate maximum position
+        Serial.println(F("Sampling max position (pull handbrake fully)..."));
+        handbrake->calibrateMax();
+        Serial.println(F("Max position calibrated."));
         return true;
     }  else if (command.startsWith("?")) {
         Serial.println(F("Handbrake Commands:"));
-        Serial.println(F("mi: calibrate minimum position"));
-        Serial.println(F("ma: calibrate maximum position"));
+        Serial.println(F("mi: calibrate minimum position (release handbrake first)"));
+        Serial.println(F("ma: calibrate maximum position (pull handbrake fully)"));
         return true;
     }       
     return false;
@@ -105,9 +109,9 @@ void BenchDebug::loop()
     handleUserInput();
 
     uint8_t newPosition = handbrake->getHandbrakePosition();
-    if (newPosition != position) {
+    if (abs((int)newPosition - (int)position) > 3) {
         position = newPosition;
-        Serial.println(String(F("Handbrake position: ")) + String(position));
+        Serial.println(String(F("Handbrake position: ")) + String(position) + String(F(" (raw: ")) + String(handbrake->getRawPosition()) + String(F(")")));
     }
 }
 #endif
