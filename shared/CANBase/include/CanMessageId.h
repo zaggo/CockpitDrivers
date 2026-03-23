@@ -17,6 +17,7 @@ enum class CanMessageId : uint16_t {
   instrumentHeartbeat = 0x301,
 
   transponderInput = 0x311,
+  handbrakeStatus = 0x330
 };
 
 // Filtering
