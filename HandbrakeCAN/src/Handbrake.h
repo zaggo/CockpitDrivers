@@ -10,6 +10,11 @@ struct HandbrakeConfig {
     uint16_t maxRawPosition;
 };
 
+struct HandbrakePositionUpdate {
+    bool changed;
+    uint8_t position;
+};
+
 class Handbrake
 {
 public:
@@ -18,12 +23,15 @@ public:
 
     uint8_t getHandbrakePosition();
     uint16_t getRawPosition();
+    HandbrakePositionUpdate getPositionUpdate();
 
     void calibrateMin();
     void calibrateMax();
 
 private:
     HandbrakeConfig _config;
+    bool _hasLastReportedPosition;
+    uint8_t _lastReportedPosition;
     void loadConfig();
     void saveConfig();
     uint16_t sampleAverage(uint8_t count);

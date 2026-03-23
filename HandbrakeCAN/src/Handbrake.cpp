@@ -9,6 +9,8 @@ static const uint16_t kHandbrakeEepromAddress = 0;
 
 Handbrake::Handbrake() {
     pinMode(kHandbrakePin, INPUT);
+    _hasLastReportedPosition = false;
+    _lastReportedPosition = 0;
     loadConfig();
 }
 
@@ -74,4 +76,28 @@ uint8_t Handbrake::getHandbrakePosition() {
     int effMax   = (int)_config.maxRawPosition - deadband;
     long mapped  = map((long)rawValue, effMin, effMax, 0, 100);
     return (uint8_t)constrain(mapped, 0, 100);
+}
+
+HandbrakePositionUpdate Handbrake::getPositionUpdate() {
+    HandbrakePositionUpdate update;
+    uint8_t newPosition = getHandbrakePosition();
+
+    if (!_hasLastReportedPosition) {
+        _hasLastReportedPosition = true;
+        _lastReportedPosition = newPosition;
+        update.changed = true;
+        update.position = newPosition;
+        return update;
+    }
+
+    bool changedSignificantly = abs((int)newPosition - (int)_lastReportedPosition) > 2;
+    bool changedToExtreme = ((newPosition == 0 || newPosition == 100) && (newPosition != _lastReportedPosition));
+    update.changed = changedSignificantly || changedToExtreme;
+    update.position = newPosition;
+
+    if (update.changed) {
+        _lastReportedPosition = newPosition;
+    }
+
+    return update;
 }

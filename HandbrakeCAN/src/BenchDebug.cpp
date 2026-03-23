@@ -108,9 +108,9 @@ void BenchDebug::loop()
 
     handleUserInput();
 
-    uint8_t newPosition = handbrake->getHandbrakePosition();
-    if (abs((int)newPosition - (int)position) > 3) {
-        position = newPosition;
+    HandbrakePositionUpdate update = handbrake->getPositionUpdate();
+    if (update.changed) {
+        position = update.position;
         Serial.println(String(F("Handbrake position: ")) + String(position) + String(F(" (raw: ")) + String(handbrake->getRawPosition()) + String(F(")")));
     }
 }

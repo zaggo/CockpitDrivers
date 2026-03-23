@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <CanNodeId.h>
 
-#define BENCHDEBUG 1                                           
+#define BENCHDEBUG 0                                           
 #define DEBUGLOG_ENABLE 1
 
 const CanNodeId kNodeId = CanNodeId::handbrakeNodeId;
