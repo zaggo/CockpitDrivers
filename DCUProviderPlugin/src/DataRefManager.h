@@ -41,6 +41,9 @@ public:
     void setTransponderMode(uint8_t mode);
     void transponderIdentOnce();
     
+    // Parking Brake
+    void setParkingBrakeRatio(float ratio);
+    
     // ============ UPLINK (Gateway → Plugin) ============
     /// Sets barometer altimeter setting (inHg)
     void setBarometerSetting(float inHg);
@@ -73,6 +76,7 @@ private:
     XPLMDataRef dr_TransponderModeR = nullptr;
     XPLMDataRef dr_TransponderModeW = nullptr;
     XPLMDataRef dr_TransponderLight = nullptr;
+    XPLMDataRef dr_ParkingBrake = nullptr;
 
     XPLMCommandRef cr_TransponderIdent = nullptr;
 };

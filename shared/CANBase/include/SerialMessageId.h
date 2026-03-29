@@ -11,6 +11,7 @@ enum class MessageType : uint8_t {
     SerialMessageFuel   = 0x01,
     SerialMessageLights = 0x02,
     SerialMessageTransponder = 0x03,
+    SerialMessageHandbrake = 0x04,
 };
 
 // Message Payload for Transponder > DCU

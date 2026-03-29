@@ -23,5 +23,8 @@ class CAN : public InstrumentCAN {
 
     private:
         Handbrake* handbrake;
+        unsigned long lastPeriodicSendTime = 0;
+        static const unsigned long PERIODIC_SEND_INTERVAL_MS = 2000; // 2 seconds
+        void sendHandbrakePosition(uint8_t position);
 };
 #endif // CAN_H

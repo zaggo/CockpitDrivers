@@ -42,13 +42,13 @@ void BenchDebug::sendFuelLevel() {
     }
     Serial.println();
 
-    canBus->sendMessage(CanStateId::fuelLevel, 8, data);
+    canBus->sendMessage(CanMessageId::fuelLevel, 8, data);
 }
 
 void BenchDebug::sendCockpitLightLevel() {
     byte data[8] = {0};
     data[0]= cockpitLightLevel;
-    canBus->sendMessage(CanStateId::dashboardLight, 1, data);
+    canBus->sendMessage(CanMessageId::lights, 1, data);
 }
 
 const int kMaxCommandLength = 10;

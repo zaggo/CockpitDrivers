@@ -17,11 +17,27 @@ void CAN::loop()
 {
     InstrumentCAN::loop();
     HandbrakePositionUpdate update = handbrake->getPositionUpdate();
+    
+    // Event-driven: send immediately when position changes
     if (update.changed) {
-        byte payload[1] = { update.position };
-        sendMessage(static_cast<uint16_t>(CanMessageId::handbrakeStatus), 1, payload);
-        DEBUGLOG_PRINTLN(String(F("Handbrake position: ")) + String(update.position));
+        sendHandbrakePosition(update.position);
+        DEBUGLOG_PRINTLN(String(F("Handbrake position changed: ")) + String(update.position));
+        lastPeriodicSendTime = millis(); // Reset periodic timer
     }
+    
+    // Periodic fallback: send position every 2 seconds
+    unsigned long currentTime = millis();
+    if (currentTime - lastPeriodicSendTime >= PERIODIC_SEND_INTERVAL_MS) {
+        sendHandbrakePosition(handbrake->getHandbrakePosition());
+        DEBUGLOG_PRINTLN(String(F("Handbrake position periodic: ")) + String(handbrake->getHandbrakePosition()));
+        lastPeriodicSendTime = currentTime;
+    }
+}
+
+void CAN::sendHandbrakePosition(uint8_t position)
+{
+    byte payload[1] = { position };
+    sendMessage(static_cast<uint16_t>(CanMessageId::handbrakeStatus), 1, payload);
 }
 
 void CAN::onStartupFail()

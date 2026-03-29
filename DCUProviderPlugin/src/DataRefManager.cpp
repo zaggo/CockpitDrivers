@@ -29,6 +29,8 @@ void DataRefManager::onAircraftLoaded()
     dr_TransponderLight = XPLMFindDataRef("sim/cockpit/radios/transponder_light");
 
     cr_TransponderIdent = XPLMFindCommand("sim/transponder/transponder_ident");
+
+    dr_ParkingBrake = XPLMFindDataRef("sim/cockpit2/controls/parking_brake_ratio");
 }
 
 // Fuel
@@ -113,6 +115,14 @@ void DataRefManager::transponderIdentOnce()
         XPLMCommandOnce(cr_TransponderIdent);
 }
 
+// Parking Brake
+void DataRefManager::setParkingBrakeRatio(float ratio)
+{
+    if (dr_ParkingBrake)
+    {
+        XPLMSetDataf(dr_ParkingBrake, ratio);
+    }
+}
 // ----
 
 float DataRefManager::readFloat(XPLMDataRef dr, float def)

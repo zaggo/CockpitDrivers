@@ -5,6 +5,8 @@
 #if BENCHDEBUG
 #include <Arduino.h>
 #include "CAN.h"
+#include <CanMessageId.h>
+#include <CanNodeId.h>
 
 class BenchDebug {
     public:

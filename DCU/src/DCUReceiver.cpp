@@ -169,6 +169,7 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
   }
   default:
     // Unknown message type -> ignore
+    DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
     break;
   }
 }

@@ -271,18 +271,27 @@ void DCUProvider::updateUplink()
             if (msg->payload.size() >= sizeof(TransponderToDcuMessage))
             {
                 const TransponderToDcuMessage *message = reinterpret_cast<const TransponderToDcuMessage *>(msg->payload.data());
-                if (message->command & TransponderToDcuCommandSetCode)
+                if (static_cast<uint8_t>(message->command) & static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandSetCode))
                 {
                     dataRefMgr_->setTransponderCode(message->code);
                 }
-                if (message->command & TransponderToDcuCommandSetMode)
+                if (static_cast<uint8_t>(message->command) & static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandSetMode))
                 {
                     dataRefMgr_->setTransponderMode(message->mode);
                 }
-                if (message->command & TransponderToDcuCommandIdent)
+                if (static_cast<uint8_t>(message->command) & static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandIdent))
                 {
                     dataRefMgr_->transponderIdentOnce();
                 }
+            }
+            break;
+
+        case MessageType::SerialMessageHandbrake:
+            // Gateway → Plugin: This would be for reading handbrake controls from device
+            if (msg->payload.size() >= sizeof(uint8_t))
+            {
+                uint8_t breakStatus = *reinterpret_cast<const uint8_t *>(msg->payload.data());
+                dataRefMgr_->setParkingBrakeRatio(static_cast<float>(breakStatus) / 100.0f);
             }
             break;
 

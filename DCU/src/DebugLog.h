@@ -1,7 +1,6 @@
 #ifndef DEBUGLOG_H
 #define DEBUGLOG_H
-
-#define DEBUGLOG_ENABLE 1
+#include "Configuration.h"
 
 #if DEBUGLOG_ENABLE
 #define DEBUGLOG_INIT(x) Serial1.begin(x)
