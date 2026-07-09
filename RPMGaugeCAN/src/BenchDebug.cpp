@@ -1,5 +1,8 @@
 #include <BenchDebug.h>
 #if BENCHDEBUG
+#include <string.h>
+#include <stdlib.h>
+
 const int kLedPin = 13;
 
 BenchDebug::BenchDebug(RPMGauge* rpmGauge, Odometer* odometer)
@@ -11,7 +14,8 @@ BenchDebug::BenchDebug(RPMGauge* rpmGauge, Odometer* odometer)
     #endif
     Serial.println(F("RPMGauge BenchDebug"));
 
-    inputBuffer = "";
+    inputBuffer[0] = '\0';
+    inputLength = 0;
 
     pinMode(kLedPin, OUTPUT);
     digitalWrite(kLedPin, heartbeatLedOn);
@@ -25,35 +29,22 @@ BenchDebug::~BenchDebug()
 {
 }
 
-const int kMaxCommandLength = 10;
-bool BenchDebug::handleRPMGaugeInput(String command) {
-    if (command.startsWith("rp")) {
-        String rString = command.substring(2);
-        rString.trim();
-        float rpm = rString.toFloat();
-        rpmGauge->moveNeedle(rpm);
+bool BenchDebug::handleRPMGaugeInput(char* command) {
+    if (strncmp(command, "rp", 2) == 0) {
+        rpmGauge->moveNeedle(atof(command + 2));
         return true;
-    } else if (command.startsWith("od")) {
-        String rString = command.substring(2);
-        rString.trim();
-        float odometerValue = rString.toFloat();
+    } else if (strncmp(command, "od", 2) == 0) {
         float digits[6];
-        odometer->secondsToDigits(odometerValue, digits);
+        odometer->secondsToDigits(atof(command + 2), digits);
         odometer->displayNumber(digits);
         return true;
-    } else if (command.startsWith("cl")) {
-        String rString = command.substring(2);
-        rString.trim();
-        float degree = rString.toFloat();
-        rpmGauge->moveNeedle(degree, true);
+    } else if (strncmp(command, "cl", 2) == 0) {
+        rpmGauge->moveNeedle(atof(command + 2), true);
         return true;
-    } else if (command.startsWith("br")) {
-        String rString = command.substring(2);
-        rString.trim();
-        uint8_t brightness = rString.toInt();
-        rpmGauge->setBrightness(brightness);
+    } else if (strncmp(command, "br", 2) == 0) {
+        rpmGauge->setBrightness(static_cast<uint8_t>(atoi(command + 2)));
         return true;
-    } else if (command.startsWith("?")) {
+    } else if (command[0] == '?') {
         Serial.println(F("RPM Gauge Commands:"));
         Serial.println(F("rp<value>: display given RPM"));
         Serial.println(F("od<value>: display given seconds as odometer value"));
@@ -66,55 +57,35 @@ bool BenchDebug::handleRPMGaugeInput(String command) {
 
 void BenchDebug::handleUserInput()
 {
-    static String inputBuffer = ""; // Zwischenspeicher für serielle Eingaben
-
     while (Serial.available() > 0)
     {
-        char receivedChar = Serial.read(); // Einzelnes Zeichen lesen
+        char receivedChar = Serial.read();
         if (receivedChar == '\n')
-        {                       // Enter erkannt
-            Serial.println();   // Neue Zeile
-            inputBuffer.trim(); // Eingabe bereinigen (Leerzeichen etc.)
-
-            // Split the inputBuffer into a vector of single commands. Since this program is executed on an Arduino, we can't use the std::vector class.
-            // Instead, we use a fixed size array of strings, which is large enough to hold all possible commands.
-            // The maximum number of commands is 10, which is more than enough for this application.
-            String commands[kMaxCommandLength];
-            int commandCount = 0;
-            int lastCommandEnd = 0;
-            for (unsigned int i = 0; i < inputBuffer.length(); i++) {
-                if (inputBuffer[i] == ' ') {
-                    commands[commandCount] = inputBuffer.substring(lastCommandEnd, i);
-                    commandCount++;
-                    if (commandCount >= kMaxCommandLength - 1) {
-                        Serial.println("Too many commands in one line. Maximum is 10.");
-                        break;
-                    }
-                    lastCommandEnd = i + 1;
-                }
-            }
-            commands[commandCount] = inputBuffer.substring(lastCommandEnd);
-            commandCount++;
+        {
+            Serial.println();
+            inputBuffer[inputLength] = '\0';
 
             bool commandExecuted = false;
-
-            // Execute all commands
-            for (int i = 0; i < commandCount; i++) {
-                if (handleRPMGaugeInput(commands[i])) {
+            char* token = strtok(inputBuffer, " ");
+            while (token != nullptr) {
+                if (strlen(token) > 0 && handleRPMGaugeInput(token)) {
                     commandExecuted = true;
                 }
+                token = strtok(nullptr, " ");
             }
 
             if (!commandExecuted) {
                 Serial.println(F("Unknown command. Type '?' for help."));
             }
 
-            inputBuffer = ""; // Buffer leeren
+            inputLength = 0;
         }
-        else
+        else if (receivedChar != '\r')
         {
-            inputBuffer += receivedChar; // Zeichen an den Buffer anhängen
-            Serial.print(receivedChar);  // Eingabe zurückgeben
+            if (inputLength < kInputBufferSize - 1) {
+                inputBuffer[inputLength++] = receivedChar;
+                Serial.print(receivedChar);
+            }
         }
     }
 }

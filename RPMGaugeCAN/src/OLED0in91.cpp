@@ -46,10 +46,7 @@ void OLED0in91::asyncTask() {
         writeOLEDRegister(0xb0 + asyncLine);
         writeOLEDRegister(0x00);
         writeOLEDRegister(0x10);
-        for (uint8_t column = 0; column < OLED_0in91_WIDTH; column++)
-        {
-            writeOLEDData(asyncImageBuffer[(3 - asyncLine) + column * 4]);
-        }
+        sendPage(asyncImageBuffer, asyncLine);
         asyncLine++;
     }
 }
@@ -66,10 +63,24 @@ void OLED0in91::displayCanvas()
         writeOLEDRegister(0xb0 + line);
         writeOLEDRegister(0x00);
         writeOLEDRegister(0x10);
-        for (uint8_t column = 0; column < OLED_0in91_WIDTH; column++)
+        sendPage(canvas.image, line);
+    }
+}
+
+void OLED0in91::sendPage(const uint8_t* imageBuffer, uint8_t line)
+{
+    uint8_t chunk[kI2CChunkSize];
+    for (uint8_t column = 0; column < OLED_0in91_WIDTH; column += kI2CChunkSize)
+    {
+        uint8_t len = min((uint16_t)kI2CChunkSize, (uint16_t)(OLED_0in91_WIDTH - column));
+        for (uint8_t i = 0; i < len; i++)
         {
-            writeOLEDData(canvas.image[(3 - line) + column * 4]);
+            chunk[i] = imageBuffer[(3 - line) + (column + i) * 4];
         }
+        Wire.beginTransmission(0x3c);
+        Wire.write(IIC_RAM);
+        Wire.write(chunk, len);
+        Wire.endTransmission();
     }
 }
 

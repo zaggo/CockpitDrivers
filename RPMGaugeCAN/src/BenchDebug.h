@@ -15,9 +15,11 @@ class BenchDebug {
         void loop();
     private:
         void handleUserInput();
-        bool handleRPMGaugeInput(String command);
+        bool handleRPMGaugeInput(char* command);
 
-        String inputBuffer;
+        static const uint8_t kInputBufferSize = 32;
+        char inputBuffer[kInputBufferSize];
+        uint8_t inputLength = 0;
 
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;

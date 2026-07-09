@@ -38,11 +38,6 @@ class OLED0in91
             writeByteToI2C(reg, IIC_CMD);
         }
 
-        inline void writeOLEDData(uint8_t data) 
-        {
-            writeByteToI2C(data, IIC_RAM);
-        }
-
         inline void writeByteToI2C(uint8_t value, uint8_t cmd)
         {
             uint8_t addr = 0x3c;
@@ -51,6 +46,11 @@ class OLED0in91
             Wire.write(value);
             Wire.endTransmission();
         }
+
+        // Gathers one strided image page (128 columns, stride 4) and sends it
+        // to the OLED in chunks that fit the Wire library's transmit buffer,
+        // instead of one I2C start/stop per byte.
+        void sendPage(const uint8_t* imageBuffer, uint8_t line);
 
         void setPixel(int16_t x, int16_t y, bool white);
 
@@ -64,6 +64,7 @@ class OLED0in91
         const uint8_t IIC_RAM = 0x40;
         const uint8_t OLED_0in91_WIDTH = 128; // 0.91 inch OLED width
         const uint8_t OLED_0in91_HEIGHT = 32; // 0.91 inch OLED height
+        const uint8_t kI2CChunkSize = 31; // Wire's TWI buffer is 32 bytes; 1 goes to the control byte
 };
 
 #endif // OLED0IN91_H

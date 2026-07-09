@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <CanNodeId.h>
 
-#define BENCHDEBUG 0
+#define BENCHDEBUG 1
 
 const CanNodeId kNodeId = CanNodeId::rpmGaugeNodeId;
 
