@@ -5,6 +5,10 @@
 
 // Message_IDs for CAN messages
 enum class CanMessageId : uint16_t {
+  rpm = 0x106,
+
+  odometer = 0x1F0,
+
   fuelLevel = 0x202,
   lights = 0x203,
   transponder = 0x201,

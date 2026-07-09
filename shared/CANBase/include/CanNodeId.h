@@ -8,6 +8,7 @@ enum class CanNodeId : uint8_t {
   debugNodeId = 0x01,
   fuelGaugeNodeId = 0x02,
   transponderNodeId = 0x03,
-  handbrakeNodeId = 0x04
+  handbrakeNodeId = 0x04,
+  rpmGaugeNodeId = 0x05
 };
 #endif // CAN_NODE_ID_H
