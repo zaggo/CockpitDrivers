@@ -42,11 +42,25 @@ OLED0in91::~OLED0in91()
 }
 
 void OLED0in91::asyncTask() {
-    if(asyncLine < OLED_0in91_HEIGHT / 8) {
+    if (asyncLine >= OLED_0in91_HEIGHT / 8) {
+        return;
+    }
+
+    // One I2C chunk per call (instead of a whole page) so callers that
+    // interleave other time-critical work between asyncTask() calls (e.g.
+    // stepping a motor) get to run between chunks, not just between pages.
+    if (asyncColumn == 0) {
         writeOLEDRegister(0xb0 + asyncLine);
         writeOLEDRegister(0x00);
         writeOLEDRegister(0x10);
-        sendPage(asyncImageBuffer, asyncLine);
+    }
+
+    uint8_t len = min((uint16_t)kI2CChunkSize, (uint16_t)(OLED_0in91_WIDTH - asyncColumn));
+    sendChunk(asyncImageBuffer, asyncLine, asyncColumn, len);
+    asyncColumn += len;
+
+    if (asyncColumn >= OLED_0in91_WIDTH) {
+        asyncColumn = 0;
         asyncLine++;
     }
 }
@@ -54,6 +68,7 @@ void OLED0in91::asyncTask() {
 void OLED0in91::asyncDisplayCanvas() {
     memcpy(asyncImageBuffer, canvas.image, canvas.widthByte * canvas.heightByte);
     asyncLine = 0;
+    asyncColumn = 0;
 }
 
 void OLED0in91::displayCanvas()
@@ -67,20 +82,25 @@ void OLED0in91::displayCanvas()
     }
 }
 
-void OLED0in91::sendPage(const uint8_t* imageBuffer, uint8_t line)
+void OLED0in91::sendChunk(const uint8_t* imageBuffer, uint8_t line, uint8_t startColumn, uint8_t len)
 {
     uint8_t chunk[kI2CChunkSize];
+    for (uint8_t i = 0; i < len; i++)
+    {
+        chunk[i] = imageBuffer[(3 - line) + (startColumn + i) * 4];
+    }
+    Wire.beginTransmission(0x3c);
+    Wire.write(IIC_RAM);
+    Wire.write(chunk, len);
+    Wire.endTransmission();
+}
+
+void OLED0in91::sendPage(const uint8_t* imageBuffer, uint8_t line)
+{
     for (uint8_t column = 0; column < OLED_0in91_WIDTH; column += kI2CChunkSize)
     {
         uint8_t len = min((uint16_t)kI2CChunkSize, (uint16_t)(OLED_0in91_WIDTH - column));
-        for (uint8_t i = 0; i < len; i++)
-        {
-            chunk[i] = imageBuffer[(3 - line) + (column + i) * 4];
-        }
-        Wire.beginTransmission(0x3c);
-        Wire.write(IIC_RAM);
-        Wire.write(chunk, len);
-        Wire.endTransmission();
+        sendChunk(imageBuffer, line, column, len);
     }
 }
 

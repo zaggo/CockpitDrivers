@@ -47,9 +47,12 @@ class OLED0in91
             Wire.endTransmission();
         }
 
-        // Gathers one strided image page (128 columns, stride 4) and sends it
-        // to the OLED in chunks that fit the Wire library's transmit buffer,
-        // instead of one I2C start/stop per byte.
+        // Gathers up to kI2CChunkSize columns of one strided image line (stride 4)
+        // and sends them as a single I2C transmission, instead of one start/stop
+        // per byte.
+        void sendChunk(const uint8_t* imageBuffer, uint8_t line, uint8_t startColumn, uint8_t len);
+
+        // Sends one full strided image page (128 columns) as consecutive chunks.
         void sendPage(const uint8_t* imageBuffer, uint8_t line);
 
         void setPixel(int16_t x, int16_t y, bool white);
@@ -58,6 +61,7 @@ class OLED0in91
         Canvas canvas;
         uint8_t *asyncImageBuffer;
         uint8_t asyncLine = OLED_0in91_HEIGHT/8;
+        uint8_t asyncColumn = 0;
 
         // Constants
         const uint8_t IIC_CMD = 0x00;
