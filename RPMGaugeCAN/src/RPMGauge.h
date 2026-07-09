@@ -19,6 +19,7 @@ public:
     APIResult moveNeedle(uint16_t rpm, bool calibration = false);
     APIResult setBrightness(uint8_t brightness);
     APIResult loop();
+    bool isMoving();
 
 private:
     vid6608 *motor;

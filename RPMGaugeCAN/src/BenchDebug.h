@@ -24,6 +24,12 @@ class BenchDebug {
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;
 
+        bool continuousTestActive = false;
+        float continuousTestStartSeconds = 0;
+        uint32_t continuousTestElapsedSeconds = 0;
+        uint32_t lastSecondTick = 0;
+        uint32_t nextMoveTime = 0;
+
         RPMGauge* rpmGauge;
         Odometer* odometer;
 };

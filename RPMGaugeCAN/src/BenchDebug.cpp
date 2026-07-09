@@ -30,6 +30,15 @@ BenchDebug::~BenchDebug()
 }
 
 bool BenchDebug::handleRPMGaugeInput(char* command) {
+    if (continuousTestActive &&
+        (strncmp(command, "rp", 2) == 0 ||
+         strncmp(command, "cl", 2) == 0 ||
+         strncmp(command, "br", 2) == 0 ||
+         strncmp(command, "od", 2) == 0)) {
+        Serial.println(F("Continuous test running. Type 'cx' to stop."));
+        return true;
+    }
+
     if (strncmp(command, "rp", 2) == 0) {
         rpmGauge->moveNeedle(atof(command + 2));
         return true;
@@ -44,12 +53,27 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
     } else if (strncmp(command, "br", 2) == 0) {
         rpmGauge->setBrightness(static_cast<uint8_t>(atoi(command + 2)));
         return true;
+    } else if (strncmp(command, "co", 2) == 0) {
+        continuousTestActive = true;
+        continuousTestStartSeconds = atof(command + 2);
+        continuousTestElapsedSeconds = 0;
+        lastSecondTick = millis();
+        nextMoveTime = 0;
+        float digits[6];
+        odometer->secondsToDigits(continuousTestStartSeconds, digits);
+        odometer->displayNumber(digits);
+        return true;
+    } else if (strncmp(command, "cx", 2) == 0) {
+        continuousTestActive = false;
+        return true;
     } else if (command[0] == '?') {
         Serial.println(F("RPM Gauge Commands:"));
         Serial.println(F("rp<value>: display given RPM"));
         Serial.println(F("od<value>: display given seconds as odometer value"));
         Serial.println(F("br<0..255>: set light brightness"));
         Serial.println(F("cl<degree>: calibrate needle"));
+        Serial.println(F("co<seconds>: start continuous motor/odometer test"));
+        Serial.println(F("cx: stop continuous test"));
         return true;
     }
     return false;
@@ -97,6 +121,31 @@ void BenchDebug::loop()
         heartbeat = millis();
         digitalWrite(kLedPin, heartbeatLedOn ? HIGH : LOW);
         heartbeatLedOn = !heartbeatLedOn;
+    }
+
+    if (continuousTestActive)
+    {
+        if (millis() - lastSecondTick >= 1000L)
+        {
+            lastSecondTick += 100L;
+            continuousTestElapsedSeconds++;
+            float digits[6];
+            odometer->secondsToDigits(continuousTestStartSeconds + continuousTestElapsedSeconds, digits);
+            odometer->displayNumber(digits);
+        }
+
+        if (!rpmGauge->isMoving())
+        {
+            if (nextMoveTime == 0)
+            {
+                nextMoveTime = millis() + random(500, 2000);
+            }
+            else if (millis() > nextMoveTime)
+            {
+                nextMoveTime = 0;
+                rpmGauge->moveNeedle(random(0, kMaximumDegree), true);
+            }
+        }
     }
 
     handleUserInput();

@@ -63,3 +63,8 @@ RPMGauge::APIResult RPMGauge::loop()
     motor->loop();
     return success;
 }
+
+bool RPMGauge::isMoving()
+{
+    return motor->isMoving();
+}
