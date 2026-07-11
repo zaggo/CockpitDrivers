@@ -5,6 +5,7 @@
 #include "CAN.h"
 #include "DCUSender.h"
 #include <SerialMessageId.h>
+#include "SerialFrameParser.h"
 
 // Message metadata for maxAge resync
 struct MessageMeta {
@@ -52,5 +53,8 @@ class DCUReceiver {
         
         // DCUSender instance for sending data back to DCUProvider Plugin
         DCUSender* dcuSender;
+
+        // Serial framing parser (0xAA 0x55 TYPE LEN PAYLOAD...)
+        SerialFrameParser frameParser;
 };
 #endif // DCURECEIVER_H

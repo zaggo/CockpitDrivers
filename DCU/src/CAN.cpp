@@ -2,6 +2,7 @@
 #include "Configuration.h"
 #include "DebugLog.h"
 #include "DCUSender.h"
+#include "Heartbeat.h"
 
 CAN::CAN()
     : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint8_t>(CanNodeId::gatewayNodeId), 1, 0})
@@ -256,7 +257,7 @@ void CAN::checkInstrumentHeartbeats()
         if (nodeId == static_cast<uint8_t>(fwInfo.nodeId))
             continue; // skip gateway itself
 
-        const bool alive = (lastInstrumentHeartbeatMs[nodeId] != 0) && (now - lastInstrumentHeartbeatMs[nodeId] <= timeoutMs);
+        const bool alive = heartbeatAlive(lastInstrumentHeartbeatMs[nodeId], now, timeoutMs);
         if (alive != instrumentAlive[nodeId])
         {
             instrumentAlive[nodeId] = alive;
@@ -353,15 +354,7 @@ void CAN::updateAlarmLED()
     }
     else
     {
-        // Check if any CAN ID has an error
-        for (uint8_t i = 0; i < canIdErrorCount; ++i)
-        {
-            if (canIdErrors[i].hasError)
-            {
-                ledOn = true;
-                break;
-            }
-        }
+        ledOn = anyCanIdHasError(canIdErrors, canIdErrorCount);
     }
 
     digitalWrite(kCANAlarmPin, ledOn ? HIGH : LOW);

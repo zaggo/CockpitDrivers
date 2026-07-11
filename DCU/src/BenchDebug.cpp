@@ -1,5 +1,6 @@
 #include <BenchDebug.h>
 #include "WireEncoding.h"
+#include "CommandTokenizer.h"
 
 #if BENCHDEBUG
 const int kLedPin = 13;
@@ -90,31 +91,17 @@ void BenchDebug::handleUserInput()
             inputBuffer.trim(); // Eingabe bereinigen (Leerzeichen etc.)
 
             // Split the inputBuffer into a vector of single commands. Since this program is executed on an Arduino, we can't use the std::vector class.
-            // Instead, we use a fixed size array of strings, which is large enough to hold all possible commands.
-            // The maximum number of commands is 10, which is more than enough for this application.
-            String commands[kMaxCommandLength];
-            int commandCount = 0;
-            int lastCommandEnd = 0;
-            for (unsigned int i = 0; i < inputBuffer.length(); i++) {
-                if (inputBuffer[i] == ' ') {
-                    commands[commandCount] = inputBuffer.substring(lastCommandEnd, i);
-                    commandCount++;
-                    if (commandCount >= kMaxCommandLength) {
-                        Serial.println("Too many commands in one line. Maximum is 10.");
-                        break;
-                    }
-                    lastCommandEnd = i + 1;
-                }
-            }
-            commands[commandCount] = inputBuffer.substring(lastCommandEnd);
-            commandCount++;
+            char lineBuffer[64];
+            inputBuffer.toCharArray(lineBuffer, sizeof(lineBuffer));
+
+            char* tokens[kMaxCommandLength];
+            size_t commandCount = tokenizeCommands(lineBuffer, tokens, kMaxCommandLength);
 
             bool commandExecuted = false;
 
-
             // Execute all commands
-            for (int i = 0; i < commandCount; i++) {
-                commandExecuted = handleAltimeterInput(commands[i]) || commandExecuted;
+            for (size_t i = 0; i < commandCount; i++) {
+                commandExecuted = handleAltimeterInput(String(tokens[i])) || commandExecuted;
             }
 
             if (!commandExecuted) {

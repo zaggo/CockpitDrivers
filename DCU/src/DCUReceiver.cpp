@@ -1,21 +1,7 @@
 #include "DCUReceiver.h"
 #include "DebugLog.h"
 #include "WireEncoding.h"
-
-enum class RxState : uint8_t
-{
-  SyncAA,
-  Sync55,
-  Type,
-  Len,
-  Payload
-};
-
-static RxState state = RxState::SyncAA;
-static MessageType type = static_cast<MessageType>(0);
-static uint8_t len = 0;
-static uint8_t buf[32];
-static uint8_t idx = 0;
+#include "Heartbeat.h"
 
 DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
 {
@@ -45,45 +31,12 @@ void DCUReceiver::loop()
   {
     uint8_t b = (uint8_t)Serial.read();
 
-    switch (state)
+    MessageType type;
+    uint8_t len;
+    uint8_t payload[SerialFrameParser::kMaxPayload];
+    if (frameParser.feed(b, &type, &len, payload))
     {
-    case RxState::SyncAA:
-      state = (b == 0xAA) ? RxState::Sync55 : RxState::SyncAA;
-      break;
-
-    case RxState::Sync55:
-      if (b == 0x55)
-        state = RxState::Type;
-      else
-        state = RxState::SyncAA;
-      break;
-
-    case RxState::Type:
-      type = static_cast<MessageType>(b);
-      state = RxState::Len;
-      break;
-
-    case RxState::Len:
-      len = b;
-      idx = 0;
-      if (len > sizeof(buf))
-      {
-        state = RxState::SyncAA; // ungültig
-      }
-      else
-      {
-        state = RxState::Payload;
-      }
-      break;
-
-    case RxState::Payload:
-      buf[idx++] = b;
-      if (idx >= len)
-      {
-        handleFrame(type, len, buf);
-        state = RxState::SyncAA;
-      }
-      break;
+      handleFrame(type, len, payload);
     }
   }
 }
@@ -227,24 +180,21 @@ void DCUReceiver::checkMaxAgeResync()
   unsigned long now = millis();
   
   // Check fuel level message
-  if (fuelLevelMeta.lastSendTimestamp > 0 && 
-      (now - fuelLevelMeta.lastSendTimestamp) >= fuelLevelMeta.maxAgeMs)
+  if (isStale(fuelLevelMeta.lastSendTimestamp, now, fuelLevelMeta.maxAgeMs))
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for fuelLevel")));
     sendFuelLevel();
   }
-  
+
   // Check cockpit light level message
-  if (cockpitLightMeta.lastSendTimestamp > 0 && 
-      (now - cockpitLightMeta.lastSendTimestamp) >= cockpitLightMeta.maxAgeMs)
+  if (isStale(cockpitLightMeta.lastSendTimestamp, now, cockpitLightMeta.maxAgeMs))
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for cockpitLights")));
     sendCockpitLightLevel();
   }
 
   // Check transponder message
-  if (transponderMeta.lastSendTimestamp > 0 && 
-      (now - transponderMeta.lastSendTimestamp) >= transponderMeta.maxAgeMs)
+  if (isStale(transponderMeta.lastSendTimestamp, now, transponderMeta.maxAgeMs))
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for transponder")));
     sendTransponder();
