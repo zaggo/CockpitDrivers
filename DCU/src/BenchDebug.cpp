@@ -1,4 +1,5 @@
 #include <BenchDebug.h>
+#include "WireEncoding.h"
 
 #if BENCHDEBUG
 const int kLedPin = 13;
@@ -22,13 +23,8 @@ BenchDebug::~BenchDebug()
 
 void BenchDebug::sendFuelLevel() {
     byte data[8] = {0};
-    uint16_t leftKg100 = static_cast<uint16_t>(leftTankLevelKg * 100.);
-    data[0] = static_cast<uint8_t>((leftKg100 >> 8) & 0xff);
-    data[1] = static_cast<uint8_t>(leftKg100 & 0xff);
-
-    uint16_t rightKg100 = static_cast<uint16_t>(rightTankLevelKg * 100.);
-    data[2] = static_cast<uint8_t>((rightKg100 >> 8) & 0xff);
-    data[3] = static_cast<uint8_t>(rightKg100 & 0xff);
+    packBE16(data + 0, static_cast<uint16_t>(leftTankLevelKg * 100.));
+    packBE16(data + 2, static_cast<uint16_t>(rightTankLevelKg * 100.));
 
     Serial.print("Send FuelLevel with Data: ");
     char msgString[128]; // Array to store serial string
@@ -44,8 +40,7 @@ void BenchDebug::sendFuelLevel() {
 void BenchDebug::sendCockpitLightLevel() {
     byte data[8] = {0};
     uint16_t panelDim1000 = static_cast<uint16_t>(static_cast<float>(cockpitLightLevel) / 255. * 1000.);
-    data[0] = static_cast<uint8_t>((panelDim1000 >> 8) & 0xff);
-    data[1] = static_cast<uint8_t>(panelDim1000 & 0xff);
+    packBE16(data + 0, panelDim1000);
     canBus->sendMessage(CanMessageId::lights, 8, data);
 }
 

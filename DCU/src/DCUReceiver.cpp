@@ -1,5 +1,6 @@
 #include "DCUReceiver.h"
 #include "DebugLog.h"
+#include "WireEncoding.h"
 
 enum class RxState : uint8_t
 {
@@ -178,11 +179,8 @@ void DCUReceiver::sendFuelLevel()
 {
   byte data[8] = {0};
 
-  data[0] = static_cast<uint8_t>((leftTankLevelKg100 >> 8) & 0xff);
-  data[1] = static_cast<uint8_t>(leftTankLevelKg100 & 0xff);
-
-  data[2] = static_cast<uint8_t>((rightTankLevelKg100 >> 8) & 0xff);
-  data[3] = static_cast<uint8_t>(rightTankLevelKg100 & 0xff);
+  packBE16(data + 0, leftTankLevelKg100);
+  packBE16(data + 2, rightTankLevelKg100);
 
   canBus->sendMessage(CanMessageId::fuelLevel, 8, data);
   
@@ -195,12 +193,10 @@ void DCUReceiver::sendCockpitLightLevel()
   byte data[8] = {0};
 
   // Byte 0..1: Panel Dim * 1000
-  data[0] = (uint8_t)((panelDim1000 >> 8) & 0xFF);
-  data[1] = (uint8_t)(panelDim1000 & 0xFF);
+  packBE16(data + 0, panelDim1000);
 
   // Byte 2..3: Radio Dim * 1000
-  data[2] = (uint8_t)((radioDim1000 >> 8) & 0xFF);
-  data[3] = (uint8_t)(radioDim1000 & 0xFF);
+  packBE16(data + 2, radioDim1000);
 
   // Byte 4: Dome Light On/Off
   data[4] = domeLightDim1000 > 0 ? 1 : 0;
@@ -215,8 +211,7 @@ void DCUReceiver::sendTransponder()
 {
   byte data[8] = {0};
 
-  data[0] = static_cast<uint8_t>((transponderCode >> 8) & 0xff);
-  data[1] = static_cast<uint8_t>(transponderCode & 0xff);
+  packBE16(data + 0, transponderCode);
 
   data[2] = transponderMode;
   data[3] = transponderLight;
