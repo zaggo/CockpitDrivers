@@ -32,7 +32,7 @@ class CAN : public BaseCAN {
         bool instrumentAlive[kMaxInstrumentNodes] = {false};
 
         // CAN ID error tracking: tracks TX/RX error status per CAN ID
-        static constexpr uint8_t kMaxCanIdErrors = 8;
+        static constexpr uint8_t kMaxCanIdErrors = 12;
         CanIdError canIdErrors[kMaxCanIdErrors];
         uint8_t canIdErrorCount = 0;
 

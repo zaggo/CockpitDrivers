@@ -20,6 +20,8 @@ class BenchDebug {
 
         void sendFuelLevel();
         void sendCockpitLightLevel();
+        void sendRpm();
+        void sendOdometer();
 
         String inputBuffer;
 
@@ -27,6 +29,9 @@ class BenchDebug {
         float rightTankLevelKg = 0.;
 
         uint8_t cockpitLightLevel = 0;
+
+        uint16_t rpmValue = 0;
+        float odometerHours = 0.;
                 
         CAN* canBus;
         uint32_t heartbeat = 0L;

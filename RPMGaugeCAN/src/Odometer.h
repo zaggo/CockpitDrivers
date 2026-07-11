@@ -11,6 +11,7 @@ class Odometer
 
     void displayNumber(float digits[]);
     void secondsToDigits(float seconds, float* digits);
+    void hoursToDigits(float hours, float* digits);
     inline void asyncTask() {
         oled->asyncTask();
     }
@@ -19,7 +20,9 @@ class Odometer
     OLED0in91* oled;
 
     uint8_t* currentDigits;
-    int16_t currentYShift = 0;
+    // Tracks digits left mid-slide by the rollover-chain animation, so the next
+    // displayNumber() call finalizes them even if their value didn't change.
+    bool digitAnimating[6] = {};
 
     const uint16_t kLeftMargin = 0;
     const uint16_t kTopMargin = 2;

@@ -34,7 +34,8 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
         (strncmp(command, "rp", 2) == 0 ||
          strncmp(command, "cl", 2) == 0 ||
          strncmp(command, "br", 2) == 0 ||
-         strncmp(command, "od", 2) == 0)) {
+         strncmp(command, "od", 2) == 0 ||
+         strncmp(command, "oh", 2) == 0)) {
         Serial.println(F("Continuous test running. Type 'cx' to stop."));
         return true;
     }
@@ -45,6 +46,11 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
     } else if (strncmp(command, "od", 2) == 0) {
         float digits[6];
         odometer->secondsToDigits(atof(command + 2), digits);
+        odometer->displayNumber(digits);
+        return true;
+    } else if (strncmp(command, "oh", 2) == 0) {
+        float digits[6];
+        odometer->hoursToDigits(atof(command + 2), digits);
         odometer->displayNumber(digits);
         return true;
     } else if (strncmp(command, "cl", 2) == 0) {
@@ -70,6 +76,7 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
         Serial.println(F("RPM Gauge Commands:"));
         Serial.println(F("rp<value>: display given RPM"));
         Serial.println(F("od<value>: display given seconds as odometer value"));
+        Serial.println(F("oh<value>: display given hours as odometer value"));
         Serial.println(F("br<0..255>: set light brightness"));
         Serial.println(F("cl<degree>: calibrate needle"));
         Serial.println(F("co<seconds>: start continuous motor/odometer test"));
@@ -125,7 +132,7 @@ void BenchDebug::loop()
 
     if (continuousTestActive)
     {
-        if (millis() - lastSecondTick >= 1000L)
+        if (millis() - lastSecondTick >= 100L) // Intentionally using 100ms to speed 10x
         {
             lastSecondTick += 100L;
             continuousTestElapsedSeconds++;

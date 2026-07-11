@@ -24,14 +24,19 @@ Odometer::~Odometer()
 // Transforms a 6 digit number into a 6 element array
 void Odometer::secondsToDigits(float seconds, float *digits)
 {
-    float decimalHours = seconds / 3600.0;
-    uint32_t number = static_cast<uint32_t>(decimalHours * 100);
+    hoursToDigits(seconds / 3600.0, digits);
+}
+
+// Transforms a decimal hours value into a 6 element digit array
+void Odometer::hoursToDigits(float hours, float *digits)
+{
+    uint32_t number = static_cast<uint32_t>(hours * 100);
     for (uint8_t i = 0; i < 6; i++)
     {
         digits[5 - i] = static_cast<float>(number % 10);
         number /= 10;
     }
-    digits[5] += static_cast<float>((decimalHours * 100) - static_cast<uint32_t>(decimalHours * 100));
+    digits[5] += static_cast<float>((hours * 100) - static_cast<uint32_t>(hours * 100));
 }
 
 // Displays a 6 digit number on the OLED display
@@ -50,14 +55,18 @@ void Odometer::displayNumber(float digits[])
     for (uint8_t i = 0; i < 6; i++)
     {
         uint8_t digit = static_cast<uint8_t>(digits[i]);
-        bool isAnimating = (yShift != currentYShift);
+        bool chainEligible = true;
         for(uint8_t j = i + 1; j < 6; j++) {
             if (static_cast<uint8_t>(digits[j]) != 9) {
-                isAnimating = false;
+                chainEligible = false;
                 break;
             }
         }
-        if (currentDigits[i] != digit || isAnimating)
+        // Depend only on whether we're mid-slide right now, not on whether yShift
+        // moved since the last frame - yShift is quantized, so it can plateau across
+        // several consecutive frames while still mid-animation.
+        bool isAnimating = chainEligible && yShift > 0;
+        if (currentDigits[i] != digit || isAnimating || digitAnimating[i])
         {
             uint16_t charX = kLeftMargin + i * kDigitWidth;
 
@@ -83,10 +92,7 @@ void Odometer::displayNumber(float digits[])
                 oled->drawDigit(charX + (isWhiteOnBlack ? 0 : 1), kTopMargin, digit, isWhiteOnBlack, isWhiteOnBlack);
             }
             currentDigits[i] = digit;
-            if (i == 5)
-            {
-                currentYShift = yShift;
-            }
+            digitAnimating[i] = isAnimating;
             somethingChanged = true;
         }
     }

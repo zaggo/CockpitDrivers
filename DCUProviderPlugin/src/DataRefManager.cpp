@@ -31,6 +31,18 @@ void DataRefManager::onAircraftLoaded()
     cr_TransponderIdent = XPLMFindCommand("sim/transponder/transponder_ident");
 
     dr_ParkingBrake = XPLMFindDataRef("sim/cockpit2/controls/parking_brake_ratio");
+
+    // RPM / Tach (VFLYTEAIR is an aircraft-specific third-party dataref namespace;
+    // absent on other aircraft, getters fall back to 0 via readFloat's default.
+    // The aircraft's own plugin may register it later than our onAircraftLoaded(),
+    // so the tach getters lazily retry via resolveLazy() if still null here.)
+    dr_rpm = XPLMFindDataRef("sim/cockpit2/engine/indicators/engine_speed_rpm");
+    dr_tachHrs1000 = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHrs1000");
+    dr_tachHrs100 = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHrs100");
+    dr_tachHrs10 = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHrs10");
+    dr_tachHrs1 = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHrs1");
+    dr_tachHrsTenths = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeTenths");
+    dr_tachHrsHundredths = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHundredths");
 }
 
 // Fuel
@@ -54,6 +66,43 @@ float DataRefManager::getDomeLightBrightness() const
 {
     auto values = readFloatArray(dr_domeLightDim, 1, 1);
     return values[0];
+}
+
+// RPM / Tach
+float DataRefManager::getRpm() const
+{
+    auto values = readFloatArray(dr_rpm, 0, 1);
+    return values[0];
+}
+
+int8_t DataRefManager::getTachHours1000() const
+{
+    return static_cast<int8_t>(readInt(resolveLazy(dr_tachHrs1000, "VFLYTEAIR/tach/TachTimeHrs1000"), 0));
+}
+
+int8_t DataRefManager::getTachHours100() const
+{
+    return static_cast<int8_t>(readInt(resolveLazy(dr_tachHrs100, "VFLYTEAIR/tach/TachTimeHrs100"), 0));
+}
+
+int8_t DataRefManager::getTachHours10() const
+{
+    return static_cast<int8_t>(readInt(resolveLazy(dr_tachHrs10, "VFLYTEAIR/tach/TachTimeHrs10"), 0));
+}
+
+int8_t DataRefManager::getTachHours1() const
+{
+    return static_cast<int8_t>(readInt(resolveLazy(dr_tachHrs1, "VFLYTEAIR/tach/TachTimeHrs1"), 0));
+}
+
+float DataRefManager::getTachHoursTenths() const
+{
+    return readFloat(resolveLazy(dr_tachHrsTenths, "VFLYTEAIR/tach/TachTimeTenths"), 0.0f);
+}
+
+float DataRefManager::getTachHoursHundredths() const
+{
+    return readFloat(resolveLazy(dr_tachHrsHundredths, "VFLYTEAIR/tach/TachTimeHundredths"), 0.0f);
 }
 
 // Altimeter
@@ -134,6 +183,15 @@ float DataRefManager::readFloat(XPLMDataRef dr, float def)
     return XPLMGetDataf(dr);
 }
 
+int DataRefManager::readInt(XPLMDataRef dr, int def)
+{
+    if (!dr)
+    {
+        return def;
+    }
+    return XPLMGetDatai(dr);
+}
+
 std::vector<float> DataRefManager::readFloatArray(XPLMDataRef dr, int index, int count)
 {
     std::vector<float> result(count, 0.0f);
@@ -142,4 +200,13 @@ std::vector<float> DataRefManager::readFloatArray(XPLMDataRef dr, int index, int
         XPLMGetDatavf(dr, result.data(), index, count);
     }
     return result;
+}
+
+XPLMDataRef DataRefManager::resolveLazy(XPLMDataRef& cached, const char* name)
+{
+    if (!cached)
+    {
+        cached = XPLMFindDataRef(name);
+    }
+    return cached;
 }

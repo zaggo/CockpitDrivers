@@ -15,7 +15,13 @@ pio run -t upload            # flash to connected Mega 2560
 pio device monitor -b 115200 # serial monitor (debug log is on Serial1, not the USB Serial link)
 ```
 
-`test/` is an empty PlatformIO scaffold — no tests exist yet.
+```bash
+pio test -e native            # run Unity tests against DCU/include headers (no device needed)
+```
+
+`test/` has real Unity suites (`test_can_id_error`, `test_command_tokenizer`, `test_heartbeat`,
+`test_serial_frame_parser`, `test_wire_encoding`) covering the header-only helpers in `DCU/include/`
+(see below) — the `env:native` PlatformIO env builds/runs them on the host.
 
 ## What DCU is
 
@@ -50,8 +56,9 @@ gateway, so it implements the other half of the heartbeat protocol described in 
 Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `MessageType` from
 `shared/CANBase/include/SerialMessageId.h`.
 
-- **`DCUReceiver`**: byte state machine parsing frames from the plugin (`SerialMessageFuel`,
-  `SerialMessageLights`, `SerialMessageTransponder`), converts them to CAN messages and sends them
+- **`DCUReceiver`**: byte state machine (via `SerialFrameParser`) parsing frames from the plugin
+  (`SerialMessageFuel`, `SerialMessageLights`, `SerialMessageTransponder`, `SerialMessageHandbrake`,
+  `SerialMessageRPM`, `SerialMessageOdometer`), converts them to CAN messages and sends them
   onward to instruments via `CAN::sendMessage`. Caches last-sent values per message type and resends on
   a 5000ms max-age timer (`checkMaxAgeResync`) even without new plugin input, so instruments recover
   after a dropped frame or a restart.
@@ -60,6 +67,20 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
 - Adding a new serial message type touches three places: `SerialMessageId.h` (enum + payload struct),
   `DCUReceiver::handleFrame` (plugin → CAN direction) or `CAN::handleFrame`/`updateXxx` +
   `DCUSender::sendFrame` call site (CAN → plugin direction).
+
+## Header-only helpers (`DCU/include/`)
+
+Unit-tested independent of Arduino/hardware (see `env:native` above):
+
+- `WireEncoding.h` — `packBE16`/`unpackBE16` big-endian pack/unpack for CAN/serial payloads.
+- `CanIdError.h` — `CanIdError`/`CanErrorType` fixed-size error record + `anyCanIdHasError()`; backs
+  `CAN`'s `canIdErrors[]` alarm-LED logic above.
+- `Heartbeat.h` — `heartbeatAlive()`/`isStale()`; rollover-safe `millis()` comparisons shared by the
+  CAN heartbeat timeout and serial max-age resync logic.
+- `CommandTokenizer.h` — `tokenizeCommands()`; in-place space-splitting for `BenchDebug`'s serial
+  console commands.
+- `SerialFrameParser.h` — byte-in/frame-out state machine for the `0xAA 0x55 TYPE LEN PAYLOAD...`
+  framing, used by `DCUReceiver`.
 
 ## BenchDebug mode
 

@@ -33,6 +33,15 @@ public:
     std::vector<float> getPanelBrightness() const;  // [0] and [1], 0.0 - 1.0
     float getDomeLightBrightness() const;  // 0.0 - 1.0
 
+    // RPM / Tach
+    float getRpm() const;  // engine_speed_rpm[0], direct RPM value
+    int8_t getTachHours1000() const;
+    int8_t getTachHours100() const;
+    int8_t getTachHours10() const;
+    int8_t getTachHours1() const;
+    float getTachHoursTenths() const;
+    float getTachHoursHundredths() const;  // 0.0-1.0 fraction, *1000 on the wire
+
     // Transponder
     uint16_t getTransponderCode() const;
     uint8_t getTransponderMode() const;
@@ -61,9 +70,17 @@ public:
 private:
     /// Helper: read float from dataref
     static float readFloat(XPLMDataRef dr, float def = 0.0f);
-        
+
     /// Helper: read multiple floats from array (returns vector)
     static std::vector<float> readFloatArray(XPLMDataRef dr, int index, int count);
+
+    /// Helper: read int from dataref, returned as float
+    static int readInt(XPLMDataRef dr, int def = 0);
+
+    /// Helper: re-attempts XPLMFindDataRef if cached is still null.
+    /// Some third-party (aircraft-specific) datarefs are registered by the aircraft's
+    /// own plugin later than our onAircraftLoaded(), so the first lookup can miss them.
+    static XPLMDataRef resolveLazy(XPLMDataRef& cached, const char* name);
 
     // Cached datarefs (downlink)
     XPLMDataRef dr_fuelL = nullptr;
@@ -77,6 +94,14 @@ private:
     XPLMDataRef dr_TransponderModeW = nullptr;
     XPLMDataRef dr_TransponderLight = nullptr;
     XPLMDataRef dr_ParkingBrake = nullptr;
+
+    XPLMDataRef dr_rpm = nullptr;
+    mutable XPLMDataRef dr_tachHrs1000 = nullptr;
+    mutable XPLMDataRef dr_tachHrs100 = nullptr;
+    mutable XPLMDataRef dr_tachHrs10 = nullptr;
+    mutable XPLMDataRef dr_tachHrs1 = nullptr;
+    mutable XPLMDataRef dr_tachHrsTenths = nullptr;
+    mutable XPLMDataRef dr_tachHrsHundredths = nullptr;
 
     XPLMCommandRef cr_TransponderIdent = nullptr;
 };

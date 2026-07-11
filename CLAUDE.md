@@ -12,9 +12,10 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 ## Repo layout
 
 - Board projects (`AltimeterDriver`, `CANDebugNode`, `DCU`, `FuelGaugeCAN`, `HSIDriver`, `HandbrakeCAN`,
-  `I2CBoard`, `MasterClock`, `MotionActor`, `MotionGateway`, `ServoBoard`, `StepperBoard`,
-  `TransponderBoard`, `SwitecTest`): independent PlatformIO/Arduino projects, each with its own
-  `platformio.ini`, `include/`, `lib/`, `src/`, `test/`.
+  `I2CBoard`, `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`, `ServoBoard`, `StepperBoard`,
+  `TransponderBoard`): independent PlatformIO/Arduino projects, each with its own
+  `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (e.g. `DCU`) have their own `CLAUDE.md`
+  with board-specific detail — read it too when working in that directory.
 - `shared/CANBase`: shared PlatformIO library with the CAN wire protocol (see Architecture below).
   Board projects pull it in via `lib_extra_dirs = ../shared` in `platformio.ini`.
 - `DCUProviderPlugin`: X-Plane 12 plugin (C++/CMake, not PlatformIO) bridging DCU serial data into
@@ -31,7 +32,9 @@ pio run -e <env>         # build a specific env (see platformio.ini for env name
 pio run -t upload        # flash to connected board
 pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
-pio test                 # PlatformIO unit tests — test/ dirs are currently empty scaffolds, no tests written yet
+pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
+                          # DCU has real Unity tests, run natively (no device needed):
+pio test -e native       # (from DCU/) runs DCU/test/test_* against DCU/include headers
 ```
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
@@ -60,6 +63,10 @@ Plugin logs go to X-Plane's `Log.txt` (`XPLMDebugString`).
 - CAN std ID filtering: `CAN_STD_ID(id)` left-shifts the 11-bit message ID into the MCP2515's expected
   position; `MASK_EXACT = 0x07FF0000` matches all 11 ID bits exactly. Both must stay bit-compatible with
   whatever mask/filter setup `BaseCAN`/`InstrumentCAN` apply — mismatches silently drop or mis-route frames.
+- `SerialMessageId.h`: the `MessageType` enum + payload structs for the DCU↔`DCUProviderPlugin` USB
+  serial link (separate protocol from CAN, framed `0xAA 0x55 TYPE LEN PAYLOAD...` — see `DCU/CLAUDE.md`
+  for the parser/gateway side). Adding a message type here means also updating `DCUReceiver`/`DCUSender`
+  in `DCU` and the matching dataref plumbing in `DCUProviderPlugin/src/DataRefManager`.
 
 ### Per-board file layout
 

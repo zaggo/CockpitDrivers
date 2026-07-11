@@ -45,6 +45,52 @@ void BenchDebug::sendCockpitLightLevel() {
     canBus->sendMessage(CanMessageId::lights, 8, data);
 }
 
+void BenchDebug::sendRpm() {
+    byte data[2] = {0};
+    packBE16(data + 0, rpmValue);
+
+    Serial.println(String(F("Send RPM: ")) + rpmValue);
+
+    canBus->sendMessage(CanMessageId::rpm, 2, data);
+}
+
+void BenchDebug::sendOdometer() {
+    // Round to the nearest ten-thousandth-of-an-hour once (preserves up to 4
+    // typed decimal digits, e.g. 123.4595), then extract every digit via
+    // integer arithmetic - doing it digit-by-digit in floating point truncates
+    // instead of rounds (823.3 -> tenths computed as 2.999... -> 2).
+    //
+    // The last two decimal digits (thousandths/ten-thousandths-of-an-hour)
+    // don't map to a displayed digit - the device only shows whole
+    // hundredths - but they set the fractional part of the CAN "hundredths"
+    // field, which the device uses to roll the hundredths digit smoothly
+    // between two values instead of snapping (see RPMGaugeCAN's
+    // Odometer::displayNumber, which animates once that fraction is >= 0.9).
+    uint32_t totalTenThousandths = static_cast<uint32_t>(odometerHours * 10000. + 0.5);
+
+    uint32_t wholeHours = totalTenThousandths / 10000;
+    uint16_t fracTenThousandths = static_cast<uint16_t>(totalTenThousandths % 10000);
+
+    uint8_t d1000 = static_cast<uint8_t>((wholeHours / 1000) % 10);
+    uint8_t d100 = static_cast<uint8_t>((wholeHours / 100) % 10);
+    uint8_t d10 = static_cast<uint8_t>((wholeHours / 10) % 10);
+    uint8_t d1 = static_cast<uint8_t>(wholeHours % 10);
+    uint8_t dTenths = static_cast<uint8_t>(fracTenThousandths / 1000);
+    uint16_t dHundredths100 = static_cast<uint16_t>(fracTenThousandths % 1000) * 10;
+
+    byte data[7] = {0};
+    data[0] = d1000;
+    data[1] = d100;
+    data[2] = d10;
+    data[3] = d1;
+    data[4] = dTenths;
+    packBE16(data + 5, dHundredths100);
+
+    Serial.println(String(F("Send Odometer hours: ")) + odometerHours);
+
+    canBus->sendMessage(CanMessageId::odometer, 7, data);
+}
+
 const int kMaxCommandLength = 10;
 bool BenchDebug::handleAltimeterInput(String command) {
     if (command.startsWith("lt")) {
@@ -68,13 +114,29 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Cockpit light set brightness="))+cockpitLightLevel);
         sendCockpitLightLevel();
         return true;
+    } else if (command.startsWith("rp")) {
+        String rString = command.substring(2);
+        rString.trim();
+        rpmValue = static_cast<uint16_t>(rString.toInt());
+        Serial.println(String(F("RPM set to "))+rpmValue);
+        sendRpm();
+        return true;
+    } else if (command.startsWith("oh")) {
+        String rString = command.substring(2);
+        rString.trim();
+        odometerHours = rString.toFloat();
+        Serial.println(String(F("Odometer hours set to "))+odometerHours);
+        sendOdometer();
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
         Serial.println(F("rt<kg>: display fuel level right tank"));
         Serial.println(F("cl<0..255>: set light brightness"));
+        Serial.println(F("rp<rpm>: set RPM gauge value"));
+        Serial.println(F("oh<hours>: set odometer total hours"));
         return true;
-    }       
+    }
     return false;
 }
 

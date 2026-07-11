@@ -234,6 +234,54 @@ void DCUProvider::updateDownlink(float dt)
         transponderAccumulator_ = 0.0f;
     }
 
+    // ============ RPM Data (50 Hz) ============
+    rpmAccumulator_ += dt;
+    float rpmRate = 1.0f / RPM_RATE;
+
+    if (rpmAccumulator_ >= rpmRate)
+    {
+        struct RpmData
+        {
+            float rpm;
+        };
+
+        RpmData rpm;
+        rpm.rpm = dataRefMgr_->getRpm();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageRPM, &rpm, sizeof(rpm));
+
+        rpmAccumulator_ = 0.0f;
+    }
+
+    // ============ Odometer Data (10 Hz) ============
+    odometerAccumulator_ += dt;
+    float odometerRate = 1.0f / ODOMETER_RATE;
+
+    if (odometerAccumulator_ >= odometerRate)
+    {
+        struct OdometerData
+        {
+            int8_t hrs1000;
+            int8_t hrs100;
+            int8_t hrs10;
+            int8_t hrs1;
+            float hrsTenths;
+            float hrsHundredths;
+        };
+
+        OdometerData odometer;
+        odometer.hrs1000 = dataRefMgr_->getTachHours1000();
+        odometer.hrs100 = dataRefMgr_->getTachHours100();
+        odometer.hrs10 = dataRefMgr_->getTachHours10();
+        odometer.hrs1 = dataRefMgr_->getTachHours1();
+        odometer.hrsTenths = dataRefMgr_->getTachHoursTenths();
+        odometer.hrsHundredths = dataRefMgr_->getTachHoursHundredths();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageOdometer, &odometer, sizeof(odometer));
+
+        odometerAccumulator_ = 0.0f;
+    }
+
     // TODO: Add more downlink data based on CAN Message IDs
     // - Altimeter settings
     // - Heading bug
