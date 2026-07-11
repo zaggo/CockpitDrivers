@@ -22,17 +22,13 @@ BenchDebug::~BenchDebug()
 
 void BenchDebug::sendFuelLevel() {
     byte data[8] = {0};
-    uint32_t leftEnc = static_cast<uint32_t>(leftTankLevelKg * 100.);
-    data[3] = static_cast<uint8_t>(leftEnc & 0xff);
-    data[2] = static_cast<uint8_t>((leftEnc >> 8) & 0xff);
-    data[1] = static_cast<uint8_t>((leftEnc >> 16) & 0xff);
-    data[0]= static_cast<uint8_t>((leftEnc >> 24) & 0xff);
+    uint16_t leftKg100 = static_cast<uint16_t>(leftTankLevelKg * 100.);
+    data[0] = static_cast<uint8_t>((leftKg100 >> 8) & 0xff);
+    data[1] = static_cast<uint8_t>(leftKg100 & 0xff);
 
-    uint32_t rightEnc = static_cast<uint32_t>(rightTankLevelKg * 100.);
-    data[7] = static_cast<uint8_t>(rightEnc & 0xff);
-    data[6] = static_cast<uint8_t>((rightEnc >> 8) & 0xff);
-    data[5] = static_cast<uint8_t>((rightEnc >> 16) & 0xff);
-    data[4]= static_cast<uint8_t>((rightEnc >> 24) & 0xff);
+    uint16_t rightKg100 = static_cast<uint16_t>(rightTankLevelKg * 100.);
+    data[2] = static_cast<uint8_t>((rightKg100 >> 8) & 0xff);
+    data[3] = static_cast<uint8_t>(rightKg100 & 0xff);
 
     Serial.print("Send FuelLevel with Data: ");
     char msgString[128]; // Array to store serial string
@@ -47,8 +43,10 @@ void BenchDebug::sendFuelLevel() {
 
 void BenchDebug::sendCockpitLightLevel() {
     byte data[8] = {0};
-    data[0]= cockpitLightLevel;
-    canBus->sendMessage(CanMessageId::lights, 1, data);
+    uint16_t panelDim1000 = static_cast<uint16_t>(static_cast<float>(cockpitLightLevel) / 255. * 1000.);
+    data[0] = static_cast<uint8_t>((panelDim1000 >> 8) & 0xff);
+    data[1] = static_cast<uint8_t>(panelDim1000 & 0xff);
+    canBus->sendMessage(CanMessageId::lights, 8, data);
 }
 
 const int kMaxCommandLength = 10;
@@ -77,7 +75,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
-        Serial.println(F("rt<lg>: display fuel level right tank"));
+        Serial.println(F("rt<kg>: display fuel level right tank"));
         Serial.println(F("cl<0..255>: set light brightness"));
         return true;
     }       
@@ -121,7 +119,7 @@ void BenchDebug::handleUserInput()
 
             // Execute all commands
             for (int i = 0; i < commandCount; i++) {
-                commandExecuted = handleAltimeterInput(commands[i]);
+                commandExecuted = handleAltimeterInput(commands[i]) || commandExecuted;
             }
 
             if (!commandExecuted) {

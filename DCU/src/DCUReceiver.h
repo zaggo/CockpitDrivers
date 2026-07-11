@@ -23,8 +23,6 @@ class DCUReceiver {
         void handleFrame(MessageType t, uint8_t l, const uint8_t* p);
         void checkMaxAgeResync();
 
-        bool readBytes(uint8_t* dst, size_t n);
-
         void sendFuelLevel();
         void sendCockpitLightLevel();
         void sendTransponder();

@@ -214,7 +214,7 @@ void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
 void CAN::updateTransponder(uint8_t len, const uint8_t *data)
 {
     // Handle transponder input frame
-    if (len < sizeof(TransponderToDcuMessage) && sizeof(TransponderToDcuMessage) < 8)
+    if (len < sizeof(TransponderToDcuMessage))
         return;
 
     #if DEBUGLOG_ENABLE

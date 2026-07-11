@@ -203,8 +203,7 @@ void DCUReceiver::sendCockpitLightLevel()
   data[3] = (uint8_t)(radioDim1000 & 0xFF);
 
   // Byte 4: Dome Light On/Off
-  data[4] = (uint8_t)((domeLightDim1000 >> 8) & 0xFF);
-  data[5] = (uint8_t)(domeLightDim1000 & 0xFF);
+  data[4] = domeLightDim1000 > 0 ? 1 : 0;
 
   canBus->sendMessage(CanMessageId::lights, 8, data);
   
@@ -226,19 +225,6 @@ void DCUReceiver::sendTransponder()
   
   // Update last send timestamp for maxAge resync
   transponderMeta.lastSendTimestamp = millis();
-}
-
-bool DCUReceiver::readBytes(uint8_t *dst, size_t n)
-{
-  size_t got = 0;
-  while (got < n)
-  {
-    int c = Serial.read();
-    if (c < 0)
-      return false;
-    dst[got++] = (uint8_t)c;
-  }
-  return true;
 }
 
 void DCUReceiver::checkMaxAgeResync()
