@@ -17,6 +17,9 @@ enum class MotionMessageId : uint16_t
 
     actorPairHome = 0x380,
     actorPairStop = 0x381,
+    actorCalibrationMove = 0x385,
+    actorSaveLogicMin = 0x38a,
+    actorSaveLogicMax = 0x38b,
 };
 
 // Filtering

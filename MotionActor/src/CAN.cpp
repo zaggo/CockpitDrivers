@@ -30,21 +30,18 @@ bool CAN::begin()
         return false;
     }
 
-    // Filters: receive Actor Heartbeat (0x301) in RXB0.
-    canBus->init_Mask(0, 0, MASK_EXACT); // RXB0 exact match
-    canBus->init_Mask(1, 0, MASK_EXACT); // RXB1 exact match
-
-    // Beide RX-Buffer vergleichen alle ID-Bits
-    canBus->init_Mask(0, 0, MASK_EXACT); // RXB0
-    canBus->init_Mask(1, 0, MASK_EXACT); // RXB1
-
+    // RXB0: exact matches for demand + gateway heartbeat
+    canBus->init_Mask(0, 0, MASK_EXACT);
     canBus->init_Filt(0, 0, CAN_STD_ID(MotionMessageId::actorPairDemand));
-    canBus->init_Filt(1, 0, CAN_STD_ID(MotionMessageId::actorPairDemand)); // zweiter Filter optional identisch
+    canBus->init_Filt(1, 0, CAN_STD_ID(MotionMessageId::gatewayHeartbeat));
 
-    canBus->init_Filt(2, 0, CAN_STD_ID(MotionMessageId::actorPairHome));
-    canBus->init_Filt(3, 0, CAN_STD_ID(MotionMessageId::actorPairStop));
-    canBus->init_Filt(4, 0, CAN_STD_ID(MotionMessageId::gatewayHeartbeat));
-    canBus->init_Filt(5, 0, CAN_STD_ID(MotionMessageId::gatewayHeartbeat));
+    // RXB1: command range 0x380-0x38F (home/stop/calibration/save messages)
+    const uint32_t MASK_38X = (0x07F0UL << 16);
+    canBus->init_Mask(1, 0, MASK_38X);
+    canBus->init_Filt(2, 0, (0x0380UL << 16));
+    canBus->init_Filt(3, 0, (0x0380UL << 16));
+    canBus->init_Filt(4, 0, (0x0380UL << 16));
+    canBus->init_Filt(5, 0, (0x0380UL << 16));
 
     canBus->setMode(MCP_NORMAL);
 
@@ -228,6 +225,31 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
         {
             DEBUGLOG_PRINTLN(F("Received stop command"));
             motionActor->powerDown();
+        }
+        break;
+    case MotionMessageId::actorCalibrationMove:
+        if (len >= 4 && data[0] == static_cast<uint8_t>(kNodeId))
+        {
+            const uint8_t channel = data[1];
+            const uint16_t targetPercent = (static_cast<uint16_t>(data[2]) << 8) | static_cast<uint16_t>(data[3]);
+            DEBUGLOG_PRINTLN(String(F("Received calibration move channel=")) + channel + String(F(" target=")) + targetPercent);
+            motionActor->calibrationMove(channel, targetPercent);
+        }
+        break;
+    case MotionMessageId::actorSaveLogicMin:
+        if (len >= 2 && data[0] == static_cast<uint8_t>(kNodeId))
+        {
+            const uint8_t channel = data[1];
+            DEBUGLOG_PRINTLN(String(F("Received save logical min channel=")) + channel);
+            motionActor->saveLogicalMin(channel);
+        }
+        break;
+    case MotionMessageId::actorSaveLogicMax:
+        if (len >= 2 && data[0] == static_cast<uint8_t>(kNodeId))
+        {
+            const uint8_t channel = data[1];
+            DEBUGLOG_PRINTLN(String(F("Received save logical max channel=")) + channel);
+            motionActor->saveLogicalMax(channel);
         }
         break;
     default:

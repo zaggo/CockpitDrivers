@@ -5,22 +5,22 @@
 // Each entry defines where actor 1-6 maps to: {nodeId, motorIndex (0=m1, 1=m2)}
 // Mode 1: BFF Motion Driver compatible mode
 const ActorMapping MotionGateway::actorMappingMode1[6] = {
-    {MotionNodeId::actorPair2, 1}, // actor 1 → actorPair 1, motor 1
-    {MotionNodeId::actorPair3, 0}, // actor 2 → actorPair 1, motor 2
-    {MotionNodeId::actorPair3, 1}, // actor 3 → actorPair 2, motor 1
-    {MotionNodeId::actorPair1, 0}, // actor 4 → actorPair 2, motor 2
-    {MotionNodeId::actorPair1, 1}, // actor 5 → actorPair 3, motor 1
-    {MotionNodeId::actorPair2, 0}  // actor 6 → actorPair 3, motor 2
+  {MotionNodeId::actorNodeId2, 1}, // actor 1 → actorPair 2, motor 2
+  {MotionNodeId::actorNodeId3, 0}, // actor 2 → actorPair 3, motor 1
+  {MotionNodeId::actorNodeId3, 1}, // actor 3 → actorPair 3, motor 2
+  {MotionNodeId::actorNodeId1, 0}, // actor 4 → actorPair 1, motor 1
+  {MotionNodeId::actorNodeId1, 1}, // actor 5 → actorPair 1, motor 2
+  {MotionNodeId::actorNodeId2, 0}  // actor 6 → actorPair 2, motor 1
 };
 
 // Mode 2: SimTools
 const ActorMapping MotionGateway::actorMappingMode2[6] = {
-    {MotionNodeId::actorPair1, 1}, // actor 1 → actorPair 1, motor 1
-    {MotionNodeId::actorPair2, 0}, // actor 2 → actorPair 1, motor 2
-    {MotionNodeId::actorPair2, 1}, // actor 3 → actorPair 2, motor 1
-    {MotionNodeId::actorPair3, 0}, // actor 4 → actorPair 2, motor 2
-    {MotionNodeId::actorPair3, 1}, // actor 5 → actorPair 3, motor 1
-    {MotionNodeId::actorPair1, 0}  // actor 6 → actorPair 3, motor 2
+  {MotionNodeId::actorNodeId1, 1}, // actor 1 → actorPair 1, motor 2
+  {MotionNodeId::actorNodeId2, 0}, // actor 2 → actorPair 2, motor 1
+  {MotionNodeId::actorNodeId2, 1}, // actor 3 → actorPair 2, motor 2
+  {MotionNodeId::actorNodeId3, 0}, // actor 4 → actorPair 3, motor 1
+  {MotionNodeId::actorNodeId3, 1}, // actor 5 → actorPair 3, motor 2
+  {MotionNodeId::actorNodeId1, 0}  // actor 6 → actorPair 1, motor 1
 };
 
 enum class RxState : uint8_t
@@ -41,6 +41,9 @@ MotionGateway::MotionGateway(CAN *canBus) : canBus(canBus)
 {
   Serial.begin(115200);
 
+  lastModeCheckTimestampMs = millis() - 200;
+  lastDemandBatchSendTimestampMs = millis() - kDemandBatchIntervalMs;
+
   pinMode(kMode1Pin, INPUT_PULLUP);
   pinMode(kMode2Pin, INPUT_PULLUP);
 
@@ -56,36 +59,41 @@ MotionGateway::~MotionGateway()
 
 void MotionGateway::loop()
 {
+  const unsigned long now = millis();
+  if ((now - lastModeCheckTimestampMs) >= 200)
+  {
+    lastModeCheckTimestampMs = now;
 
-  bool mode1PinState = digitalRead(kMode1Pin) == LOW; // Active low
-  bool mode2PinState = digitalRead(kMode2Pin) == LOW; // Active low
-  MotionMode newMode = MotionMode::mode0;             // Default to mode0 (Off)
-  if (mode1PinState && !mode2PinState)
-  {
-    newMode = MotionMode::mode1; // BFF Motion Driver compatible mode
-  }
-  else if (!mode1PinState && mode2PinState)
-  {
-    newMode = MotionMode::mode2; // Sim Mode
-  }
-  if (newMode != mode)
-  {
-    DEBUGLOG_PRINTLN(String(F("Mode change: ")) + static_cast<uint8_t>(mode) + String(F(" -> ")) + static_cast<uint8_t>(newMode));
-
-    switch (newMode)
+    bool mode1PinState = digitalRead(kMode1Pin) == LOW; // Active low
+    bool mode2PinState = digitalRead(kMode2Pin) == LOW; // Active low
+    MotionMode newMode = MotionMode::mode0;             // Default to mode0 (Off)
+    if (mode1PinState && !mode2PinState)
     {
-    case MotionMode::mode0:
-      sendStop();
-      break;
-    case MotionMode::mode1:
-      sendHome();
-      break;
-    case MotionMode::mode2:
-      sendHome();
-      break;
+      newMode = MotionMode::mode1; // BFF Motion Driver compatible mode
     }
+    else if (!mode1PinState && mode2PinState)
+    {
+      newMode = MotionMode::mode2; // Sim Mode
+    }
+    if (newMode != mode)
+    {
+      DEBUGLOG_PRINTLN(String(F("Mode change: ")) + static_cast<uint8_t>(mode) + String(F(" -> ")) + static_cast<uint8_t>(newMode));
 
-    mode = newMode;
+      switch (newMode)
+      {
+      case MotionMode::mode0:
+        sendStop();
+        break;
+      case MotionMode::mode1:
+        sendHome();
+        break;
+      case MotionMode::mode2:
+        sendHome();
+        break;
+      }
+
+      mode = newMode;
+    }
   }
 
   // Check for maxAge resync
@@ -96,6 +104,8 @@ void MotionGateway::loop()
 
 void MotionGateway::handleSerialInput()
 {
+  const unsigned long startMs = millis();
+
   if (mode == MotionMode::mode1)
   {
     // Handle a complete frame of 12 data bytes (actor demands)
@@ -121,7 +131,7 @@ void MotionGateway::handleSerialInput()
 
     // The 16 bit value is read by combining the MSB & LSB for each actuator, eg for Act 1 -
     // Act1 16bit demand  = (b2 * 256) + b8,   in 0 to 65280 range, with 32640 mid range position
-    while (Serial.available() > 0)
+    while (Serial.available() > 0 && (millis() - startMs) < kSerialProcessingBudgetMs)
     {
       uint8_t b = (uint8_t)Serial.read();
 
@@ -158,12 +168,51 @@ void MotionGateway::handleSerialInput()
           state = RxState::SyncB;
         }
         break;
+      default:
+        state = RxState::SyncB;
+        break;
       }
     }
   }
   else if (mode == MotionMode::mode2)
   {
-    // handleSimFrame(data);
+    while (Serial.available() > 0 && (millis() - startMs) < kSerialProcessingBudgetMs)
+    {
+      uint8_t b = (uint8_t)Serial.read();
+
+      switch (state)
+      {
+      case RxState::SyncB:
+        state = (b == 'B') ? RxState::SyncC : RxState::SyncB;
+        break;
+      case RxState::SyncC:
+        state = (b == 'C') ? RxState::Data : RxState::SyncB;
+        idx = 0;
+        break;
+      case RxState::Data:
+        data[idx++] = b;
+        if (idx >= kMaxDataSize)
+        {
+          state = RxState::CR; // Wait for CR after max data size
+        }
+        break;
+
+      case RxState::CR:
+        if (b == 0x0D) // CR
+        {
+          // Process complete frame
+          if (idx == 12)
+          {
+            handleSimToolsFrame(data);
+          }
+          state = RxState::SyncB;
+        }
+        break;
+      default:
+        state = RxState::SyncB;
+        break;
+      }
+    }
   }
 }
 
@@ -182,12 +231,27 @@ void MotionGateway::handleBFFFrame(const uint8_t *data)
   processDemands(demand);
 }
 
-void MotionGateway::handleSimFrame(const uint8_t *data)
+void MotionGateway::handleSimToolsFrame(const uint8_t *data)
 {
+  // Extract the 6 individual actor demands from the serial data
+  uint16_t demand[kMaxDataSize / 2] = {0};
+  for (uint8_t i = 0; i < kMaxDataSize / 2; ++i)
+  {
+    demand[i] = ((uint16_t)data[i * 2] << 8) | data[i * 2 + 1];
+    //DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
+  }
+  processDemands(demand);
 }
 
 void MotionGateway::processDemands(const uint16_t demand[6])
 {
+  const unsigned long now = millis();
+  if ((now - lastDemandBatchSendTimestampMs) < kDemandBatchIntervalMs)
+  {
+    return;
+  }
+  lastDemandBatchSendTimestampMs = now;
+
   // Select the appropriate mapping based on current mode
   const ActorMapping *mapping = nullptr;
   switch (mode)

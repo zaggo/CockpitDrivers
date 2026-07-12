@@ -33,7 +33,7 @@ class MotionGateway {
     private:        
         void handleSerialInput();
         void handleBFFFrame(const uint8_t *data);
-        void handleSimFrame(const uint8_t *data);
+        void handleSimToolsFrame(const uint8_t *data);
 
         void processDemands(const uint16_t demand[6]);
 
@@ -47,6 +47,8 @@ class MotionGateway {
         void sendStop();
 
         MotionMode mode = MotionMode::mode0;
+        unsigned long lastModeCheckTimestampMs = 0;
+        unsigned long lastDemandBatchSendTimestampMs = 0;
 
         // Actor mappings for different modes (6 actors)
         static const ActorMapping actorMappingMode1[6];

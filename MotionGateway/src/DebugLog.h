@@ -1,7 +1,6 @@
 #ifndef DEBUGLOG_H
 #define DEBUGLOG_H
 #include "Configuration.h"
-#define DEBUGLOG_ENABLE 1
 
 #if DEBUGLOG_ENABLE
 #if BENCHDEBUG
