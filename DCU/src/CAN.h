@@ -5,24 +5,10 @@
 #include "Configuration.h"
 #include <CanMessageId.h>
 #include <CanNodeId.h>
+#include "CanIdError.h"
 
 // Forward declaration
 class DCUSender;
-
-// Error types for CAN ID tracking
-enum class CanErrorType : uint8_t {
-    NONE = 0,
-    TX_ERROR = 1,      // Transmission error
-    RX_ERROR = 2,      // Reception error
-    HEARTBEAT_TIMEOUT = 3  // Heartbeat timeout
-};
-
-// Simple struct for tracking CAN ID errors (Arduino doesn't support std::map)
-struct CanIdError {
-    uint16_t canId;
-    bool hasError;
-    CanErrorType errorType;
-};
 
 class CAN : public BaseCAN {
     public:
@@ -46,7 +32,7 @@ class CAN : public BaseCAN {
         bool instrumentAlive[kMaxInstrumentNodes] = {false};
 
         // CAN ID error tracking: tracks TX/RX error status per CAN ID
-        static constexpr uint8_t kMaxCanIdErrors = 8;
+        static constexpr uint8_t kMaxCanIdErrors = 12;
         CanIdError canIdErrors[kMaxCanIdErrors];
         uint8_t canIdErrorCount = 0;
 
@@ -56,6 +42,7 @@ class CAN : public BaseCAN {
         // Handle incoming Serial Message frames
         void updateInstrumentHeartbeat(uint8_t len, const uint8_t* data);
         void updateTransponder(uint8_t len, const uint8_t* data);
+        void updateHandbrake(uint8_t len, const uint8_t* data);
 
         void sendGatewayHeartbeat();
         void checkInstrumentHeartbeats();

@@ -84,4 +84,8 @@ private:
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;
     StatusData statusData_;
+
+    // Last visibility state we know about; used to detect changes made by
+    // X-Plane's native close button, which has no callback of its own.
+    bool lastKnownVisible_ = false;
 };

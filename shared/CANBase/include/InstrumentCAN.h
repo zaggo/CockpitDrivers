@@ -14,7 +14,7 @@ public:
     // Start CAN and setup filters
     bool begin() override;
 
-    void loop();
+    virtual void loop();
 
 protected:
     virtual bool instrumentBegin() = 0;

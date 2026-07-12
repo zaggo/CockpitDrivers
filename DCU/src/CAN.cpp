@@ -2,6 +2,7 @@
 #include "Configuration.h"
 #include "DebugLog.h"
 #include "DCUSender.h"
+#include "Heartbeat.h"
 
 CAN::CAN()
     : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint8_t>(CanNodeId::gatewayNodeId), 1, 0})
@@ -59,7 +60,7 @@ bool CAN::begin()
 
     // RXB1: (reserved for future inputs)
     canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::transponderInput));
-    canBus->init_Filt(3, 0, instrumentHeartbeat);
+    canBus->init_Filt(3, 0, CAN_STD_ID(CanMessageId::handbrakeStatus));
     canBus->init_Filt(4, 0, instrumentHeartbeat);
     canBus->init_Filt(5, 0, instrumentHeartbeat);
 
@@ -145,7 +146,12 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     case CanMessageId::transponderInput:
         updateTransponder(len, data);
         break;
+    case CanMessageId::handbrakeStatus:
+        updateHandbrake(len, data);
+        break;
     default:
+        // Unknown/unhandled CAN ID - ignore for now but log
+        DEBUGLOG_PRINTLN(String(F("Received message with unknown CAN ID: 0x")) + String(id, HEX) + String(F(" len: ")) + String(len));
         break;
     }
 }
@@ -209,7 +215,7 @@ void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
 void CAN::updateTransponder(uint8_t len, const uint8_t *data)
 {
     // Handle transponder input frame
-    if (len < sizeof(TransponderToDcuMessage) && sizeof(TransponderToDcuMessage) < 8)
+    if (len < sizeof(TransponderToDcuMessage))
         return;
 
     #if DEBUGLOG_ENABLE
@@ -227,6 +233,19 @@ void CAN::updateTransponder(uint8_t len, const uint8_t *data)
     }
 }
 
+void CAN::updateHandbrake(uint8_t len, const uint8_t *data)
+{
+    // Handle handbrake input frame
+    if (len < 1)
+        return;
+    
+    // Send handbrake input back to DCUProvider Plugin via DCUSender
+    if (dcuSender != nullptr)
+    {
+       DEBUGLOG_PRINTLN(String(F("Send Handbrake Status: ")) + String(data[0]));
+       dcuSender->sendFrame(MessageType::SerialMessageHandbrake, 1, data);
+    }
+}
 void CAN::checkInstrumentHeartbeats()
 {
     const uint32_t now = millis();
@@ -238,7 +257,7 @@ void CAN::checkInstrumentHeartbeats()
         if (nodeId == static_cast<uint8_t>(fwInfo.nodeId))
             continue; // skip gateway itself
 
-        const bool alive = (lastInstrumentHeartbeatMs[nodeId] != 0) && (now - lastInstrumentHeartbeatMs[nodeId] <= timeoutMs);
+        const bool alive = heartbeatAlive(lastInstrumentHeartbeatMs[nodeId], now, timeoutMs);
         if (alive != instrumentAlive[nodeId])
         {
             instrumentAlive[nodeId] = alive;
@@ -335,15 +354,7 @@ void CAN::updateAlarmLED()
     }
     else
     {
-        // Check if any CAN ID has an error
-        for (uint8_t i = 0; i < canIdErrorCount; ++i)
-        {
-            if (canIdErrors[i].hasError)
-            {
-                ledOn = true;
-                break;
-            }
-        }
+        ledOn = anyCanIdHasError(canIdErrors, canIdErrorCount);
     }
 
     digitalWrite(kCANAlarmPin, ledOn ? HIGH : LOW);

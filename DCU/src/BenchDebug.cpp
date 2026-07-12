@@ -1,4 +1,6 @@
 #include <BenchDebug.h>
+#include "WireEncoding.h"
+#include "CommandTokenizer.h"
 
 #if BENCHDEBUG
 const int kLedPin = 13;
@@ -22,17 +24,8 @@ BenchDebug::~BenchDebug()
 
 void BenchDebug::sendFuelLevel() {
     byte data[8] = {0};
-    uint32_t leftEnc = static_cast<uint32_t>(leftTankLevelKg * 100.);
-    data[3] = static_cast<uint8_t>(leftEnc & 0xff);
-    data[2] = static_cast<uint8_t>((leftEnc >> 8) & 0xff);
-    data[1] = static_cast<uint8_t>((leftEnc >> 16) & 0xff);
-    data[0]= static_cast<uint8_t>((leftEnc >> 24) & 0xff);
-
-    uint32_t rightEnc = static_cast<uint32_t>(rightTankLevelKg * 100.);
-    data[7] = static_cast<uint8_t>(rightEnc & 0xff);
-    data[6] = static_cast<uint8_t>((rightEnc >> 8) & 0xff);
-    data[5] = static_cast<uint8_t>((rightEnc >> 16) & 0xff);
-    data[4]= static_cast<uint8_t>((rightEnc >> 24) & 0xff);
+    packBE16(data + 0, static_cast<uint16_t>(leftTankLevelKg * 100.));
+    packBE16(data + 2, static_cast<uint16_t>(rightTankLevelKg * 100.));
 
     Serial.print("Send FuelLevel with Data: ");
     char msgString[128]; // Array to store serial string
@@ -42,13 +35,60 @@ void BenchDebug::sendFuelLevel() {
     }
     Serial.println();
 
-    canBus->sendMessage(CanStateId::fuelLevel, 8, data);
+    canBus->sendMessage(CanMessageId::fuelLevel, 8, data);
 }
 
 void BenchDebug::sendCockpitLightLevel() {
     byte data[8] = {0};
-    data[0]= cockpitLightLevel;
-    canBus->sendMessage(CanStateId::dashboardLight, 1, data);
+    uint16_t panelDim1000 = static_cast<uint16_t>(static_cast<float>(cockpitLightLevel) / 255. * 1000.);
+    packBE16(data + 0, panelDim1000);
+    canBus->sendMessage(CanMessageId::lights, 8, data);
+}
+
+void BenchDebug::sendRpm() {
+    byte data[2] = {0};
+    packBE16(data + 0, rpmValue);
+
+    Serial.println(String(F("Send RPM: ")) + rpmValue);
+
+    canBus->sendMessage(CanMessageId::rpm, 2, data);
+}
+
+void BenchDebug::sendOdometer() {
+    // Round to the nearest ten-thousandth-of-an-hour once (preserves up to 4
+    // typed decimal digits, e.g. 123.4595), then extract every digit via
+    // integer arithmetic - doing it digit-by-digit in floating point truncates
+    // instead of rounds (823.3 -> tenths computed as 2.999... -> 2).
+    //
+    // The last two decimal digits (thousandths/ten-thousandths-of-an-hour)
+    // don't map to a displayed digit - the device only shows whole
+    // hundredths - but they set the fractional part of the CAN "hundredths"
+    // field, which the device uses to roll the hundredths digit smoothly
+    // between two values instead of snapping (see RPMGaugeCAN's
+    // Odometer::displayNumber, which animates once that fraction is >= 0.9).
+    uint32_t totalTenThousandths = static_cast<uint32_t>(odometerHours * 10000. + 0.5);
+
+    uint32_t wholeHours = totalTenThousandths / 10000;
+    uint16_t fracTenThousandths = static_cast<uint16_t>(totalTenThousandths % 10000);
+
+    uint8_t d1000 = static_cast<uint8_t>((wholeHours / 1000) % 10);
+    uint8_t d100 = static_cast<uint8_t>((wholeHours / 100) % 10);
+    uint8_t d10 = static_cast<uint8_t>((wholeHours / 10) % 10);
+    uint8_t d1 = static_cast<uint8_t>(wholeHours % 10);
+    uint8_t dTenths = static_cast<uint8_t>(fracTenThousandths / 1000);
+    uint16_t dHundredths100 = static_cast<uint16_t>(fracTenThousandths % 1000) * 10;
+
+    byte data[7] = {0};
+    data[0] = d1000;
+    data[1] = d100;
+    data[2] = d10;
+    data[3] = d1;
+    data[4] = dTenths;
+    packBE16(data + 5, dHundredths100);
+
+    Serial.println(String(F("Send Odometer hours: ")) + odometerHours);
+
+    canBus->sendMessage(CanMessageId::odometer, 7, data);
 }
 
 const int kMaxCommandLength = 10;
@@ -74,13 +114,29 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Cockpit light set brightness="))+cockpitLightLevel);
         sendCockpitLightLevel();
         return true;
+    } else if (command.startsWith("rp")) {
+        String rString = command.substring(2);
+        rString.trim();
+        rpmValue = static_cast<uint16_t>(rString.toInt());
+        Serial.println(String(F("RPM set to "))+rpmValue);
+        sendRpm();
+        return true;
+    } else if (command.startsWith("oh")) {
+        String rString = command.substring(2);
+        rString.trim();
+        odometerHours = rString.toFloat();
+        Serial.println(String(F("Odometer hours set to "))+odometerHours);
+        sendOdometer();
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
-        Serial.println(F("rt<lg>: display fuel level right tank"));
+        Serial.println(F("rt<kg>: display fuel level right tank"));
         Serial.println(F("cl<0..255>: set light brightness"));
+        Serial.println(F("rp<rpm>: set RPM gauge value"));
+        Serial.println(F("oh<hours>: set odometer total hours"));
         return true;
-    }       
+    }
     return false;
 }
 
@@ -97,31 +153,17 @@ void BenchDebug::handleUserInput()
             inputBuffer.trim(); // Eingabe bereinigen (Leerzeichen etc.)
 
             // Split the inputBuffer into a vector of single commands. Since this program is executed on an Arduino, we can't use the std::vector class.
-            // Instead, we use a fixed size array of strings, which is large enough to hold all possible commands.
-            // The maximum number of commands is 10, which is more than enough for this application.
-            String commands[kMaxCommandLength];
-            int commandCount = 0;
-            int lastCommandEnd = 0;
-            for (unsigned int i = 0; i < inputBuffer.length(); i++) {
-                if (inputBuffer[i] == ' ') {
-                    commands[commandCount] = inputBuffer.substring(lastCommandEnd, i);
-                    commandCount++;
-                    if (commandCount >= kMaxCommandLength) {
-                        Serial.println("Too many commands in one line. Maximum is 10.");
-                        break;
-                    }
-                    lastCommandEnd = i + 1;
-                }
-            }
-            commands[commandCount] = inputBuffer.substring(lastCommandEnd);
-            commandCount++;
+            char lineBuffer[64];
+            inputBuffer.toCharArray(lineBuffer, sizeof(lineBuffer));
+
+            char* tokens[kMaxCommandLength];
+            size_t commandCount = tokenizeCommands(lineBuffer, tokens, kMaxCommandLength);
 
             bool commandExecuted = false;
 
-
             // Execute all commands
-            for (int i = 0; i < commandCount; i++) {
-                commandExecuted = handleAltimeterInput(commands[i]);
+            for (size_t i = 0; i < commandCount; i++) {
+                commandExecuted = handleAltimeterInput(String(tokens[i])) || commandExecuted;
             }
 
             if (!commandExecuted) {

@@ -62,7 +62,9 @@ void StatusWindow::initialize() {
         XPLMDebugString("DCUProvider: Failed to create status window\n");
         return;
     }
-    
+
+    lastKnownVisible_ = shouldBeVisible;
+
     // Create menu
     pluginMenuId_ = XPLMFindPluginsMenu();
     
@@ -101,6 +103,7 @@ void StatusWindow::setVisible(bool visible) {
     if (windowId_) {
         XPLMSetWindowIsVisible(windowId_, visible ? 1 : 0);
         // Save the new visibility state
+        lastKnownVisible_ = visible;
         saveStatusWindowVisible(visible);
     }
 }
@@ -112,7 +115,15 @@ bool StatusWindow::isVisible() const {
 
 void StatusWindow::update(const StatusData& data) {
     statusData_ = data;
-    
+
+    // Detect visibility changes made via X-Plane's native close button on the
+    // round-rectangle window decoration, which has no callback of its own.
+    bool nowVisible = isVisible();
+    if (nowVisible != lastKnownVisible_) {
+        lastKnownVisible_ = nowVisible;
+        saveStatusWindowVisible(nowVisible);
+    }
+
     // Request redraw
     // In practice, X-Plane redraws every frame anyway
     // If you need geometry, use int variables:

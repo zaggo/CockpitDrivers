@@ -5,6 +5,7 @@
 #include "CAN.h"
 #include "DCUSender.h"
 #include <SerialMessageId.h>
+#include "SerialFrameParser.h"
 
 // Message metadata for maxAge resync
 struct MessageMeta {
@@ -23,11 +24,11 @@ class DCUReceiver {
         void handleFrame(MessageType t, uint8_t l, const uint8_t* p);
         void checkMaxAgeResync();
 
-        bool readBytes(uint8_t* dst, size_t n);
-
         void sendFuelLevel();
         void sendCockpitLightLevel();
         void sendTransponder();
+        void sendRpm();
+        void sendOdometer();
 
         // RX state machine
         // Fuel Gauge
@@ -44,15 +45,31 @@ class DCUReceiver {
         uint8_t transponderMode = 3;
         uint8_t transponderLight = 0;
 
+        // RPM Gauge
+        uint16_t rpmValue = 0;
+
+        // Odometer (RPM Gauge)
+        uint8_t tachHrs1000 = 0;
+        uint8_t tachHrs100 = 0;
+        uint8_t tachHrs10 = 0;
+        uint8_t tachHrs1 = 0;
+        uint8_t tachHrsTenths = 0;
+        uint16_t tachHrsHundredths100 = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
         MessageMeta transponderMeta;
+        MessageMeta rpmMeta;
+        MessageMeta odometerMeta;
         
         // Reference to CAN bus
         CAN* canBus;
         
         // DCUSender instance for sending data back to DCUProvider Plugin
         DCUSender* dcuSender;
+
+        // Serial framing parser (0xAA 0x55 TYPE LEN PAYLOAD...)
+        SerialFrameParser frameParser;
 };
 #endif // DCURECEIVER_H

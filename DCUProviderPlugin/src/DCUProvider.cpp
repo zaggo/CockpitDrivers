@@ -234,6 +234,54 @@ void DCUProvider::updateDownlink(float dt)
         transponderAccumulator_ = 0.0f;
     }
 
+    // ============ RPM Data (50 Hz) ============
+    rpmAccumulator_ += dt;
+    float rpmRate = 1.0f / RPM_RATE;
+
+    if (rpmAccumulator_ >= rpmRate)
+    {
+        struct RpmData
+        {
+            float rpm;
+        };
+
+        RpmData rpm;
+        rpm.rpm = dataRefMgr_->getRpm();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageRPM, &rpm, sizeof(rpm));
+
+        rpmAccumulator_ = 0.0f;
+    }
+
+    // ============ Odometer Data (10 Hz) ============
+    odometerAccumulator_ += dt;
+    float odometerRate = 1.0f / ODOMETER_RATE;
+
+    if (odometerAccumulator_ >= odometerRate)
+    {
+        struct OdometerData
+        {
+            int8_t hrs1000;
+            int8_t hrs100;
+            int8_t hrs10;
+            int8_t hrs1;
+            float hrsTenths;
+            float hrsHundredths;
+        };
+
+        OdometerData odometer;
+        odometer.hrs1000 = dataRefMgr_->getTachHours1000();
+        odometer.hrs100 = dataRefMgr_->getTachHours100();
+        odometer.hrs10 = dataRefMgr_->getTachHours10();
+        odometer.hrs1 = dataRefMgr_->getTachHours1();
+        odometer.hrsTenths = dataRefMgr_->getTachHoursTenths();
+        odometer.hrsHundredths = dataRefMgr_->getTachHoursHundredths();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageOdometer, &odometer, sizeof(odometer));
+
+        odometerAccumulator_ = 0.0f;
+    }
+
     // TODO: Add more downlink data based on CAN Message IDs
     // - Altimeter settings
     // - Heading bug
@@ -271,18 +319,27 @@ void DCUProvider::updateUplink()
             if (msg->payload.size() >= sizeof(TransponderToDcuMessage))
             {
                 const TransponderToDcuMessage *message = reinterpret_cast<const TransponderToDcuMessage *>(msg->payload.data());
-                if (message->command & TransponderToDcuCommandSetCode)
+                if (static_cast<uint8_t>(message->command) & static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandSetCode))
                 {
                     dataRefMgr_->setTransponderCode(message->code);
                 }
-                if (message->command & TransponderToDcuCommandSetMode)
+                if (static_cast<uint8_t>(message->command) & static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandSetMode))
                 {
                     dataRefMgr_->setTransponderMode(message->mode);
                 }
-                if (message->command & TransponderToDcuCommandIdent)
+                if (static_cast<uint8_t>(message->command) & static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandIdent))
                 {
                     dataRefMgr_->transponderIdentOnce();
                 }
+            }
+            break;
+
+        case MessageType::SerialMessageHandbrake:
+            // Gateway → Plugin: This would be for reading handbrake controls from device
+            if (msg->payload.size() >= sizeof(uint8_t))
+            {
+                uint8_t breakStatus = *reinterpret_cast<const uint8_t *>(msg->payload.data());
+                dataRefMgr_->setParkingBrakeRatio(static_cast<float>(breakStatus) / 100.0f);
             }
             break;
 
