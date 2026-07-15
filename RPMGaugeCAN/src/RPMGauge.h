@@ -18,11 +18,25 @@ public:
 
     APIResult moveNeedle(uint16_t rpm, bool calibration = false);
     APIResult setBrightness(uint8_t brightness);
+    APIResult calibrateMin();
+    APIResult calibrateMax();
     APIResult loop();
     bool isMoving();
 
 private:
+    struct Config
+    {
+        uint32_t magic;
+        uint16_t version;
+        uint16_t minStep;
+        uint16_t maxStep;
+    };
+
+    void loadConfig();
+    void saveConfig();
+
     vid6608 *motor;
+    Config config;
 };
 
 #endif

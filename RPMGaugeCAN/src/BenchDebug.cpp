@@ -35,7 +35,9 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
          strncmp(command, "cl", 2) == 0 ||
          strncmp(command, "br", 2) == 0 ||
          strncmp(command, "od", 2) == 0 ||
-         strncmp(command, "oh", 2) == 0)) {
+         strncmp(command, "oh", 2) == 0 ||
+         strncmp(command, "mi", 2) == 0 ||
+         strncmp(command, "ma", 2) == 0)) {
         Serial.println(F("Continuous test running. Type 'cx' to stop."));
         return true;
     }
@@ -55,6 +57,16 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
         return true;
     } else if (strncmp(command, "cl", 2) == 0) {
         rpmGauge->moveNeedle(atof(command + 2), true);
+        return true;
+    } else if (strncmp(command, "mi", 2) == 0) {
+        Serial.println(F("Sampling min position..."));
+        rpmGauge->calibrateMin();
+        Serial.println(F("Min position calibrated."));
+        return true;
+    } else if (strncmp(command, "ma", 2) == 0) {
+        Serial.println(F("Sampling max position..."));
+        rpmGauge->calibrateMax();
+        Serial.println(F("Max position calibrated."));
         return true;
     } else if (strncmp(command, "br", 2) == 0) {
         rpmGauge->setBrightness(static_cast<uint8_t>(atoi(command + 2)));
@@ -79,6 +91,8 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
         Serial.println(F("oh<value>: display given hours as odometer value"));
         Serial.println(F("br<0..255>: set light brightness"));
         Serial.println(F("cl<degree>: calibrate needle"));
+        Serial.println(F("mi: calibrate logical minimum to current needle position"));
+        Serial.println(F("ma: calibrate logical maximum to current needle position"));
         Serial.println(F("co<seconds>: start continuous motor/odometer test"));
         Serial.println(F("cx: stop continuous test"));
         return true;
