@@ -131,10 +131,9 @@ RPMGauge::APIResult RPMGauge::moveNeedle(uint16_t rpm, bool calibration)
         return success;
     }
 
-    if (motor->isMoving())
-    {
-        return success;
-    }
+    // No isMoving() bail-out: the motor now retargets on the fly (see the
+    // local vid6608 fork), so feeding it fresh setpoints at 50Hz keeps the
+    // needle tracking smoothly instead of stopping to accept each waypoint.
 
     // Map rpm to absolute motor step, where 0 rpm = config.minStep and kMaxRPM = config.maxStep
     const float ratio = constrain(rpm / kMaxRPM, 0., 1.);

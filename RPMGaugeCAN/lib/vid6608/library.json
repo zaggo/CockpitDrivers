@@ -1,0 +1,8 @@
+{
+  "name": "vid6608",
+  "version": "1.0.4-local1",
+  "description": "Local fork of petrows/vid6608 with non-blocking, micros()-gated stepping so OLED I2C traffic overlaps the inter-step wait instead of stacking after it (smoother motion). Based on https://github.com/petrows/arduino-vid6608 (GPL).",
+  "keywords": "vid6608, x27, stepper, gauge",
+  "frameworks": "arduino",
+  "platforms": "atmelavr"
+}
