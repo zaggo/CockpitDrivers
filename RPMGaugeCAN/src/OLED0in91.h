@@ -68,7 +68,10 @@ class OLED0in91
         const uint8_t IIC_RAM = 0x40;
         const uint8_t OLED_0in91_WIDTH = 128; // 0.91 inch OLED width
         const uint8_t OLED_0in91_HEIGHT = 32; // 0.91 inch OLED height
-        const uint8_t kI2CChunkSize = 31; // Wire's TWI buffer is 32 bytes; 1 goes to the control byte
+        // Smaller chunk = shorter I2C blocking burst per asyncTask() call, less
+        // stepper stutter when interleaved with motor stepping in loop() - at the
+        // cost of more calls (more I2C start/stop overhead) to finish a page.
+        const uint8_t kI2CChunkSize = 8;
 };
 
 #endif // OLED0IN91_H

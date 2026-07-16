@@ -76,7 +76,13 @@ bool BenchDebug::handleRPMGaugeInput(char* command) {
         continuousTestStartSeconds = atof(command + 2);
         continuousTestElapsedSeconds = 0;
         lastSecondTick = millis();
-        nextMoveTime = 0;
+
+        rpmMoveFrom = 0;
+        rpmMoveTo = 0;
+        rpmMoveStartMillis = millis();
+        rpmMoveDurationMillis = 0; // forces an immediate target pick on the first tick
+        lastRPMDeliveryMillis = millis();
+
         float digits[6];
         odometer->secondsToDigits(continuousTestStartSeconds, digits);
         odometer->displayNumber(digits);
@@ -146,26 +152,37 @@ void BenchDebug::loop()
 
     if (continuousTestActive)
     {
-        if (millis() - lastSecondTick >= 100L) // Intentionally using 100ms to speed 10x
+        // Odometer: sim-time runs 10x real speed, delivered at 10Hz - matches
+        // one accelerated second landing exactly on one delivery tick.
+        if (millis() - lastSecondTick >= kOdometerDeliveryIntervalMs)
         {
-            lastSecondTick += 100L;
+            lastSecondTick += kOdometerDeliveryIntervalMs;
             continuousTestElapsedSeconds++;
             float digits[6];
             odometer->secondsToDigits(continuousTestStartSeconds + continuousTestElapsedSeconds, digits);
             odometer->displayNumber(digits);
         }
 
-        if (!rpmGauge->isMoving())
+        // RPM needle: random targets, but interpolated and delivered at 50Hz
+        // via the real moveNeedle() API (isMoving() gating included), just
+        // like actual CAN telemetry would drive it.
+        if (millis() - lastRPMDeliveryMillis >= kRPMDeliveryIntervalMs)
         {
-            if (nextMoveTime == 0)
+            lastRPMDeliveryMillis += kRPMDeliveryIntervalMs;
+
+            uint32_t elapsed = millis() - rpmMoveStartMillis;
+            if (elapsed >= rpmMoveDurationMillis)
             {
-                nextMoveTime = millis() + random(500, 2000);
+                rpmMoveFrom = rpmMoveTo;
+                rpmMoveTo = random(0, (long)kMaxRPM);
+                rpmMoveDurationMillis = random(500, 2000);
+                rpmMoveStartMillis = millis();
+                elapsed = 0;
             }
-            else if (millis() > nextMoveTime)
-            {
-                nextMoveTime = 0;
-                rpmGauge->moveNeedle(random(0, kMaximumDegree), true);
-            }
+
+            float progress = static_cast<float>(elapsed) / static_cast<float>(rpmMoveDurationMillis);
+            float interpolatedRpm = rpmMoveFrom + (rpmMoveTo - rpmMoveFrom) * progress;
+            rpmGauge->moveNeedle(static_cast<uint16_t>(interpolatedRpm));
         }
     }
 
