@@ -126,7 +126,8 @@ RPMGauge::APIResult RPMGauge::moveNeedle(uint16_t rpm, bool calibration)
 {
     if (calibration)
     {
-        DEBUGLOG_PRINTLN(String(F("Calibrate RPM needle to ")) + String(rpm));
+        DEBUGLOG_PRINT(F("Calibrate RPM needle to "));
+        DEBUGLOG_PRINTLN(rpm);
         motor->moveTo(rpm * 12); // 12 steps per degree
         return success;
     }
@@ -139,7 +140,10 @@ RPMGauge::APIResult RPMGauge::moveNeedle(uint16_t rpm, bool calibration)
     const float ratio = constrain(rpm / kMaxRPM, 0., 1.);
     const int range = (int)config.maxStep - (int)config.minStep; // signed widen, matches Handbrake::getHandbrakePosition() pattern — avoids uint16_t wraparound if maxStep < minStep
     const uint16_t step = static_cast<uint16_t>(config.minStep + static_cast<int>(ratio * static_cast<float>(range)));
-    DEBUGLOG_PRINTLN(String(F("Move RPM needle to ")) + String(rpm) + String(F(" adjusted to step ")) + String(step));
+    DEBUGLOG_PRINT(F("Move RPM needle to "));
+    DEBUGLOG_PRINT(rpm);
+    DEBUGLOG_PRINT(F(" adjusted to step "));
+    DEBUGLOG_PRINTLN(step);
     motor->moveTo(step);
     return success;
 }
