@@ -44,7 +44,10 @@ bool CAN::instrumentBegin()
 
 void CAN::handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t *data)
 {
-    DEBUGLOG_PRINTLN(String(F("CAN Message received: ID 0x")) + String(static_cast<uint16_t>(id), HEX));
+    // No String here: heap churn + extra stack in the deepest call path was
+    // part of the stack/heap collision that froze the CAN link.
+    DEBUGLOG_PRINT(F("CAN Message received: ID "));
+    DEBUGLOG_PRINTLN(static_cast<uint16_t>(id));
 
     // We currently expect standard frames only (ext == 0).
     (void)ext;

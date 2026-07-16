@@ -59,7 +59,6 @@ class OLED0in91
 
         // iVars
         Canvas canvas;
-        uint8_t *asyncImageBuffer;
         uint8_t asyncLine = OLED_0in91_HEIGHT/8;
         uint8_t asyncColumn = 0;
 

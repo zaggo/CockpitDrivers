@@ -24,9 +24,13 @@ OLED0in91::OLED0in91()
     canvas.width = OLED_0in91_WIDTH;
     canvas.height = OLED_0in91_HEIGHT;
 
+    // Single framebuffer only: the ATmega328 has 2 KB SRAM total and a second
+    // 512-byte async snapshot buffer previously pushed the stack into the heap
+    // (corrupting the topmost allocation, the MCP_CAN object). asyncTask()
+    // streams straight from canvas.image; a mid-stream canvas update can show
+    // one partially-updated frame, which the next flush corrects.
     canvas.image = new uint8_t[canvas.widthByte * canvas.heightByte]();
-    asyncImageBuffer = new uint8_t[canvas.widthByte * canvas.heightByte]();
-    if (canvas.image == NULL || asyncImageBuffer == NULL) 
+    if (canvas.image == NULL)
     {
         DEBUGLOG_PRINTLN("Failed to apply for black memory...");
     }
@@ -38,7 +42,6 @@ OLED0in91::~OLED0in91()
 {
     Wire.end();
     delete[] canvas.image;
-    delete[] asyncImageBuffer;
 }
 
 void OLED0in91::asyncTask() {
@@ -56,7 +59,7 @@ void OLED0in91::asyncTask() {
     }
 
     uint8_t len = min((uint16_t)kI2CChunkSize, (uint16_t)(OLED_0in91_WIDTH - asyncColumn));
-    sendChunk(asyncImageBuffer, asyncLine, asyncColumn, len);
+    sendChunk(canvas.image, asyncLine, asyncColumn, len);
     asyncColumn += len;
 
     if (asyncColumn >= OLED_0in91_WIDTH) {
@@ -66,7 +69,7 @@ void OLED0in91::asyncTask() {
 }
 
 void OLED0in91::asyncDisplayCanvas() {
-    memcpy(asyncImageBuffer, canvas.image, canvas.widthByte * canvas.heightByte);
+    // Restart the streaming cursor; asyncTask() reads live from canvas.image.
     asyncLine = 0;
     asyncColumn = 0;
 }
