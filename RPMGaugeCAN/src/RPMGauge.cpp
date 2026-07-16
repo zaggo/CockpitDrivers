@@ -6,11 +6,31 @@ static const uint32_t kRPMGaugeConfigMagic = 0x52474331; // 'R','G','C','1'
 static const uint16_t kRPMGaugeConfigVersion = 1;
 static const uint16_t kRPMGaugeEepromAddress = 0;
 
+// CAN updates arrive at ~50Hz, so most moves only span a few steps and never
+// leave the slow ramp-up zone of vid6608's default table (reaches top speed
+// only after 800 steps). Same start delay (stall-safe) and top speed (proven)
+// as the default table, but ramps to cruise within 65 steps instead of 800.
+static vid6608::AccelTable kRPMAccelTable[] = {
+    {4, 3000},
+    {8, 2400},
+    {12, 1900},
+    {16, 1500},
+    {20, 1150},
+    {25, 900},
+    {30, 700},
+    {36, 550},
+    {42, 430},
+    {48, 360},
+    {55, 320},
+    {65, 300},
+};
+
 RPMGauge::RPMGauge()
 {
     pinMode(kRstPin, OUTPUT);
     digitalWrite(kRstPin, LOW);
     motor = new vid6608(kStepPin, kDirPin, kSteps);
+    motor->setAccelTable(kRPMAccelTable);
 
     pinMode(kLightPin, OUTPUT);
     analogWrite(kLightPin, 0);
