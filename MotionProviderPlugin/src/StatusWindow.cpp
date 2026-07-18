@@ -51,7 +51,13 @@ void StatusWindow::initialize() {
 void StatusWindow::destroy() {
     if (windowId_) { XPLMDestroyWindow(windowId_); windowId_ = nullptr; }
     if (pluginMenuId_) { XPLMDestroyMenu(pluginMenuId_); pluginMenuId_ = nullptr; }
-    menuItemIdx_ = -1;
+    // Remove our parent item from the Plugins menu. initialize() reassigned
+    // pluginMenuId_ to our submenu, so re-fetch the Plugins menu (the item's
+    // owner) to remove the entry at menuItemIdx_.
+    if (menuItemIdx_ >= 0) {
+        XPLMRemoveMenuItem(XPLMFindPluginsMenu(), menuItemIdx_);
+        menuItemIdx_ = -1;
+    }
 }
 
 void StatusWindow::setVisible(bool visible) {
