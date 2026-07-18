@@ -2,6 +2,7 @@
 #include "StatusWindow.h"
 #include "DataRefManager.h"
 #include "StewartGeometry.h"
+#include "MotionConfig.h"
 #include "XPLMUtilities.h"
 #include <algorithm>
 
@@ -15,7 +16,8 @@ bool MotionProvider::initialize() {
     statusWindow_ = std::make_unique<StatusWindow>();
     statusWindow_->initialize();
 
-    kin_ = std::make_unique<StewartKinematics>(StewartGeometry::defaults());
+    kin_ = std::make_unique<StewartKinematics>(
+        MotionConfig::loadGeometry(MotionConfig::defaultPath()));
 
     XPLMDebugString("MotionProvider: initialized\n");
     return true;

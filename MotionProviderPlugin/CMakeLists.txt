@@ -49,6 +49,7 @@ set(SOURCES
     src/ConfigUtils.cpp
     src/DataRefManager.cpp
     src/StewartKinematics.cpp
+    src/MotionConfig.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -59,6 +60,7 @@ set(HEADERS
     src/StewartKinematics.h
     src/StewartGeometry.h
     src/Pose.h
+    src/MotionConfig.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})
@@ -67,6 +69,7 @@ target_include_directories(MotionProvider PRIVATE
     ${XPLANE_INCLUDE_DIR}
     ${XPLANE_UTIL_INCLUDE_DIR}
     src
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tomlplusplus
 )
 
 # ============ PLATFORM DEFINITIONS ============

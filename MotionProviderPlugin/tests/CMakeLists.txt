@@ -4,11 +4,12 @@ project(motion_provider_tests CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(test_kinematics
-    test_kinematics.cpp
-    ../src/StewartKinematics.cpp
-)
+add_executable(test_kinematics test_kinematics.cpp ../src/StewartKinematics.cpp)
 target_include_directories(test_kinematics PRIVATE ../src)
+
+add_executable(test_config test_config.cpp ../src/MotionConfig.cpp)
+target_include_directories(test_config PRIVATE ../src ../third_party/tomlplusplus)
 
 enable_testing()
 add_test(NAME kinematics COMMAND test_kinematics)
+add_test(NAME config COMMAND test_config)
