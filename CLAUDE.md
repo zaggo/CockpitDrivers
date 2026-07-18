@@ -42,7 +42,8 @@ pio test -e native       # (from DCU/) runs DCU/test/test_* against DCU/include 
 ```bash
 ./build-macos.sh          # release build
 ./build-macos.sh debug    # debug build with symbols
-./build-windows.sh        # cross-compile with MinGW
+./build-windows.sh        # native build on Windows (MSVC)
+./build-xc-windows.sh     # cross-compile for Windows from macOS (MinGW)
 ./build-all.sh            # all platforms
 ```
 Debug via VS Code + CodeLLDB (`.vscode/launch.json`: "Debug X-Plane Plugin" / "Attach to X-Plane").

@@ -11,10 +11,17 @@ X-Plane Plugin zur Kommunikation zwischen dem DCU (Data Communication Unit) und 
 ./build-macos.sh debug    # Debug Build mit Symbolen
 ```
 
-### Windows (Cross-Compile mit MinGW)
+### Windows (nativ, MSVC)
 
 ```bash
-./build-windows.sh
+./build-windows.sh          # Release Build
+./build-windows.sh debug    # Debug Build
+```
+
+### Windows (Cross-Compile mit MinGW, von macOS aus)
+
+```bash
+./build-xc-windows.sh
 ```
 
 ### Alle Plattformen

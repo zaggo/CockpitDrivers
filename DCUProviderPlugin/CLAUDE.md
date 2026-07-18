@@ -12,7 +12,8 @@ Not PlatformIO — plain CMake + shell scripts, run from this directory:
 ```bash
 ./build-macos.sh          # Release build, installs to X-Plane plugins dir
 ./build-macos.sh debug    # Debug build with symbols (-g -O0), needed for breakpoints
-./build-windows.sh        # Cross-compile with MinGW (needs toolchain-mingw64.cmake)
+./build-windows.sh        # Native build on Windows (MSVC, needs VS Build Tools)
+./build-xc-windows.sh     # Cross-compile for Windows from macOS (MinGW, needs toolchain-mingw64.cmake)
 ./build-all.sh            # All platforms
 ```
 
