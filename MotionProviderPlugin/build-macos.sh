@@ -38,7 +38,7 @@ OUTPUT_DIR="${BUILD_DIR}/output"
 
 
 # X-Plane plugins directory (customized for user)
-XPLANE_PLUGINS_DIR="/Volumes/1TBSSD/XPlane/X-Plane 12/Resources/plugins/MotionProvider/mac_x64"
+XPLANE_PLUGINS_DIR="/Volumes/1TBSSD/XPlane/X-Plane 12/Resources/plugins/MotionProvider/64"
 
 # ============ Check Prerequisites ============
 
