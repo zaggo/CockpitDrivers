@@ -90,16 +90,22 @@ void StatusWindow::setReloadCallback(std::function<void()> cb) {
     reloadCallback_ = std::move(cb);
 }
 
+void StatusWindow::setKeyCommandCallback(std::function<void(char)> cb) {
+    keyCommandCallback_ = std::move(cb);
+}
+
 void StatusWindow::drawCallback(XPLMWindowID inWindowID, void* inRefcon) {
     (void)inWindowID;
     StatusWindow* self = static_cast<StatusWindow*>(inRefcon);
     if (self) self->draw();
 }
 
-void StatusWindow::keyCallback(XPLMWindowID, char inKey, XPLMKeyFlags, char, void* inRefcon, int) {
+void StatusWindow::keyCallback(XPLMWindowID, char inKey, XPLMKeyFlags, char inVirtualKey,
+                               void* inRefcon, int) {
     StatusWindow* self = static_cast<StatusWindow*>(inRefcon);
     if (!self) return;
-    if (inKey == 27) self->setVisible(false); // ESC hides
+    if (inKey == 27) { self->setVisible(false); return; }   // ESC hides
+    if (self->keyCommandCallback_) self->keyCommandCallback_(inKey);
 }
 
 void StatusWindow::menuCallback(void* inMenuRef, void* inItemRef) {
@@ -140,7 +146,7 @@ void StatusWindow::draw() {
         drawString(x, y, "AUTO (attitude placeholder)   [M] manual", 0.7f, 0.8f, 0.9f);
     }
     y -= 16;
-    drawString(x, y, "[M] mode  [Tab] axis  [Up/Dn] nudge  [R] reset",
+    drawString(x, y, "[M] mode  [Tab] axis  [+/-] nudge  [R] reset",
                0.6f, 0.6f, 0.65f);
     y -= 18;
 

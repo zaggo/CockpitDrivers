@@ -22,6 +22,7 @@ public:
     void onAircraftLoaded();
 
     void reloadConfig();
+    void onManualKey(char key);
 
 private:
     std::unique_ptr<StatusWindow> statusWindow_;

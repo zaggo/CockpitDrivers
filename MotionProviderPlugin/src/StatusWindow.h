@@ -22,6 +22,7 @@ public:
     // Refresh the displayed cue snapshot (called ~1 Hz).
     void update(const StatusData& data);
     void setReloadCallback(std::function<void()> cb);
+    void setKeyCommandCallback(std::function<void(char)> cb);
 
 private:
     static void drawCallback(XPLMWindowID inWindowID, void* inRefcon);
@@ -40,5 +41,6 @@ private:
 
     StatusData data_;
     std::function<void()> reloadCallback_;
+    std::function<void(char)> keyCommandCallback_;
     int btnLeft_ = 0, btnTop_ = 0, btnRight_ = 0, btnBottom_ = 0; // reload button hitbox
 };
