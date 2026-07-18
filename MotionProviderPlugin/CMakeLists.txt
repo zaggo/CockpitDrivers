@@ -48,6 +48,7 @@ set(SOURCES
     src/StatusWindow.cpp
     src/ConfigUtils.cpp
     src/DataRefManager.cpp
+    src/StewartKinematics.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -55,6 +56,9 @@ set(HEADERS
     src/ConfigUtils.h
     src/DataRefManager.h
     src/MotionCues.h
+    src/StewartKinematics.h
+    src/StewartConfig.h
+    src/Pose.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})
