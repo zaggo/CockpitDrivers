@@ -1,6 +1,7 @@
 #include "StatusWindow.h"
 #include "ConfigUtils.h"
 #include "XPLMUtilities.h"
+#include <cstdio>
 
 StatusWindow::StatusWindow()
     : windowId_(nullptr), menuItemIdx_(-1), pluginMenuId_(nullptr), lastKnownVisible_(false) {}
@@ -17,7 +18,7 @@ void StatusWindow::initialize() {
     params.left = 100;
     params.top = 500;
     params.right = 500;
-    params.bottom = 380;
+    params.bottom = 300;
     params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
@@ -72,7 +73,9 @@ bool StatusWindow::isVisible() const {
     return XPLMGetWindowIsVisible(windowId_) != 0;
 }
 
-void StatusWindow::update() {
+void StatusWindow::update(const MotionCues& cues) {
+    cues_ = cues;
+
     // Keep persisted visibility in sync with the native close button
     // (round-rectangle decoration has no callback of its own).
     bool nowVisible = isVisible();
@@ -105,7 +108,33 @@ void StatusWindow::draw() {
     int left, top, right, bottom;
     XPLMGetWindowGeometry(windowId_, &left, &top, &right, &bottom);
     XPLMDrawTranslucentDarkBox(left, top, right, bottom);
-    drawString(left + 10, top - 20, "Motion Provider v0.1 (Phase 0)", 0.8f, 1.0f, 0.8f);
+
+    int x = left + 10;
+    int y = top - 20;
+    char buf[128];
+
+    drawString(x, y, "Motion Provider v0.2 (Phase 1)", 0.8f, 1.0f, 0.8f);
+    y -= 20;
+
+    std::snprintf(buf, sizeof(buf), "Spec force (g)   surge %+.2f  sway %+.2f  heave %+.2f",
+                  cues_.surgeG, cues_.swayG, cues_.heaveG);
+    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 16;
+
+    std::snprintf(buf, sizeof(buf), "Rate (deg/s)     roll %+.1f  pitch %+.1f  yaw %+.1f",
+                  cues_.rollRate, cues_.pitchRate, cues_.yawRate);
+    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 16;
+
+    std::snprintf(buf, sizeof(buf), "Attitude (deg)   pitch %+.1f  roll %+.1f",
+                  cues_.pitchDeg, cues_.rollDeg);
+    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 16;
+
+    std::snprintf(buf, sizeof(buf), "Ground %s   GS %.1f m/s",
+                  cues_.onGround ? "YES" : "no ", cues_.groundspeed);
+    drawString(x, y, buf, 0.8f, 0.8f, 0.8f); y -= 16;
+
+    std::snprintf(buf, sizeof(buf), "Eng RPM %.0f   AoA %+.1f deg",
+                  cues_.engineRpm, cues_.alphaDeg);
+    drawString(x, y, buf, 0.8f, 0.8f, 0.8f); y -= 16;
 }
 
 void StatusWindow::drawString(int x, int y, const std::string& text, float r, float g, float b) {

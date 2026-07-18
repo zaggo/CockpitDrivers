@@ -2,6 +2,7 @@
 #include "XPLMDisplay.h"
 #include "XPLMMenus.h"
 #include "XPLMGraphics.h"
+#include "MotionCues.h"
 #include <string>
 
 class StatusWindow {
@@ -17,8 +18,8 @@ public:
     void setVisible(bool visible);
     bool isVisible() const;
 
-    // Phase 0: no payload. Later phases pass a data struct.
-    void update();
+    // Refresh the displayed cue snapshot (called ~1 Hz).
+    void update(const MotionCues& cues);
 
 private:
     static void drawCallback(XPLMWindowID inWindowID, void* inRefcon);
@@ -33,4 +34,6 @@ private:
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;
     bool lastKnownVisible_;
+
+    MotionCues cues_;
 };
