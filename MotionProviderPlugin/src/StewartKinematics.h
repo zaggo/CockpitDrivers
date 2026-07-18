@@ -1,25 +1,28 @@
 #pragma once
 #include <cstdint>
 #include "Pose.h"
+#include "StewartGeometry.h"
 
 struct LegResult {
-    double angleDeg = 0.0;   // servo horn elevation, deg (0 = horizontal/home)
-    bool   reachable = true; // false if the pose is outside this leg's envelope
+    double angleDeg = 0.0;
+    bool   reachable = true;
 };
 
 struct SolveResult {
-    LegResult legs[6];        // P1..P6 order
+    LegResult legs[6];
     uint16_t  setpoints[6];   // BFF actuator order (index 0 == BFF #1)
     bool      allReachable = true;
 };
 
 class StewartKinematics {
 public:
-    // Home platform height (mm) at which all horns rest horizontal. Derived
-    // from geometry; equal for all legs by symmetry.
-    static double homeHeight();
+    explicit StewartKinematics(const StewartGeometry& geo);
 
-    // Solve inverse kinematics for a pose. Never throws; unreachable legs are
-    // flagged and their angle is clamped to the envelope edge.
-    static SolveResult solve(const Pose& pose);
+    double homeHeight() const { return z0_; }      // mm
+    SolveResult solve(const Pose& pose) const;
+    const StewartGeometry& geometry() const { return geo_; }
+
+private:
+    StewartGeometry geo_;
+    double z0_ = 0.0;
 };

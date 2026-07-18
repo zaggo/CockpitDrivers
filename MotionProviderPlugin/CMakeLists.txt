@@ -57,7 +57,7 @@ set(HEADERS
     src/DataRefManager.h
     src/MotionCues.h
     src/StewartKinematics.h
-    src/StewartConfig.h
+    src/StewartGeometry.h
     src/Pose.h
 )
 

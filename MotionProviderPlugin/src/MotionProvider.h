@@ -23,6 +23,7 @@ public:
 private:
     std::unique_ptr<StatusWindow> statusWindow_;
     std::unique_ptr<DataRefManager> dataRefs_;
+    std::unique_ptr<StewartKinematics> kin_;
 
     // Most recent sampled snapshot (updated every 60 Hz tick).
     MotionCues latestCues_;

@@ -1,6 +1,7 @@
 #include "MotionProvider.h"
 #include "StatusWindow.h"
 #include "DataRefManager.h"
+#include "StewartGeometry.h"
 #include "XPLMUtilities.h"
 #include <algorithm>
 
@@ -14,6 +15,8 @@ bool MotionProvider::initialize() {
     statusWindow_ = std::make_unique<StatusWindow>();
     statusWindow_->initialize();
 
+    kin_ = std::make_unique<StewartKinematics>(StewartGeometry::defaults());
+
     XPLMDebugString("MotionProvider: initialized\n");
     return true;
 }
@@ -24,6 +27,7 @@ void MotionProvider::shutdown() {
         statusWindow_.reset();
     }
     dataRefs_.reset();
+    kin_.reset();
 }
 
 void MotionProvider::onFlightLoopTick(float elapsedSec) {
@@ -40,7 +44,7 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
     Pose pose;
     pose.roll  = clampf(latestCues_.rollDeg,  -8.0f, 8.0f);
     pose.pitch = clampf(latestCues_.pitchDeg, -8.0f, 8.0f);
-    latestSolve_ = StewartKinematics::solve(pose);
+    latestSolve_ = kin_->solve(pose);
 
     statusAccumSec_ += elapsedSec;
     if (statusAccumSec_ >= 1.0f) {
