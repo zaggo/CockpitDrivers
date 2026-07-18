@@ -3,6 +3,7 @@
 #include "XPLMMenus.h"
 #include "XPLMGraphics.h"
 #include "MotionCues.h"
+#include "StewartKinematics.h"
 #include <string>
 
 class StatusWindow {
@@ -19,7 +20,7 @@ public:
     bool isVisible() const;
 
     // Refresh the displayed cue snapshot (called ~1 Hz).
-    void update(const MotionCues& cues);
+    void update(const MotionCues& cues, const SolveResult& solve);
 
 private:
     static void drawCallback(XPLMWindowID inWindowID, void* inRefcon);
@@ -36,4 +37,5 @@ private:
     bool lastKnownVisible_;
 
     MotionCues cues_;
+    SolveResult solve_;
 };

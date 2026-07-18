@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include "MotionCues.h"
+#include "StewartKinematics.h"
 
 class StatusWindow;
 class DataRefManager;
@@ -25,6 +26,7 @@ private:
 
     // Most recent sampled snapshot (updated every 60 Hz tick).
     MotionCues latestCues_;
+    SolveResult latestSolve_;
 
     // Status window refresh accumulator (~1 Hz), independent of the 60 Hz tick.
     float statusAccumSec_ = 0.0f;

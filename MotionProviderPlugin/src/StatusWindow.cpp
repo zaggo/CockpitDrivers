@@ -18,7 +18,7 @@ void StatusWindow::initialize() {
     params.left = 100;
     params.top = 500;
     params.right = 500;
-    params.bottom = 300;
+    params.bottom = 210;
     params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
@@ -73,11 +73,10 @@ bool StatusWindow::isVisible() const {
     return XPLMGetWindowIsVisible(windowId_) != 0;
 }
 
-void StatusWindow::update(const MotionCues& cues) {
+void StatusWindow::update(const MotionCues& cues, const SolveResult& solve) {
     cues_ = cues;
+    solve_ = solve;
 
-    // Keep persisted visibility in sync with the native close button
-    // (round-rectangle decoration has no callback of its own).
     bool nowVisible = isVisible();
     if (nowVisible != lastKnownVisible_) {
         lastKnownVisible_ = nowVisible;
@@ -111,30 +110,28 @@ void StatusWindow::draw() {
 
     int x = left + 10;
     int y = top - 20;
-    char buf[128];
+    char buf[160];
 
-    drawString(x, y, "Motion Provider v0.2 (Phase 1)", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "Motion Provider v0.3 (Phase 2)", 0.8f, 1.0f, 0.8f);
     y -= 20;
-
-    std::snprintf(buf, sizeof(buf), "Spec force (g)   surge %+.2f  sway %+.2f  heave %+.2f",
-                  cues_.surgeG, cues_.swayG, cues_.heaveG);
-    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 16;
-
-    std::snprintf(buf, sizeof(buf), "Rate (deg/s)     roll %+.1f  pitch %+.1f  yaw %+.1f",
-                  cues_.rollRate, cues_.pitchRate, cues_.yawRate);
-    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 16;
 
     std::snprintf(buf, sizeof(buf), "Attitude (deg)   pitch %+.1f  roll %+.1f",
                   cues_.pitchDeg, cues_.rollDeg);
-    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 16;
+    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 18;
 
-    std::snprintf(buf, sizeof(buf), "Ground %s   GS %.1f m/s",
-                  cues_.onGround ? "YES" : "no ", cues_.groundspeed);
-    drawString(x, y, buf, 0.8f, 0.8f, 0.8f); y -= 16;
+    drawString(x, y, solve_.allReachable ? "IK: all legs reachable"
+                                          : "IK: POSE UNREACHABLE",
+               solve_.allReachable ? 0.6f : 1.0f,
+               solve_.allReachable ? 1.0f : 0.4f, 0.4f);
+    y -= 18;
 
-    std::snprintf(buf, sizeof(buf), "Eng RPM %.0f   AoA %+.1f deg",
-                  cues_.engineRpm, cues_.alphaDeg);
-    drawString(x, y, buf, 0.8f, 0.8f, 0.8f); y -= 16;
+    for (int i = 0; i < 6; ++i) {
+        std::snprintf(buf, sizeof(buf), "P%d  %+7.2f deg  ->  %5u%s",
+                      i + 1, solve_.legs[i].angleDeg, solve_.setpoints[i],
+                      solve_.legs[i].reachable ? "" : "  (unreachable)");
+        drawString(x, y, buf, 0.85f, 0.85f, 0.9f);
+        y -= 16;
+    }
 }
 
 void StatusWindow::drawString(int x, int y, const std::string& text, float r, float g, float b) {

@@ -2,6 +2,7 @@
 #include "StatusWindow.h"
 #include "DataRefManager.h"
 #include "XPLMUtilities.h"
+#include <algorithm>
 
 MotionProvider::MotionProvider() = default;
 MotionProvider::~MotionProvider() = default;
@@ -26,17 +27,26 @@ void MotionProvider::shutdown() {
 }
 
 void MotionProvider::onFlightLoopTick(float elapsedSec) {
-    // Sample the flight-model inputs every tick (later phases feed the washout
-    // filter from this); the window only needs it at ~1 Hz.
     if (dataRefs_) {
         latestCues_ = dataRefs_->sample();
     }
+
+    // Placeholder pose: map aircraft attitude straight to platform tilt, clamped
+    // to a small range so it stays reachable. Replaced by the washout filter in
+    // Phase 3 - this only exists so Phase 2 shows the IK responding in flight.
+    auto clampf = [](float v, float lo, float hi) {
+        return std::max(lo, std::min(hi, v));
+    };
+    Pose pose;
+    pose.roll  = clampf(latestCues_.rollDeg,  -8.0f, 8.0f);
+    pose.pitch = clampf(latestCues_.pitchDeg, -8.0f, 8.0f);
+    latestSolve_ = StewartKinematics::solve(pose);
 
     statusAccumSec_ += elapsedSec;
     if (statusAccumSec_ >= 1.0f) {
         statusAccumSec_ = 0.0f;
         if (statusWindow_) {
-            statusWindow_->update(latestCues_);
+            statusWindow_->update(latestCues_, latestSolve_);
         }
     }
 }
