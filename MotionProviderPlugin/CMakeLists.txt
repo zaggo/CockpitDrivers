@@ -61,6 +61,7 @@ set(HEADERS
     src/StewartGeometry.h
     src/Pose.h
     src/MotionConfig.h
+    src/StatusData.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})

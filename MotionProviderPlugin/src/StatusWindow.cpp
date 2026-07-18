@@ -18,11 +18,15 @@ void StatusWindow::initialize() {
     params.left = 100;
     params.top = 500;
     params.right = 500;
-    params.bottom = 210;
+    params.bottom = 170;
     params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
-    params.handleMouseClickFunc = [](XPLMWindowID, int, int, XPLMMouseStatus, void*) -> int { return 1; };
+    params.handleMouseClickFunc = [](XPLMWindowID w, int x, int y, XPLMMouseStatus s, void* ref) -> int {
+        StatusWindow* self = static_cast<StatusWindow*>(ref);
+        if (self) self->mouseCallback(w, x, y, s, ref);
+        return 1;
+    };
     params.handleCursorFunc = nullptr;
     params.handleMouseWheelFunc = nullptr;
     params.handleRightClickFunc = nullptr;
@@ -73,15 +77,17 @@ bool StatusWindow::isVisible() const {
     return XPLMGetWindowIsVisible(windowId_) != 0;
 }
 
-void StatusWindow::update(const MotionCues& cues, const SolveResult& solve) {
-    cues_ = cues;
-    solve_ = solve;
-
+void StatusWindow::update(const StatusData& data) {
+    data_ = data;
     bool nowVisible = isVisible();
     if (nowVisible != lastKnownVisible_) {
         lastKnownVisible_ = nowVisible;
         saveStatusWindowVisible(nowVisible);
     }
+}
+
+void StatusWindow::setReloadCallback(std::function<void()> cb) {
+    reloadCallback_ = std::move(cb);
 }
 
 void StatusWindow::drawCallback(XPLMWindowID inWindowID, void* inRefcon) {
@@ -102,6 +108,13 @@ void StatusWindow::menuCallback(void* inMenuRef, void* inItemRef) {
     if (self) self->setVisible(!self->isVisible());
 }
 
+void StatusWindow::mouseCallback(XPLMWindowID, int x, int y, XPLMMouseStatus s, void*) {
+    if (s != xplm_MouseDown) return;
+    if (x >= btnLeft_ && x <= btnRight_ && y <= btnTop_ && y >= btnBottom_) {
+        if (reloadCallback_) reloadCallback_();
+    }
+}
+
 void StatusWindow::draw() {
     if (!windowId_) return;
     int left, top, right, bottom;
@@ -112,26 +125,44 @@ void StatusWindow::draw() {
     int y = top - 20;
     char buf[160];
 
-    drawString(x, y, "Motion Provider v0.3 (Phase 2)", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "Motion Provider v0.4 (Phase 2a)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
-    std::snprintf(buf, sizeof(buf), "Attitude (deg)   pitch %+.1f  roll %+.1f",
-                  cues_.pitchDeg, cues_.rollDeg);
-    drawString(x, y, buf, 0.9f, 0.9f, 0.9f); y -= 18;
-
-    drawString(x, y, solve_.allReachable ? "IK: all legs reachable"
-                                          : "IK: POSE UNREACHABLE",
-               solve_.allReachable ? 0.6f : 1.0f,
-               solve_.allReachable ? 1.0f : 0.4f, 0.4f);
+    static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
+    if (data_.manualMode) {
+        std::snprintf(buf, sizeof(buf),
+            "MANUAL  axis=%s  [%.1f %.1f %.1f | %.1f %.1f %.1f]",
+            kAxis[data_.manualAxis],
+            data_.manualPose.surge, data_.manualPose.sway, data_.manualPose.heave,
+            data_.manualPose.roll, data_.manualPose.pitch, data_.manualPose.yaw);
+        drawString(x, y, buf, 1.0f, 0.9f, 0.5f);
+    } else {
+        drawString(x, y, "AUTO (attitude placeholder)   [M] manual", 0.7f, 0.8f, 0.9f);
+    }
+    y -= 16;
+    drawString(x, y, "[M] mode  [Tab] axis  [Up/Dn] nudge  [R] reset",
+               0.6f, 0.6f, 0.65f);
     y -= 18;
+
+    drawString(x, y, data_.solve.allReachable ? "IK: all legs reachable"
+                                               : "IK: POSE UNREACHABLE",
+               data_.solve.allReachable ? 0.6f : 1.0f,
+               data_.solve.allReachable ? 1.0f : 0.4f, 0.4f);
+    y -= 16;
 
     for (int i = 0; i < 6; ++i) {
         std::snprintf(buf, sizeof(buf), "P%d  %+7.2f deg  ->  %5u%s",
-                      i + 1, solve_.legs[i].angleDeg, solve_.setpoints[i],
-                      solve_.legs[i].reachable ? "" : "  (unreachable)");
+                      i + 1, data_.solve.legs[i].angleDeg, data_.solve.setpoints[i],
+                      data_.solve.legs[i].reachable ? "" : "  (unreachable)");
         drawString(x, y, buf, 0.85f, 0.85f, 0.9f);
         y -= 16;
     }
+
+    // Reload button
+    y -= 4;
+    btnLeft_ = x; btnTop_ = y + 12; btnRight_ = x + 150; btnBottom_ = y - 4;
+    drawString(x, y, data_.lastReloadOk ? "[ Reload config ]" : "[ Reload FAILED ]",
+               0.7f, data_.lastReloadOk ? 0.9f : 0.4f, 0.9f);
 }
 
 void StatusWindow::drawString(int x, int y, const std::string& text, float r, float g, float b) {

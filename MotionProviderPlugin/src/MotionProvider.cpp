@@ -15,6 +15,7 @@ bool MotionProvider::initialize() {
 
     statusWindow_ = std::make_unique<StatusWindow>();
     statusWindow_->initialize();
+    statusWindow_->setReloadCallback([this]{ reloadConfig(); });
 
     kin_ = std::make_unique<StewartKinematics>(
         MotionConfig::loadGeometry(MotionConfig::defaultPath()));
@@ -30,6 +31,12 @@ void MotionProvider::shutdown() {
     }
     dataRefs_.reset();
     kin_.reset();
+}
+
+void MotionProvider::reloadConfig() {
+    StewartGeometry g = MotionConfig::loadGeometry(MotionConfig::defaultPath());
+    kin_ = std::make_unique<StewartKinematics>(g);
+    lastReloadOk_ = true;   // loadGeometry never throws; defaults on error
 }
 
 void MotionProvider::onFlightLoopTick(float elapsedSec) {
@@ -52,7 +59,14 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
     if (statusAccumSec_ >= 1.0f) {
         statusAccumSec_ = 0.0f;
         if (statusWindow_) {
-            statusWindow_->update(latestCues_, latestSolve_);
+            StatusData sd;
+            sd.cues = latestCues_;
+            sd.solve = latestSolve_;
+            sd.manualMode = manualMode_;
+            sd.manualAxis = manualAxis_;
+            sd.manualPose = manualPose_;
+            sd.lastReloadOk = lastReloadOk_;
+            statusWindow_->update(sd);
         }
     }
 }
