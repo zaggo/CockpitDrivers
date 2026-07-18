@@ -57,18 +57,18 @@ echo -e "\n${YELLOW}════════════════════
 echo -e "${YELLOW}Building for Windows...${NC}"
 echo -e "${YELLOW}════════════════════════════════════════${NC}\n"
 
-if [ -f "${SCRIPT_DIR}/build-windows.sh" ]; then
-    "${SCRIPT_DIR}/build-windows.sh"
-    
-    if [ -f "${SCRIPT_DIR}/build-windows/output/win.xpl" ]; then
-        cp "${SCRIPT_DIR}/build-windows/output/win.xpl" "${PLUGIN_64_DIR}/win.xpl"
+if [ -f "${SCRIPT_DIR}/build-xc-windows.sh" ]; then
+    "${SCRIPT_DIR}/build-xc-windows.sh"
+
+    if [ -f "${SCRIPT_DIR}/build-xc-windows/output/win.xpl" ]; then
+        cp "${SCRIPT_DIR}/build-xc-windows/output/win.xpl" "${PLUGIN_64_DIR}/win.xpl"
         echo -e "${GREEN}✓ Windows plugin copied to ${PLUGIN_64_DIR}/win.xpl${NC}"
     else
         echo -e "${RED}✗ Windows build failed - plugin not found${NC}"
         exit 1
     fi
 else
-    echo -e "${RED}✗ build-windows.sh not found${NC}"
+    echo -e "${RED}✗ build-xc-windows.sh not found${NC}"
     exit 1
 fi
 

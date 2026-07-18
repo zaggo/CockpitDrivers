@@ -18,7 +18,7 @@ echo -e "${YELLOW}╚═══════════════════�
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Build directory
-BUILD_DIR="${SCRIPT_DIR}/build-windows"
+BUILD_DIR="${SCRIPT_DIR}/build-xc-windows"
 
 # Output directory
 OUTPUT_DIR="${BUILD_DIR}/output"
