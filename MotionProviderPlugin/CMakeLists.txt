@@ -47,11 +47,14 @@ set(SOURCES
     src/MotionProvider.cpp
     src/StatusWindow.cpp
     src/ConfigUtils.cpp
+    src/DataRefManager.cpp
 )
 set(HEADERS
     src/MotionProvider.h
     src/StatusWindow.h
     src/ConfigUtils.h
+    src/DataRefManager.h
+    src/MotionCues.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})
