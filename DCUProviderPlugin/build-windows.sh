@@ -101,8 +101,11 @@ if [ -f "${OUTPUT_DIR}/win.xpl" ]; then
     FILE_SIZE=$(ls -lh "${OUTPUT_DIR}/win.xpl" | awk '{print $5}')
     echo -e "${BLUE}File size: ${FILE_SIZE}${NC}"
 
-    echo -e "\n${YELLOW}To install:${NC}"
-    echo -e "1. Place it in: X-Plane 12/Resources/plugins/DCUProvider/64/win.xpl"
+    # ============ Auto-Install Plugin ============
+    INSTALL_PATH="/x/X-Plane 12/Resources/plugins/DCUProvider/64/win.xpl"
+    mkdir -p "$(dirname "$INSTALL_PATH")"
+    cp "${OUTPUT_DIR}/win.xpl" "$INSTALL_PATH"
+    echo -e "\n${GREEN}✓ Plugin automatisch installiert nach:${NC} ${BLUE}$INSTALL_PATH${NC}"
 else
     echo -e "${RED}✗ Build failed - plugin file not found${NC}"
     exit 1

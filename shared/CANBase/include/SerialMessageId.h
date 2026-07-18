@@ -23,9 +23,19 @@ enum class TransponderToDCUCommand : uint8_t {
     TransponderToDcuCommandIdent = 0x01 << 2,
 };
 
-struct __attribute__((packed)) TransponderToDcuMessage {
-    TransponderToDCUCommand  command; // Command identifier
-    uint16_t code;
-    uint8_t  mode;
-};
+#if defined(_MSC_VER)
+    #pragma pack(push, 1)
+    struct TransponderToDcuMessage {
+        TransponderToDCUCommand  command; // Command identifier
+        uint16_t code;
+        uint8_t  mode;
+    };
+    #pragma pack(pop)
+#else
+    struct __attribute__((packed)) TransponderToDcuMessage {
+        TransponderToDCUCommand  command; // Command identifier
+        uint16_t code;
+        uint8_t  mode;
+    };
+#endif
 #endif // SERIAL_MESSAGE_ID_H
