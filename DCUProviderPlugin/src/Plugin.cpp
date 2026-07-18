@@ -8,12 +8,18 @@
 // Global plugin instance
 static std::unique_ptr<DCUProvider> gProvider;
 
+// Decouple the flight loop tick from the render frame rate. 50 Hz matches the
+// highest downlink rate we actually need (RPM); calling more often than that
+// just burns CPU on serial I/O syscalls and queue locking without producing
+// any more useful data.
+static constexpr float kFlightLoopIntervalSec = 1.0f / 50.0f;
+
 // Flight loop callback
 static float FlightLoopCB(float elapsedTime, float, int, void*) {
     if (gProvider) {
         gProvider->onFlightLoopTick(elapsedTime);
     }
-    return -1.0f;  // Call every frame
+    return kFlightLoopIntervalSec;
 }
 
 // ============ X-Plane Plugin API ============
@@ -34,7 +40,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
     }
     
     // Register flight loop callback
-    XPLMRegisterFlightLoopCallback(FlightLoopCB, -1.0f, nullptr);
+    XPLMRegisterFlightLoopCallback(FlightLoopCB, kFlightLoopIntervalSec, nullptr);
     
 
     XPLMDebugString("DCUProvider: Plugin started successfully\n");

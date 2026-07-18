@@ -33,9 +33,12 @@ public:
     /// Returns true if at least one byte was written.
     bool writeBestEffort(const void* data, size_t len);
     
-    /// Non-blocking read.
-    /// Returns the number of bytes read (0 if no data available).
-    size_t readNonBlocking(void* outBuf, size_t maxLen);
+    /// Blocks the calling thread for up to kReadTimeoutMs waiting for incoming
+    /// data, then returns whatever is available (0 on timeout with no data).
+    /// Intended to be called from a dedicated I/O thread, not from a
+    /// render-frame-synced callback - use as a real (low-CPU) blocking wait,
+    /// not a busy-poll.
+    size_t readBlocking(void* outBuf, size_t maxLen);
     
 private:
 #ifdef _WIN32

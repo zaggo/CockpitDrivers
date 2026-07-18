@@ -45,7 +45,7 @@ bool DCUProvider::initialize()
     // Nur verbinden, wenn ein Port gesetzt ist
     if (!currentPort_.empty())
     {
-        connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
+        connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200, *msgQueue_);
         connMgr_->connect();
     }
 
@@ -111,7 +111,7 @@ void DCUProvider::changePort(const std::string &newPort)
     }
     if (!currentPort_.empty())
     {
-        connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200);
+        connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200, *msgQueue_);
         connMgr_->connect();
         // Längeres Delay nach Port-Öffnung (1 Sekunde) für Arduino-Reset
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -158,7 +158,10 @@ void DCUProvider::onFlightLoopTick(float elapsedTime)
     connMgr_->update(elapsedTime);
 
     // ============ I/O Processing ============
-    connMgr_->processIO(*msgQueue_);
+    // Handled continuously by ConnectionManager's own I/O thread now - not
+    // ticked from here, so USB/serial driver overhead can't eat into the
+    // render frame budget. This thread only reads/writes the (mutex-guarded)
+    // MessageQueue via updateDownlink()/updateUplink() below.
 
     // ============ Downlink: X-Plane → Gateway ============
     updateDownlink(elapsedTime);

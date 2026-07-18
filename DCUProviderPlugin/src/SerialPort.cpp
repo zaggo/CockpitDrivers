@@ -10,7 +10,14 @@
 #include <unistd.h>
 #include <termios.h>
 #include <errno.h>
+#include <poll.h>
 #endif
+
+// How long readBlocking() may block waiting for data before returning empty.
+// Runs on a dedicated I/O thread (see ConnectionManager), so blocking here
+// costs no render-frame time - this just bounds worst-case TX latency between
+// read attempts.
+static constexpr int kReadTimeoutMs = 20;
 
 SerialPort::~SerialPort() {
     closePort();
@@ -65,12 +72,15 @@ bool SerialPort::openPort(const std::string& devicePath, int baudRate) {
         return false;
     }
     
-    // Set timeouts for non-blocking operation
+    // Read blocks for up to kReadTimeoutMs waiting for data (returns earlier
+    // if data arrives sooner); this specific MAXDWORD/MAXDWORD/constant
+    // combination is the documented way to get a bounded blocking read on
+    // Windows instead of either an unbounded block or a busy-poll.
     COMMTIMEOUTS timeouts;
     memset(&timeouts, 0, sizeof(timeouts));
     timeouts.ReadIntervalTimeout = MAXDWORD;
-    timeouts.ReadTotalTimeoutMultiplier = 0;
-    timeouts.ReadTotalTimeoutConstant = 0;
+    timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
+    timeouts.ReadTotalTimeoutConstant = kReadTimeoutMs;
     timeouts.WriteTotalTimeoutMultiplier = 0;
     timeouts.WriteTotalTimeoutConstant = 0;
     
@@ -110,18 +120,18 @@ bool SerialPort::writeBestEffort(const void* data, size_t len) {
     return bytesWritten > 0;
 }
 
-size_t SerialPort::readNonBlocking(void* outBuf, size_t maxLen) {
+size_t SerialPort::readBlocking(void* outBuf, size_t maxLen) {
     if (!isOpen() || !outBuf || maxLen == 0) {
         return 0;
     }
-    
+
     DWORD bytesRead = 0;
     if (!ReadFile(hComm_, outBuf, static_cast<DWORD>(maxLen), &bytesRead, NULL)) {
         // Read error
         closePort();
         return 0;
     }
-    
+
     return static_cast<size_t>(bytesRead);
 }
 
@@ -220,13 +230,24 @@ bool SerialPort::writeBestEffort(const void* data, size_t len) {
     return written > 0;
 }
 
-size_t SerialPort::readNonBlocking(void* outBuf, size_t maxLen) {
+size_t SerialPort::readBlocking(void* outBuf, size_t maxLen) {
     if (!isOpen() || !outBuf || maxLen == 0) {
         return 0;
     }
-    
+
+    // fd_ is opened O_NONBLOCK, so use poll() to actually wait (low CPU)
+    // for up to kReadTimeoutMs instead of busy-polling read().
+    struct pollfd pfd;
+    pfd.fd = fd_;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    int pollResult = poll(&pfd, 1, kReadTimeoutMs);
+    if (pollResult <= 0) {
+        return 0;  // Timeout or error - nothing to read right now
+    }
+
     ssize_t bytesRead = read(fd_, outBuf, maxLen);
-    
+
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return 0;  // No data available
@@ -235,7 +256,7 @@ size_t SerialPort::readNonBlocking(void* outBuf, size_t maxLen) {
         closePort();
         return 0;
     }
-    
+
     return static_cast<size_t>(bytesRead);
 }
 

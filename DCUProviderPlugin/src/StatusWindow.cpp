@@ -122,6 +122,7 @@ bool StatusWindow::isVisible() const {
 
 void StatusWindow::update(const StatusData& data) {
     statusData_ = data;
+    rebuildCachedLines();
 
     // Detect visibility changes made via X-Plane's native close button on the
     // round-rectangle window decoration, which has no callback of its own.
@@ -139,6 +140,55 @@ void StatusWindow::update(const StatusData& data) {
     // If you need geometry, use int variables:
     // int left, top, right, bottom;
     // XPLMGetWindowGeometry(windowId_, &left, &top, &right, &bottom);
+}
+
+void StatusWindow::rebuildCachedLines() {
+    connStatusLine_.text = "Status: " + std::string(statusData_.isConnected ? "CONNECTED" : "DISCONNECTED");
+    connStatusLine_.r = statusData_.isConnected ? 0.2f : 1.0f;
+    connStatusLine_.g = statusData_.isConnected ? 1.0f : 0.2f;
+    connStatusLine_.b = 0.2f;
+
+    cachedLines_.clear();
+
+    // Baud rate
+    std::stringstream ss;
+    ss << "Baud: " << statusData_.baudRate;
+    cachedLines_.push_back({ss.str(), 0.7f, 0.7f, 0.7f});
+
+    // TX/RX stats
+    ss.str("");
+    ss << "TX: " << statusData_.txBytesSent << " bytes | "
+       << "RX: " << statusData_.rxBytesReceived << " bytes";
+    cachedLines_.push_back({ss.str(), 0.9f, 0.9f, 0.9f});
+
+    // Last TX/RX times (Sekunden seit letztem Ereignis)
+    float now = static_cast<float>(std::time(nullptr));
+    float lastTxAgo = (statusData_.lastTxTime > 0.0f) ? (now - statusData_.lastTxTime) : -1.0f;
+    float lastRxAgo = (statusData_.lastRxTime > 0.0f) ? (now - statusData_.lastRxTime) : -1.0f;
+    ss.str("");
+    ss << "Last TX: ";
+    if (lastTxAgo >= 0.0f)
+        ss << std::fixed << std::setprecision(1) << lastTxAgo << "s ago | ";
+    else
+        ss << "n/a | ";
+    ss << "Last RX: ";
+    if (lastRxAgo >= 0.0f)
+        ss << std::fixed << std::setprecision(1) << lastRxAgo << "s ago";
+    else
+        ss << "n/a";
+    cachedLines_.push_back({ss.str(), 0.8f, 0.8f, 0.8f});
+
+    // Write status
+    std::string writeStatus = statusData_.lastWriteOk ? "OK" : "FAIL";
+    float wr = statusData_.lastWriteOk ? 0.2f : 1.0f;
+    float wg = statusData_.lastWriteOk ? 1.0f : 0.2f;
+    cachedLines_.push_back({"Last Write: " + writeStatus, wr, wg, 0.2f});
+
+    // Open status
+    std::string openStatus = statusData_.lastOpenOk ? "OK" : "FAIL";
+    float orc = statusData_.lastOpenOk ? 0.2f : 1.0f;
+    float og = statusData_.lastOpenOk ? 1.0f : 0.2f;
+    cachedLines_.push_back({"Last Open: " + openStatus, orc, og, 0.2f});
 }
 
 void StatusWindow::drawCallback(XPLMWindowID inWindowID, void* inRefcon) {
@@ -233,17 +283,14 @@ void StatusWindow::draw() {
 
 void StatusWindow::drawText(int x, int y) {
     // Title
-    drawString(x, y, "DCU Provider Status v0.1", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "DCU Provider Status v0.3", 0.8f, 1.0f, 0.8f);
     y -= 20;
-    
-    // Connection status
-    std::string connStatus = statusData_.isConnected ? "CONNECTED" : "DISCONNECTED";
-    float r = statusData_.isConnected ? 0.2f : 1.0f;
-    float g = statusData_.isConnected ? 1.0f : 0.2f;
-    drawString(x, y, "Status: " + connStatus, r, g, 0.2f);
+
+    // Connection status (cached in rebuildCachedLines(), ~1 Hz)
+    drawString(x, y, connStatusLine_.text, connStatusLine_.r, connStatusLine_.g, connStatusLine_.b);
     y -= 16;
-    
-    // Serial port selection UI
+
+    // Serial port selection UI (kept dynamic - selection can change every frame)
     drawString(x, y, "Device:", 0.7f, 0.7f, 0.7f);
     y -= 16;
     if (!availablePorts_.empty()) {
@@ -259,50 +306,13 @@ void StatusWindow::drawText(int x, int y) {
         drawString(x + 10, y, "(No serial ports found)", 0.7f, 0.7f, 0.7f);
         y -= 16;
     }
-    
-    // Baud rate
-    std::stringstream ss;
-    ss << "Baud: " << statusData_.baudRate;
-    drawString(x, y, ss.str(), 0.7f, 0.7f, 0.7f);
-    y -= 16;
-    
-    // TX/RX stats
-    ss.str("");
-    ss << "TX: " << statusData_.txBytesSent << " bytes | "
-       << "RX: " << statusData_.rxBytesReceived << " bytes";
-    drawString(x, y, ss.str(), 0.9f, 0.9f, 0.9f);
-    y -= 16;
-    
-    // Last TX/RX times (Sekunden seit letztem Ereignis)
-    float now = static_cast<float>(std::time(nullptr));
-    float lastTxAgo = (statusData_.lastTxTime > 0.0f) ? (now - statusData_.lastTxTime) : -1.0f;
-    float lastRxAgo = (statusData_.lastRxTime > 0.0f) ? (now - statusData_.lastRxTime) : -1.0f;
-    ss.str("");
-    ss << "Last TX: ";
-    if (lastTxAgo >= 0.0f)
-        ss << std::fixed << std::setprecision(1) << lastTxAgo << "s ago | ";
-    else
-        ss << "n/a | ";
-    ss << "Last RX: ";
-    if (lastRxAgo >= 0.0f)
-        ss << std::fixed << std::setprecision(1) << lastRxAgo << "s ago";
-    else
-        ss << "n/a";
-    drawString(x, y, ss.str(), 0.8f, 0.8f, 0.8f);
-    y -= 16;
-    
-    // Write status
-    std::string writeStatus = statusData_.lastWriteOk ? "OK" : "FAIL";
-    float wr = statusData_.lastWriteOk ? 0.2f : 1.0f;
-    float wg = statusData_.lastWriteOk ? 1.0f : 0.2f;
-    drawString(x, y, "Last Write: " + writeStatus, wr, wg, 0.2f);
-    y -= 16;
-    
-    // Open status
-    std::string openStatus = statusData_.lastOpenOk ? "OK" : "FAIL";
-    float or_ = statusData_.lastOpenOk ? 0.2f : 1.0f;
-    float og = statusData_.lastOpenOk ? 1.0f : 0.2f;
-    drawString(x, y, "Last Open: " + openStatus, or_, og, 0.2f);
+
+    // Remaining lines (baud, TX/RX stats, last TX/RX times, write/open status)
+    // are pre-formatted in rebuildCachedLines() - draw() just replays them.
+    for (const auto& line : cachedLines_) {
+        drawString(x, y, line.text, line.r, line.g, line.b);
+        y -= 16;
+    }
 }
 
 void StatusWindow::drawString(int x, int y, const std::string& text, 

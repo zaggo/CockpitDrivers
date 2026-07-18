@@ -3,6 +3,7 @@
 #include "TransportLayer.h"
 #include <queue>
 #include <mutex>
+#include <atomic>
 #include <optional>
 #include <vector>
 #include <cstdint>
@@ -55,27 +56,27 @@ public:
     // ============ Statistics ============
     
     /// Total bytes sent (includes frame overhead: AA 55 type len)
-    uint64_t getTxBytesSent() const { return txBytesSent_; }
-    
+    uint64_t getTxBytesSent() const { return txBytesSent_.load(); }
+
     /// Total bytes received (includes frame overhead)
-    uint64_t getRxBytesReceived() const { return rxBytesReceived_; }
-    
+    uint64_t getRxBytesReceived() const { return rxBytesReceived_.load(); }
+
     /// Reset statistics (optional)
     void resetStats() {
-        std::lock_guard<std::mutex> txLock(txMutex_);
-        std::lock_guard<std::mutex> rxLock(rxMutex_);
-        txBytesSent_ = 0;
-        rxBytesReceived_ = 0;
+        txBytesSent_.store(0);
+        rxBytesReceived_.store(0);
     }
-    
+
 private:
-    // TX queue and synchronization
+    // TX queue and synchronization. Producer: main/flight-loop thread.
+    // Consumer: ConnectionManager's I/O thread.
     std::queue<std::vector<uint8_t>> txQueue_;
     mutable std::mutex txMutex_;
-    uint64_t txBytesSent_ = 0;
-    
-    // RX queue and synchronization
+    std::atomic<uint64_t> txBytesSent_{0};
+
+    // RX queue and synchronization. Producer: ConnectionManager's I/O thread.
+    // Consumer: main/flight-loop thread.
     std::queue<Message> rxQueue_;
     mutable std::mutex rxMutex_;
-    uint64_t rxBytesReceived_ = 0;
+    std::atomic<uint64_t> rxBytesReceived_{0};
 };

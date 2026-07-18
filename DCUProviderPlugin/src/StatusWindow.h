@@ -8,6 +8,13 @@
 #include <functional>
 #include <vector>
 
+// A single pre-formatted display line, built once when StatusData changes
+// (~1 Hz) instead of every render frame in the draw callback.
+struct StatusLine {
+    std::string text;
+    float r = 0.7f, g = 0.7f, b = 0.7f;
+};
+
 struct StatusData {
     // Connection
     bool isConnected = false;
@@ -81,6 +88,11 @@ private:
     void drawText(int x, int y);
     void drawString(int x, int y, const std::string& text, float r, float g, float b);
 
+    // Rebuild cachedLines_ from statusData_. Called from update() (~1 Hz),
+    // NOT from draw() (every render frame) - formatting is comparatively
+    // expensive and the underlying data only changes this often anyway.
+    void rebuildCachedLines();
+
     // Member variables
     std::vector<std::string> availablePorts_;
     std::function<void(const std::string&)> portChangedCallback_;
@@ -89,6 +101,8 @@ private:
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;
     StatusData statusData_;
+    StatusLine connStatusLine_;
+    std::vector<StatusLine> cachedLines_;
 
     // Last visibility state we know about; used to detect changes made by
     // X-Plane's native close button, which has no callback of its own.
