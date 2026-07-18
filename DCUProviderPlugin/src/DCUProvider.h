@@ -51,6 +51,9 @@ private:
 
     // Helper to change port and reconnect
     void changePort(const std::string& newPort);
+    // Rescan available serial ports and refresh the status window's list.
+    // Called whenever the status window is (re-)shown.
+    void refreshPorts();
     // ============ Internal Updates ============
     
     /// Downlink: Read data from X-Plane datarefs and queue messages for gateway.

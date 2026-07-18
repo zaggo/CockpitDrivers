@@ -25,6 +25,10 @@ void StatusWindow::setPortChangedCallback(std::function<void(const std::string&)
     portChangedCallback_ = std::move(cb);
 }
 
+void StatusWindow::setWindowShownCallback(std::function<void()> cb) {
+    windowShownCallback_ = std::move(cb);
+}
+
 StatusWindow::~StatusWindow() {
     destroy();
 }
@@ -101,10 +105,13 @@ void StatusWindow::destroy() {
 
 void StatusWindow::setVisible(bool visible) {
     if (windowId_) {
+        bool wasVisible = lastKnownVisible_;
         XPLMSetWindowIsVisible(windowId_, visible ? 1 : 0);
         // Save the new visibility state
         lastKnownVisible_ = visible;
         saveStatusWindowVisible(visible);
+        if (visible && !wasVisible && windowShownCallback_)
+            windowShownCallback_();
     }
 }
 
@@ -120,8 +127,11 @@ void StatusWindow::update(const StatusData& data) {
     // round-rectangle window decoration, which has no callback of its own.
     bool nowVisible = isVisible();
     if (nowVisible != lastKnownVisible_) {
+        bool wasVisible = lastKnownVisible_;
         lastKnownVisible_ = nowVisible;
         saveStatusWindowVisible(nowVisible);
+        if (nowVisible && !wasVisible && windowShownCallback_)
+            windowShownCallback_();
     }
 
     // Request redraw

@@ -44,6 +44,10 @@ public:
     // Set callback to notify when user selects a new port
     void setPortChangedCallback(std::function<void(const std::string&)> cb);
 
+    // Set callback invoked whenever the window transitions from hidden to visible,
+    // so the caller can rescan for serial ports that appeared in the meantime.
+    void setWindowShownCallback(std::function<void()> cb);
+
     /// Initialize window and menu item.
     /// Must be called during plugin startup.
     void initialize();
@@ -80,6 +84,7 @@ private:
     // Member variables
     std::vector<std::string> availablePorts_;
     std::function<void(const std::string&)> portChangedCallback_;
+    std::function<void()> windowShownCallback_;
     XPLMWindowID windowId_;
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;

@@ -56,6 +56,8 @@ bool DCUProvider::initialize()
         statusWin_->selectedPortIdx_ = preselectIdx;
     statusWin_->setPortChangedCallback([this](const std::string &port)
                                        { changePort(port); });
+    statusWin_->setWindowShownCallback([this]()
+                                       { refreshPorts(); });
 
     char msg[256];
     std::snprintf(msg, sizeof(msg),
@@ -64,6 +66,28 @@ bool DCUProvider::initialize()
     XPLMDebugString(msg);
 
     return true; // Even if initial connection fails, plugin loads
+}
+
+void DCUProvider::refreshPorts()
+{
+    if (!statusWin_)
+        return;
+    auto ports = enumerateSerialPorts();
+    int selectIdx = -1;
+    if (!currentPort_.empty())
+    {
+        for (size_t i = 0; i < ports.size(); ++i)
+        {
+            if (ports[i] == currentPort_)
+            {
+                selectIdx = (int)i;
+                break;
+            }
+        }
+    }
+    statusWin_->setAvailablePorts(ports);
+    if (selectIdx >= 0)
+        statusWin_->selectedPortIdx_ = selectIdx;
 }
 
 void DCUProvider::changePort(const std::string &newPort)
