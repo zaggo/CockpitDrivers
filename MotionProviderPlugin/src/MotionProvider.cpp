@@ -15,8 +15,7 @@ bool MotionProvider::initialize() {
 
     statusWindow_ = std::make_unique<StatusWindow>();
     statusWindow_->initialize();
-    statusWindow_->setReloadCallback([this]{ reloadConfig(); });
-    statusWindow_->setKeyCommandCallback([this](char k){ onManualKey(k); });
+    statusWindow_->setCommandCallback([this](int a){ onUiAction(a); });
 
     kin_ = std::make_unique<StewartKinematics>(
         MotionConfig::loadGeometry(MotionConfig::defaultPath()));
@@ -37,66 +36,76 @@ void MotionProvider::shutdown() {
 void MotionProvider::reloadConfig() {
     StewartGeometry g = MotionConfig::loadGeometry(MotionConfig::defaultPath());
     kin_ = std::make_unique<StewartKinematics>(g);
-    lastReloadOk_ = true;   // loadGeometry never throws; defaults on error
+    lastReloadOk_ = true;                 // loadGeometry never throws; defaults on error
+    reloadFlashRemaining_ = 2.0f;         // show "Config loaded" for ~2 s
 }
 
-void MotionProvider::onManualKey(char key) {
+Pose MotionProvider::currentPose() const {
+    if (manualMode_) return manualPose_;
+    // AUTO placeholder: aircraft attitude -> platform tilt, clamped so it stays
+    // reachable. Replaced by the washout filter in Phase 3.
+    auto clampf = [](float v, float lo, float hi){ return std::max(lo, std::min(hi, v)); };
+    Pose p;
+    p.roll  = clampf(latestCues_.rollDeg,  -8.0f, 8.0f);
+    p.pitch = clampf(latestCues_.pitchDeg, -8.0f, 8.0f);
+    return p;
+}
+
+void MotionProvider::onUiAction(int action) {
     const float kTransStep = 2.0f;   // mm
     const float kRotStep   = 0.5f;   // deg
-    switch (key) {
-        case 'm': case 'M': manualMode_ = !manualMode_; return;
-        case '\t': manualAxis_ = (manualAxis_ + 1) % 6; return;  // Tab
-        case 'r': case 'R': manualPose_ = Pose{}; return;
+    switch (action) {
+        case UI_RELOAD:      reloadConfig(); break;
+        case UI_TOGGLE_MODE: manualMode_ = !manualMode_; break;
+        case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 6; break;
+        case UI_RESET:       manualPose_ = Pose{}; break;
+        case UI_NUDGE_PLUS:
+        case UI_NUDGE_MINUS: {
+            const float dir = (action == UI_NUDGE_PLUS) ? 1.0f : -1.0f;
+            switch (manualAxis_) {
+                case 0: manualPose_.surge += dir * kTransStep; break;
+                case 1: manualPose_.sway  += dir * kTransStep; break;
+                case 2: manualPose_.heave += dir * kTransStep; break;
+                case 3: manualPose_.roll  += dir * kRotStep;   break;
+                case 4: manualPose_.pitch += dir * kRotStep;   break;
+                case 5: manualPose_.yaw   += dir * kRotStep;   break;
+            }
+            break;
+        }
         default: break;
     }
-    if (!manualMode_) return;
-    float dir = 0.0f;
-    if (key == '+' || key == '=') dir = 1.0f;
-    else if (key == '-' || key == '_') dir = -1.0f;
-    else return;
-    switch (manualAxis_) {
-        case 0: manualPose_.surge += dir * kTransStep; break;
-        case 1: manualPose_.sway  += dir * kTransStep; break;
-        case 2: manualPose_.heave += dir * kTransStep; break;
-        case 3: manualPose_.roll  += dir * kRotStep;   break;
-        case 4: manualPose_.pitch += dir * kRotStep;   break;
-        case 5: manualPose_.yaw   += dir * kRotStep;   break;
-    }
+    // Re-solve and refresh immediately so the click has instant visual feedback.
+    if (kin_) latestSolve_ = kin_->solve(currentPose());
+    pushStatus();
+}
+
+void MotionProvider::pushStatus() {
+    if (!statusWindow_) return;
+    StatusData sd;
+    sd.cues = latestCues_;
+    sd.solve = latestSolve_;
+    sd.manualMode = manualMode_;
+    sd.manualAxis = manualAxis_;
+    sd.manualPose = manualPose_;
+    sd.lastReloadOk = lastReloadOk_;
+    sd.reloadFlash = reloadFlashRemaining_ > 0.0f;
+    statusWindow_->update(sd);
 }
 
 void MotionProvider::onFlightLoopTick(float elapsedSec) {
     if (dataRefs_) {
         latestCues_ = dataRefs_->sample();
     }
-
-    Pose pose;
-    if (manualMode_) {
-        pose = manualPose_;
-    } else {
-        // Placeholder pose: map aircraft attitude straight to platform tilt, clamped
-        // to a small range so it stays reachable. Replaced by the washout filter in
-        // Phase 3 - this only exists so Phase 2 shows the IK responding in flight.
-        auto clampf = [](float v, float lo, float hi) {
-            return std::max(lo, std::min(hi, v));
-        };
-        pose.roll  = clampf(latestCues_.rollDeg,  -8.0f, 8.0f);
-        pose.pitch = clampf(latestCues_.pitchDeg, -8.0f, 8.0f);
+    if (reloadFlashRemaining_ > 0.0f) {
+        reloadFlashRemaining_ -= elapsedSec;
+        if (reloadFlashRemaining_ < 0.0f) reloadFlashRemaining_ = 0.0f;
     }
-    latestSolve_ = kin_->solve(pose);
+    if (kin_) latestSolve_ = kin_->solve(currentPose());
 
     statusAccumSec_ += elapsedSec;
     if (statusAccumSec_ >= 1.0f) {
         statusAccumSec_ = 0.0f;
-        if (statusWindow_) {
-            StatusData sd;
-            sd.cues = latestCues_;
-            sd.solve = latestSolve_;
-            sd.manualMode = manualMode_;
-            sd.manualAxis = manualAxis_;
-            sd.manualPose = manualPose_;
-            sd.lastReloadOk = lastReloadOk_;
-            statusWindow_->update(sd);
-        }
+        pushStatus();
     }
 }
 

@@ -5,6 +5,7 @@
 #include "StatusData.h"
 #include <string>
 #include <functional>
+#include <vector>
 
 class StatusWindow {
 public:
@@ -19,10 +20,11 @@ public:
     void setVisible(bool visible);
     bool isVisible() const;
 
-    // Refresh the displayed cue snapshot (called ~1 Hz).
+    // Refresh the displayed snapshot (called ~1 Hz and on every UI action).
     void update(const StatusData& data);
-    void setReloadCallback(std::function<void()> cb);
-    void setKeyCommandCallback(std::function<void(char)> cb);
+
+    // Invoked when the user clicks an on-screen button; arg is a UiAction code.
+    void setCommandCallback(std::function<void(int)> cb);
 
 private:
     static void drawCallback(XPLMWindowID inWindowID, void* inRefcon);
@@ -34,13 +36,19 @@ private:
     void drawString(int x, int y, const std::string& text, float r, float g, float b);
     void mouseCallback(XPLMWindowID, int x, int y, XPLMMouseStatus, void*);
 
+    // Draw a clickable button at (x, baseline y), record its hitbox + action,
+    // return its pixel width so the caller can place the next one after it.
+    int button(int x, int y, const std::string& label, int action,
+               float r, float g, float b);
+
+    struct Button { int left, top, right, bottom, action; };
+
     XPLMWindowID windowId_;
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;
     bool lastKnownVisible_;
 
     StatusData data_;
-    std::function<void()> reloadCallback_;
-    std::function<void(char)> keyCommandCallback_;
-    int btnLeft_ = 0, btnTop_ = 0, btnRight_ = 0, btnBottom_ = 0; // reload button hitbox
+    std::function<void(int)> commandCallback_;
+    std::vector<Button> buttons_;   // rebuilt every draw()
 };

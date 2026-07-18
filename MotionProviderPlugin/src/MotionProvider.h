@@ -22,18 +22,19 @@ public:
     void onAircraftLoaded();
 
     void reloadConfig();
-    void onManualKey(char key);
+    void onUiAction(int action);   // UiAction code from a status-window button
 
 private:
+    Pose currentPose() const;      // manual pose, or the AUTO attitude placeholder
+    void pushStatus();             // build a StatusData and refresh the window now
+
     std::unique_ptr<StatusWindow> statusWindow_;
     std::unique_ptr<DataRefManager> dataRefs_;
     std::unique_ptr<StewartKinematics> kin_;
 
-    // Most recent sampled snapshot (updated every 60 Hz tick).
     MotionCues latestCues_;
     SolveResult latestSolve_;
 
-    // Status window refresh accumulator (~1 Hz), independent of the 60 Hz tick.
     float statusAccumSec_ = 0.0f;
 
     // Manual DOF control state
@@ -41,4 +42,5 @@ private:
     int manualAxis_ = 0;
     Pose manualPose_;
     bool lastReloadOk_ = true;
+    float reloadFlashRemaining_ = 0.0f;  // seconds left to show "Config loaded"
 };

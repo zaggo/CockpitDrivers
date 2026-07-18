@@ -17,8 +17,8 @@ void StatusWindow::initialize() {
     params.structSize = sizeof(XPLMCreateWindow_t);
     params.left = 100;
     params.top = 500;
-    params.right = 500;
-    params.bottom = 170;
+    params.right = 540;
+    params.bottom = 150;
     params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
@@ -86,12 +86,8 @@ void StatusWindow::update(const StatusData& data) {
     }
 }
 
-void StatusWindow::setReloadCallback(std::function<void()> cb) {
-    reloadCallback_ = std::move(cb);
-}
-
-void StatusWindow::setKeyCommandCallback(std::function<void(char)> cb) {
-    keyCommandCallback_ = std::move(cb);
+void StatusWindow::setCommandCallback(std::function<void(int)> cb) {
+    commandCallback_ = std::move(cb);
 }
 
 void StatusWindow::drawCallback(XPLMWindowID inWindowID, void* inRefcon) {
@@ -100,12 +96,12 @@ void StatusWindow::drawCallback(XPLMWindowID inWindowID, void* inRefcon) {
     if (self) self->draw();
 }
 
-void StatusWindow::keyCallback(XPLMWindowID, char inKey, XPLMKeyFlags, char inVirtualKey,
+void StatusWindow::keyCallback(XPLMWindowID, char inKey, XPLMKeyFlags, char,
                                void* inRefcon, int) {
+    // Manual control is via on-screen buttons (X-Plane owns most keystrokes and
+    // the window rarely has keyboard focus). Only ESC-to-hide is handled here.
     StatusWindow* self = static_cast<StatusWindow*>(inRefcon);
-    if (!self) return;
-    if (inKey == 27) { self->setVisible(false); return; }   // ESC hides
-    if (self->keyCommandCallback_) self->keyCommandCallback_(inKey);
+    if (self && inKey == 27) self->setVisible(false);
 }
 
 void StatusWindow::menuCallback(void* inMenuRef, void* inItemRef) {
@@ -116,39 +112,72 @@ void StatusWindow::menuCallback(void* inMenuRef, void* inItemRef) {
 
 void StatusWindow::mouseCallback(XPLMWindowID, int x, int y, XPLMMouseStatus s, void*) {
     if (s != xplm_MouseDown) return;
-    if (x >= btnLeft_ && x <= btnRight_ && y <= btnTop_ && y >= btnBottom_) {
-        if (reloadCallback_) reloadCallback_();
+    for (const Button& b : buttons_) {
+        if (x >= b.left && x <= b.right && y >= b.bottom && y <= b.top) {
+            if (commandCallback_) commandCallback_(b.action);
+            return;
+        }
     }
+}
+
+int StatusWindow::button(int x, int y, const std::string& label, int action,
+                         float r, float g, float b) {
+    int cw = 0, ch = 0;
+    XPLMGetFontDimensions(xplmFont_Basic, &cw, &ch, nullptr);
+    if (cw <= 0) cw = 7;
+    if (ch <= 0) ch = 12;
+    const int w = static_cast<int>(label.size()) * cw;
+    buttons_.push_back({ x, y + ch, x + w, y - 3, action });
+    drawString(x, y, label, r, g, b);
+    return w;
 }
 
 void StatusWindow::draw() {
     if (!windowId_) return;
+    buttons_.clear();
+
     int left, top, right, bottom;
     XPLMGetWindowGeometry(windowId_, &left, &top, &right, &bottom);
     XPLMDrawTranslucentDarkBox(left, top, right, bottom);
 
+    int cw = 0, ch = 0;
+    XPLMGetFontDimensions(xplmFont_Basic, &cw, &ch, nullptr);
+    if (cw <= 0) cw = 7;
+    const int gap = cw * 2;
+
     int x = left + 10;
     int y = top - 20;
     char buf[160];
+    static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
 
     drawString(x, y, "Motion Provider v0.4 (Phase 2a)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
-    static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
+    // Mode toggle button
+    button(x, y, data_.manualMode ? "[ Switch to AUTO ]" : "[ Switch to MANUAL ]",
+           UI_TOGGLE_MODE, 0.7f, 0.9f, 1.0f);
+    y -= 18;
+
+    // Manual controls (only meaningful in MANUAL mode)
     if (data_.manualMode) {
+        std::snprintf(buf, sizeof(buf), "[ Axis: %s ]", kAxis[data_.manualAxis]);
+        int bx = x;
+        bx += button(bx, y, buf, UI_NEXT_AXIS, 1.0f, 0.9f, 0.5f) + gap;
+        bx += button(bx, y, "[ - ]", UI_NUDGE_MINUS, 0.9f, 0.9f, 0.6f) + gap;
+        bx += button(bx, y, "[ + ]", UI_NUDGE_PLUS, 0.9f, 0.9f, 0.6f) + gap;
+        button(bx, y, "[ Reset ]", UI_RESET, 0.9f, 0.7f, 0.6f);
+        y -= 16;
         std::snprintf(buf, sizeof(buf),
-            "MANUAL  axis=%s  [%.1f %.1f %.1f | %.1f %.1f %.1f]",
-            kAxis[data_.manualAxis],
+            "pose  s%.1f y%.1f h%.1f  r%.1f p%.1f w%.1f",
             data_.manualPose.surge, data_.manualPose.sway, data_.manualPose.heave,
             data_.manualPose.roll, data_.manualPose.pitch, data_.manualPose.yaw);
         drawString(x, y, buf, 1.0f, 0.9f, 0.5f);
+        y -= 16;
     } else {
-        drawString(x, y, "AUTO (attitude placeholder)   [M] manual", 0.7f, 0.8f, 0.9f);
+        drawString(x, y, "AUTO: platform follows aircraft attitude (placeholder)",
+                   0.7f, 0.8f, 0.9f);
+        y -= 16;
     }
-    y -= 16;
-    drawString(x, y, "[M] mode  [Tab] axis  [+/-] nudge  [R] reset",
-               0.6f, 0.6f, 0.65f);
-    y -= 18;
 
     drawString(x, y, data_.solve.allReachable ? "IK: all legs reachable"
                                                : "IK: POSE UNREACHABLE",
@@ -164,11 +193,14 @@ void StatusWindow::draw() {
         y -= 16;
     }
 
-    // Reload button
+    // Reload button + transient confirmation
     y -= 4;
-    btnLeft_ = x; btnTop_ = y + 12; btnRight_ = x + 150; btnBottom_ = y - 4;
-    drawString(x, y, data_.lastReloadOk ? "[ Reload config ]" : "[ Reload FAILED ]",
-               0.7f, data_.lastReloadOk ? 0.9f : 0.4f, 0.9f);
+    int rx = x + button(x, y, "[ Reload config ]", UI_RELOAD, 0.7f, 0.9f, 0.9f) + gap;
+    if (data_.reloadFlash) {
+        drawString(rx, y, "Config loaded", 0.4f, 1.0f, 0.5f);
+    } else if (!data_.lastReloadOk) {
+        drawString(rx, y, "Reload FAILED", 1.0f, 0.4f, 0.4f);
+    }
 }
 
 void StatusWindow::drawString(int x, int y, const std::string& text, float r, float g, float b) {
