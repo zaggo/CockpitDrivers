@@ -266,6 +266,19 @@ set_target_properties(DCUProvider PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/output"
 )
 
+# Multi-config generators (e.g. Visual Studio) append a per-configuration
+# subdirectory to LIBRARY/RUNTIME_OUTPUT_DIRECTORY unless the per-config
+# property variants are pinned too. Flatten to a single output/ dir so
+# every build script finds the artifact at the same path regardless of
+# generator. No-op for single-config generators (Makefiles).
+foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
+    set_target_properties(DCUProvider PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${CMAKE_BINARY_DIR}/output"
+        LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${CMAKE_BINARY_DIR}/output"
+    )
+endforeach()
+
 # X-Plane plugins directory (for auto-install)
 if(APPLE)
     set(DEFAULT_XPLANE_PLUGINS_DIR "${HOME}/Library/Preferences/X-Plane 12/Resources/plugins")
