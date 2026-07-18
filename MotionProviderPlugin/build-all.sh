@@ -87,14 +87,8 @@ The plugin will automatically load the correct version for your platform:
 - 64/mac.xpl for macOS
 - 64/win.xpl for Windows
 
-Configuration:
---------------
-Edit MotionProvider.ini to configure:
-- Serial port (COM1, COM2, etc. on Windows; /dev/cu.* on macOS)
-- Baud rate (default: 115200)
-
-The plugin will create a status window accessible via:
-    Plugins > Motion Provider Status
+The plugin provides a status window accessible via:
+    Plugins > Motion Provider > Show Status Window
 
 Build Information:
 ------------------
