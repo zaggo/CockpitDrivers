@@ -154,6 +154,8 @@ int StatusWindow::portButton(int x, int y, const std::string& label, const std::
     if (cw <= 0) cw = 7;
     if (ch <= 0) ch = 12;
     const int w = static_cast<int>(label.size()) * cw;
+    // action is unused for port buttons: mouseCallback routes on non-empty port
+    // before ever reading action. The placeholder must NOT be relied upon.
     buttons_.push_back({ x, y + ch, x + w, y - 3, UI_RESCAN_PORTS, port });
     drawString(x, y, label, r, g, b);
     return w;

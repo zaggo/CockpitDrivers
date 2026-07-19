@@ -31,7 +31,6 @@ public:
     void onUiAction(int action);   // UiAction code from a status-window button
 
     void selectPort(const std::string& port);
-    void rescanPorts();
 
 private:
     void pushStatus();             // build a StatusData and refresh the window now

@@ -84,8 +84,6 @@ void MotionProvider::selectPort(const std::string& port) {
     armed_ = false;              // always re-arm deliberately after a port change
 }
 
-void MotionProvider::rescanPorts() { /* handled in the window via enumerateSerialPorts */ }
-
 void MotionProvider::onUiAction(int action) {
     const float kTransStep = 2.0f;   // mm
     const float kRotStep   = 0.5f;   // deg
