@@ -30,9 +30,9 @@ bool MotionProvider::initialize() {
 
     safetyCfg_ = MotionConfig::loadSafety(MotionConfig::defaultPath());
     safety_ = std::make_unique<SafetyLimiter>(safetyCfg_);
-    // Park pose = lowest reachable pose along parkHeaveMm; start disarmed there.
-    Pose parkTarget; parkTarget.heave = static_cast<float>(safetyCfg_.parkHeaveMm);
-    parkPose_ = kin_->clampToReachable(parkTarget);
+    // Park pose = lowest reachable pose along parkHeaveMm; start disarmed there
+    // with the limiter pre-seeded to the park setpoints (no startup jump).
+    recomputeParkPose();
     SolveResult parkSolve = kin_->solve(parkPose_);
     safety_->reset(parkSolve.setpoints);
 
@@ -70,9 +70,7 @@ void MotionProvider::reloadConfig() {
     if (effects_) { effects_->setConfig(MotionConfig::loadEffects(path)); effects_->reset(); }
     safetyCfg_ = MotionConfig::loadSafety(path);
     if (safety_) safety_->setConfig(safetyCfg_);
-    // Recompute the park pose (geometry and/or park heave may have changed).
-    Pose parkTarget; parkTarget.heave = static_cast<float>(safetyCfg_.parkHeaveMm);
-    parkPose_ = kin_->clampToReachable(parkTarget);
+    recomputeParkPose();   // geometry and/or park heave may have changed
     // serial rate/baud change needs a reconnect to take effect:
     if (serial_) {
         SerialConfig sc = MotionConfig::loadSerial(path);
@@ -198,6 +196,13 @@ void MotionProvider::onAircraftLoaded() {
     if (dataRefs_) {
         dataRefs_->onAircraftLoaded();
     }
+}
+
+void MotionProvider::recomputeParkPose() {
+    if (!kin_) return;
+    Pose parkTarget;
+    parkTarget.heave = static_cast<float>(safetyCfg_.parkHeaveMm);
+    parkPose_ = kin_->clampToReachable(parkTarget);
 }
 
 Pose MotionProvider::blendedCommand(const Pose& rawLive) const {

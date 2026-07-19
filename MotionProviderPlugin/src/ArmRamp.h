@@ -43,7 +43,6 @@ public:
 
     double   blend() const { return blend_; }   // 0 = park, 1 = live
     ArmState state() const { return state_; }
-    bool     fullyDisarmed() const { return state_ == ArmState::Disarmed; }
 
 private:
     ArmState state_ = ArmState::Disarmed;

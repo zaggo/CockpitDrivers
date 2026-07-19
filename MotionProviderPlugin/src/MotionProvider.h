@@ -39,6 +39,7 @@ private:
     // Blend the live pose toward the park pose by the arm ramp, then clamp to a
     // reachable pose (every intermediate is a valid rigid config).
     Pose blendedCommand(const Pose& rawLive) const;
+    void recomputeParkPose();      // park pose = lowest reachable along parkHeaveMm
 
     std::unique_ptr<StatusWindow> statusWindow_;
     std::unique_ptr<DataRefManager> dataRefs_;
