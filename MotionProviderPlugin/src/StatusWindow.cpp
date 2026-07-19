@@ -197,9 +197,10 @@ void StatusWindow::draw() {
     y -= 4;
     int rx = x + button(x, y, "[ Reload config ]", UI_RELOAD, 0.7f, 0.9f, 0.9f) + gap;
     if (data_.reloadFlash) {
-        drawString(rx, y, "Config loaded", 0.4f, 1.0f, 0.5f);
-    } else if (!data_.lastReloadOk) {
-        drawString(rx, y, "Reload FAILED", 1.0f, 0.4f, 0.4f);
+        if (data_.lastReloadOk)
+            drawString(rx, y, "Config loaded", 0.4f, 1.0f, 0.5f);
+        else
+            drawString(rx, y, "No config file - using defaults", 1.0f, 0.8f, 0.3f);
     }
 }
 

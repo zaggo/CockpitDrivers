@@ -34,10 +34,11 @@ void MotionProvider::shutdown() {
 }
 
 void MotionProvider::reloadConfig() {
-    StewartGeometry g = MotionConfig::loadGeometry(MotionConfig::defaultPath());
+    bool loaded = false;
+    StewartGeometry g = MotionConfig::loadGeometry(MotionConfig::defaultPath(), &loaded);
     kin_ = std::make_unique<StewartKinematics>(g);
-    lastReloadOk_ = true;                 // loadGeometry never throws; defaults on error
-    reloadFlashRemaining_ = 2.0f;         // show "Config loaded" for ~2 s
+    lastReloadOk_ = loaded;               // true only if a file was actually parsed
+    reloadFlashRemaining_ = 2.0f;         // show the result for ~2 s
 }
 
 Pose MotionProvider::currentPose() const {

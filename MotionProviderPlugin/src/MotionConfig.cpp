@@ -2,52 +2,81 @@
 #include "toml.hpp"
 #include <cstdlib>
 
+namespace {
+
+// toml++ value<double>() does NOT accept integer literals (and value<int64_t>()
+// does not accept floats). Config authors will freely mix `= 120` and `= 120.0`,
+// so read every numeric field leniently: try the exact type, then the other.
+
+bool getDouble(const toml::table& t, const char* key, double& out) {
+    auto n = t[key];
+    if (auto v = n.value<double>())  { out = *v; return true; }
+    if (auto v = n.value<int64_t>()) { out = static_cast<double>(*v); return true; }
+    return false;
+}
+
+bool getInt(const toml::table& t, const char* key, int& out) {
+    auto n = t[key];
+    if (auto v = n.value<int64_t>()) { out = static_cast<int>(*v); return true; }
+    if (auto v = n.value<double>())  { out = static_cast<int>(*v); return true; }
+    return false;
+}
+
+void getArr6d(const toml::table& t, const char* key, double out[6]) {
+    if (auto arr = t[key].as_array()) {
+        for (int i = 0; i < 6 && i < static_cast<int>(arr->size()); ++i) {
+            auto e = arr->get(i);
+            if (auto v = e->value<double>())       out[i] = *v;
+            else if (auto v = e->value<int64_t>()) out[i] = static_cast<double>(*v);
+        }
+    }
+}
+
+void getArr6i(const toml::table& t, const char* key, int out[6]) {
+    if (auto arr = t[key].as_array()) {
+        for (int i = 0; i < 6 && i < static_cast<int>(arr->size()); ++i) {
+            auto e = arr->get(i);
+            if (auto v = e->value<int64_t>())     out[i] = static_cast<int>(*v);
+            else if (auto v = e->value<double>()) out[i] = static_cast<int>(*v);
+        }
+    }
+}
+
+}  // namespace
+
 std::string MotionConfig::defaultPath() {
     const char* home = std::getenv("HOME");
     return home ? std::string(home) + "/.motionprovider.toml"
                 : std::string(".motionprovider.toml");
 }
 
-StewartGeometry MotionConfig::loadGeometry(const std::string& path) {
+StewartGeometry MotionConfig::loadGeometry(const std::string& path, bool* outLoaded) {
+    if (outLoaded) *outLoaded = false;
     StewartGeometry g = StewartGeometry::defaults();
 
     toml::table tbl;
     try {
         tbl = toml::parse_file(path);
     } catch (const toml::parse_error&) {
-        return g;  // missing or invalid file -> full defaults
+        return g;  // missing or invalid file -> full defaults, outLoaded stays false
+    }
+    if (outLoaded) *outLoaded = true;
+
+    if (auto geo = tbl["geometry"].as_table()) {
+        getDouble(*geo, "base_radius_mm",     g.baseRadius);
+        getDouble(*geo, "platform_radius_mm", g.platformRadius);
+        getDouble(*geo, "horn_length_mm",     g.hornLength);
+        getDouble(*geo, "rod_length_mm",      g.rodLength);
+        getArr6d(*geo, "base_angle_deg",   g.phiDeg);
+        getArr6d(*geo, "anchor_angle_deg", g.psiDeg);
+        getArr6d(*geo, "horn_azimuth_deg", g.betaDeg);
+        getArr6i(*geo, "bff_actuator",     g.bff);
     }
 
-    auto geo = tbl["geometry"].as_table();
-    if (geo) {
-        if (auto v = (*geo)["base_radius_mm"].value<double>())     g.baseRadius = *v;
-        if (auto v = (*geo)["platform_radius_mm"].value<double>()) g.platformRadius = *v;
-        if (auto v = (*geo)["horn_length_mm"].value<double>())     g.hornLength = *v;
-        if (auto v = (*geo)["rod_length_mm"].value<double>())      g.rodLength = *v;
-
-        auto readArr6d = [](const toml::table& t, const char* key, double out[6]) {
-            if (auto arr = t[key].as_array()) {
-                for (int i = 0; i < 6 && i < static_cast<int>(arr->size()); ++i)
-                    if (auto v = arr->get(i)->value<double>()) out[i] = *v;
-            }
-        };
-        auto readArr6i = [](const toml::table& t, const char* key, int out[6]) {
-            if (auto arr = t[key].as_array()) {
-                for (int i = 0; i < 6 && i < static_cast<int>(arr->size()); ++i)
-                    if (auto v = arr->get(i)->value<int64_t>()) out[i] = static_cast<int>(*v);
-            }
-        };
-        readArr6d(*geo, "base_angle_deg",   g.phiDeg);
-        readArr6d(*geo, "anchor_angle_deg", g.psiDeg);
-        readArr6d(*geo, "horn_azimuth_deg", g.betaDeg);
-        readArr6i(*geo, "bff_actuator",     g.bff);
-    }
-
-    auto servo = tbl["servo"].as_table();
-    if (servo) {
-        if (auto v = (*servo)["angle_at_full_scale_deg"].value<double>()) g.angleAtFullScale = *v;
-        if (auto v = (*servo)["demand_home"].value<int64_t>()) g.demandHome = static_cast<int>(*v);
-        if (auto v = (*servo)["demand_max"].value<int64_t>())  g.demandMax  = static_cast<int>(*v);
+    if (auto servo = tbl["servo"].as_table()) {
+        getDouble(*servo, "angle_at_full_scale_deg", g.angleAtFullScale);
+        getInt(*servo, "demand_home", g.demandHome);
+        getInt(*servo, "demand_max",  g.demandMax);
     }
 
     return g;
