@@ -13,7 +13,11 @@ target_include_directories(test_config PRIVATE ../src ../third_party/tomlplusplu
 add_executable(test_washout test_washout.cpp ../src/WashoutFilter.cpp)
 target_include_directories(test_washout PRIVATE ../src)
 
+add_executable(test_effects test_effects.cpp ../src/EffectsLayer.cpp)
+target_include_directories(test_effects PRIVATE ../src)
+
 enable_testing()
 add_test(NAME kinematics COMMAND test_kinematics)
 add_test(NAME config COMMAND test_config)
 add_test(NAME washout COMMAND test_washout)
+add_test(NAME effects COMMAND test_effects)
