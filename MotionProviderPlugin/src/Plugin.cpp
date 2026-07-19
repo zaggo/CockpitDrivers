@@ -24,7 +24,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 
     // Native (OS-style) paths, so XPLMGetPluginInfo returns POSIX/Windows paths
     // (not legacy ':'-separated macOS paths) for the config-file location.
-    XPLMEnableFeature("XPLMUseNativePaths", 1);
+    XPLMEnableFeature("XPLM_USE_NATIVE_PATHS", 1);
 
     gProvider = std::make_unique<MotionProvider>();
     if (!gProvider->initialize()) {
