@@ -167,17 +167,19 @@ void StatusWindow::draw() {
         bx += button(bx, y, "[ + ]", UI_NUDGE_PLUS, 0.9f, 0.9f, 0.6f) + gap;
         button(bx, y, "[ Reset ]", UI_RESET, 0.9f, 0.7f, 0.6f);
         y -= 16;
-        std::snprintf(buf, sizeof(buf),
-            "pose  s%.1f y%.1f h%.1f  r%.1f p%.1f w%.1f",
-            data_.manualPose.surge, data_.manualPose.sway, data_.manualPose.heave,
-            data_.manualPose.roll, data_.manualPose.pitch, data_.manualPose.yaw);
-        drawString(x, y, buf, 1.0f, 0.9f, 0.5f);
-        y -= 16;
     } else {
         drawString(x, y, "AUTO: washout + effects motion cueing",
                    0.7f, 0.8f, 0.9f);
         y -= 16;
     }
+
+    // Commanded pose fed to the IK (what actually moves), both modes.
+    const Pose& cp = data_.commandedPose;
+    std::snprintf(buf, sizeof(buf),
+        "cmd  x%+.1f y%+.1f z%+.1f mm | r%+.1f p%+.1f w%+.1f deg",
+        cp.surge, cp.sway, cp.heave, cp.roll, cp.pitch, cp.yaw);
+    drawString(x, y, buf, 1.0f, 0.9f, 0.6f);
+    y -= 16;
 
     drawString(x, y, data_.solve.allReachable ? "IK: all legs reachable"
                                                : "IK: POSE UNREACHABLE",

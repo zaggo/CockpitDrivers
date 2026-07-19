@@ -75,7 +75,7 @@ void MotionProvider::onUiAction(int action) {
         default: break;
     }
     // Re-solve and refresh immediately so the click has instant visual feedback.
-    if (kin_ && manualMode_) latestSolve_ = kin_->solve(manualPose_);
+    if (kin_ && manualMode_) { latestPose_ = manualPose_; latestSolve_ = kin_->solve(manualPose_); }
     pushStatus();
 }
 
@@ -87,6 +87,7 @@ void MotionProvider::pushStatus() {
     sd.manualMode = manualMode_;
     sd.manualAxis = manualAxis_;
     sd.manualPose = manualPose_;
+    sd.commandedPose = latestPose_;
     sd.lastReloadOk = lastReloadOk_;
     sd.reloadFlash = reloadFlashRemaining_ > 0.0f;
     statusWindow_->update(sd);
@@ -113,6 +114,7 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         pose.pitch = w.pitch + e.pitch;
         pose.yaw   = w.yaw   + e.yaw;
     }
+    latestPose_ = pose;
     if (kin_) latestSolve_ = kin_->solve(pose);
 
     statusAccumSec_ += elapsedSec;

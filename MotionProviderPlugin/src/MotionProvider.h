@@ -37,6 +37,7 @@ private:
 
     MotionCues latestCues_;
     SolveResult latestSolve_;
+    Pose latestPose_;              // pose fed to the IK this tick (for display)
 
     float statusAccumSec_ = 0.0f;
 

@@ -20,6 +20,7 @@ struct StatusData {
     bool        manualMode = false;
     int         manualAxis = 0;      // 0..5: surge,sway,heave,roll,pitch,yaw
     Pose        manualPose;
+    Pose        commandedPose;       // pose actually fed to the IK this tick
     bool        lastReloadOk = true;
     bool        reloadFlash = false; // show transient "Config loaded" confirmation
 };
