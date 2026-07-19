@@ -50,6 +50,7 @@ set(SOURCES
     src/DataRefManager.cpp
     src/StewartKinematics.cpp
     src/MotionConfig.cpp
+    src/WashoutFilter.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -62,6 +63,8 @@ set(HEADERS
     src/Pose.h
     src/MotionConfig.h
     src/StatusData.h
+    src/WashoutConfig.h
+    src/WashoutFilter.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})
