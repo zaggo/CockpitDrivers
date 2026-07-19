@@ -56,6 +56,7 @@ set(SOURCES
     src/SerialPortUtils.cpp
     src/BffEncoder.cpp
     src/SerialLink.cpp
+    src/SafetyLimiter.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -77,6 +78,8 @@ set(HEADERS
     src/BffEncoder.h
     src/SerialConfig.h
     src/SerialLink.h
+    src/SafetyConfig.h
+    src/SafetyLimiter.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})

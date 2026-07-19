@@ -22,6 +22,11 @@ public:
     SolveResult solve(const Pose& pose) const;
     const StewartGeometry& geometry() const { return geo_; }
 
+    // Scale a commanded pose toward home (all-zero pose, always reachable) until
+    // every leg is reachable, so the platform degrades gracefully instead of
+    // saturating. Returns pose unchanged if already fully reachable.
+    Pose clampToReachable(const Pose& pose) const;
+
 private:
     StewartGeometry geo_;
     double z0_ = 0.0;

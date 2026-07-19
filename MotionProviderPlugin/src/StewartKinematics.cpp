@@ -81,3 +81,25 @@ SolveResult StewartKinematics::solve(const Pose& pose) const {
     }
     return out;
 }
+
+Pose StewartKinematics::clampToReachable(const Pose& pose) const {
+    if (solve(pose).allReachable) return pose;
+
+    auto scaled = [&](double s) {
+        Pose p;
+        p.surge = static_cast<float>(pose.surge * s);
+        p.sway  = static_cast<float>(pose.sway  * s);
+        p.heave = static_cast<float>(pose.heave * s);
+        p.roll  = static_cast<float>(pose.roll  * s);
+        p.pitch = static_cast<float>(pose.pitch * s);
+        p.yaw   = static_cast<float>(pose.yaw   * s);
+        return p;
+    };
+
+    double lo = 0.0, hi = 1.0;               // lo always reachable (home), hi not
+    for (int i = 0; i < 14; ++i) {
+        double mid = 0.5 * (lo + hi);
+        if (solve(scaled(mid)).allReachable) lo = mid; else hi = mid;
+    }
+    return scaled(lo);
+}
