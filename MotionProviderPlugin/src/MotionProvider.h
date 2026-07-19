@@ -3,6 +3,8 @@
 #include "MotionCues.h"
 #include "StewartKinematics.h"
 #include "StatusData.h"
+#include "WashoutFilter.h"
+#include "EffectsLayer.h"
 
 class StatusWindow;
 class DataRefManager;
@@ -31,6 +33,8 @@ private:
     std::unique_ptr<StatusWindow> statusWindow_;
     std::unique_ptr<DataRefManager> dataRefs_;
     std::unique_ptr<StewartKinematics> kin_;
+    std::unique_ptr<WashoutFilter> washout_;
+    std::unique_ptr<EffectsLayer> effects_;
 
     MotionCues latestCues_;
     SolveResult latestSolve_;

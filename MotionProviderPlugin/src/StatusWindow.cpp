@@ -174,7 +174,7 @@ void StatusWindow::draw() {
         drawString(x, y, buf, 1.0f, 0.9f, 0.5f);
         y -= 16;
     } else {
-        drawString(x, y, "AUTO: platform follows aircraft attitude (placeholder)",
+        drawString(x, y, "AUTO: washout + effects motion cueing",
                    0.7f, 0.8f, 0.9f);
         y -= 16;
     }

@@ -3,8 +3,9 @@
 #include "DataRefManager.h"
 #include "StewartGeometry.h"
 #include "MotionConfig.h"
+#include "WashoutFilter.h"
+#include "EffectsLayer.h"
 #include "XPLMUtilities.h"
-#include <algorithm>
 
 MotionProvider::MotionProvider() = default;
 MotionProvider::~MotionProvider() = default;
@@ -20,6 +21,9 @@ bool MotionProvider::initialize() {
     kin_ = std::make_unique<StewartKinematics>(
         MotionConfig::loadGeometry(MotionConfig::defaultPath()));
 
+    washout_ = std::make_unique<WashoutFilter>(MotionConfig::loadWashout(MotionConfig::defaultPath()));
+    effects_ = std::make_unique<EffectsLayer>(MotionConfig::loadEffects(MotionConfig::defaultPath()));
+
     XPLMDebugString("MotionProvider: initialized\n");
     return true;
 }
@@ -31,25 +35,18 @@ void MotionProvider::shutdown() {
     }
     dataRefs_.reset();
     kin_.reset();
+    washout_.reset();
+    effects_.reset();
 }
 
 void MotionProvider::reloadConfig() {
     bool loaded = false;
-    StewartGeometry g = MotionConfig::loadGeometry(MotionConfig::defaultPath(), &loaded);
-    kin_ = std::make_unique<StewartKinematics>(g);
-    lastReloadOk_ = loaded;               // true only if a file was actually parsed
-    reloadFlashRemaining_ = 2.0f;         // show the result for ~2 s
-}
-
-Pose MotionProvider::currentPose() const {
-    if (manualMode_) return manualPose_;
-    // AUTO placeholder: aircraft attitude -> platform tilt, clamped so it stays
-    // reachable. Replaced by the washout filter in Phase 3.
-    auto clampf = [](float v, float lo, float hi){ return std::max(lo, std::min(hi, v)); };
-    Pose p;
-    p.roll  = clampf(latestCues_.rollDeg,  -8.0f, 8.0f);
-    p.pitch = clampf(latestCues_.pitchDeg, -8.0f, 8.0f);
-    return p;
+    const std::string path = MotionConfig::defaultPath();
+    kin_ = std::make_unique<StewartKinematics>(MotionConfig::loadGeometry(path, &loaded));
+    if (washout_) { washout_->setConfig(MotionConfig::loadWashout(path)); washout_->reset(); }
+    if (effects_) { effects_->setConfig(MotionConfig::loadEffects(path)); effects_->reset(); }
+    lastReloadOk_ = loaded;
+    reloadFlashRemaining_ = 2.0f;
 }
 
 void MotionProvider::onUiAction(int action) {
@@ -57,7 +54,10 @@ void MotionProvider::onUiAction(int action) {
     const float kRotStep   = 0.5f;   // deg
     switch (action) {
         case UI_RELOAD:      reloadConfig(); break;
-        case UI_TOGGLE_MODE: manualMode_ = !manualMode_; break;
+        case UI_TOGGLE_MODE:
+            manualMode_ = !manualMode_;
+            if (!manualMode_ && washout_ && effects_) { washout_->reset(); effects_->reset(); }
+            break;
         case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 6; break;
         case UI_RESET:       manualPose_ = Pose{}; break;
         case UI_NUDGE_PLUS:
@@ -76,7 +76,7 @@ void MotionProvider::onUiAction(int action) {
         default: break;
     }
     // Re-solve and refresh immediately so the click has instant visual feedback.
-    if (kin_) latestSolve_ = kin_->solve(currentPose());
+    if (kin_ && manualMode_) latestSolve_ = kin_->solve(manualPose_);
     pushStatus();
 }
 
@@ -101,7 +101,20 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         reloadFlashRemaining_ -= elapsedSec;
         if (reloadFlashRemaining_ < 0.0f) reloadFlashRemaining_ = 0.0f;
     }
-    if (kin_) latestSolve_ = kin_->solve(currentPose());
+    Pose pose;
+    if (manualMode_) {
+        pose = manualPose_;
+    } else if (washout_ && effects_) {
+        Pose w = washout_->update(latestCues_, static_cast<double>(elapsedSec));
+        Pose e = effects_->update(latestCues_, static_cast<double>(elapsedSec));
+        pose.surge = w.surge + e.surge;
+        pose.sway  = w.sway  + e.sway;
+        pose.heave = w.heave + e.heave;
+        pose.roll  = w.roll  + e.roll;
+        pose.pitch = w.pitch + e.pitch;
+        pose.yaw   = w.yaw   + e.yaw;
+    }
+    if (kin_) latestSolve_ = kin_->solve(pose);
 
     statusAccumSec_ += elapsedSec;
     if (statusAccumSec_ >= 1.0f) {
