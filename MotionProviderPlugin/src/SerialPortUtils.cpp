@@ -40,6 +40,12 @@ std::vector<std::string> enumerateSerialPorts() {
         }
         globfree(&glob_result);
     }
+    // socat-Bridge-Symlinks
+    if (glob("/tmp/tty*", 0, nullptr, &glob_result) == 0) {
+        for (size_t i = 0; i < glob_result.gl_pathc; ++i)
+            ports.emplace_back(glob_result.gl_pathv[i]);
+        globfree(&glob_result);
+    }
 #endif
     
     return ports;
