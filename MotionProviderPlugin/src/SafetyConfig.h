@@ -14,5 +14,14 @@ struct SafetyConfig {
     double armRampSec     = 3.0;
     double disarmRampSec  = 2.0;
 
+    // Runaway / watchdog (Phase 5). A command DOF beyond these hard sanity
+    // bounds, sustained for runawayHoldSec, latches a Runaway fault. maxDtSec
+    // clamps the timestep fed to the filters so an X-Plane stall can't diverge
+    // the washout.
+    double runawayTiltDeg = 45.0;   // |roll|/|pitch|/|yaw| sanity bound (deg)
+    double runawayTransMm = 500.0;  // |surge|/|sway|/|heave| sanity bound (mm)
+    double runawayHoldSec = 1.0;    // sustained out-of-bounds -> fault
+    double maxDtSec       = 0.1;    // filter timestep clamp
+
     static SafetyConfig defaults() { return SafetyConfig{}; }
 };

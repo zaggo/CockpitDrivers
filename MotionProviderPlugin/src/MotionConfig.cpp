@@ -155,6 +155,10 @@ SafetyConfig MotionConfig::loadSafety(const std::string& path) {
         getDouble(*t, "park_heave_mm", s.parkHeaveMm);
         getDouble(*t, "arm_ramp_sec", s.armRampSec);
         getDouble(*t, "disarm_ramp_sec", s.disarmRampSec);
+        getDouble(*t, "runaway_tilt_deg", s.runawayTiltDeg);
+        getDouble(*t, "runaway_trans_mm", s.runawayTransMm);
+        getDouble(*t, "runaway_hold_sec", s.runawayHoldSec);
+        getDouble(*t, "max_dt_sec", s.maxDtSec);
     }
     return s;
 }

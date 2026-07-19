@@ -57,6 +57,7 @@ set(SOURCES
     src/BffEncoder.cpp
     src/SerialLink.cpp
     src/SafetyLimiter.cpp
+    src/SafetyMonitor.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -80,6 +81,7 @@ set(HEADERS
     src/SerialLink.h
     src/SafetyConfig.h
     src/SafetyLimiter.h
+    src/SafetyMonitor.h
     src/ArmRamp.h
 )
 
