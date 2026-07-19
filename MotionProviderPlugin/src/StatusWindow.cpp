@@ -150,7 +150,7 @@ void StatusWindow::draw() {
     char buf[160];
     static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
 
-    drawString(x, y, "Motion Provider v0.4 (Phase 2a)", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "Motion Provider v0.5 (Phase 3)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
     // Mode toggle button
