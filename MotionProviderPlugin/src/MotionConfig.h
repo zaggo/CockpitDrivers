@@ -3,6 +3,8 @@
 #include "StewartGeometry.h"
 #include "WashoutConfig.h"
 #include "EffectsConfig.h"
+#include "SerialConfig.h"
+#include "SafetyConfig.h"
 
 namespace MotionConfig {
     // Full path to the tuning config (~/.motionprovider.toml).
@@ -21,4 +23,10 @@ namespace MotionConfig {
 
     // Load effects config from a TOML file. Same contract as loadWashout.
     EffectsConfig   loadEffects(const std::string& path);
+
+    // Load serial config from a TOML file. Same contract as loadWashout.
+    SerialConfig    loadSerial(const std::string& path);
+
+    // Load safety config from a TOML file. Same contract as loadWashout.
+    SafetyConfig    loadSafety(const std::string& path);
 }

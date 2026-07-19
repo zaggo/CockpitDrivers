@@ -123,3 +123,25 @@ EffectsConfig MotionConfig::loadEffects(const std::string& path) {
     }
     return e;
 }
+
+SerialConfig MotionConfig::loadSerial(const std::string& path) {
+    SerialConfig s = SerialConfig::defaults();
+    toml::table tbl;
+    try { tbl = toml::parse_file(path); } catch (const toml::parse_error&) { return s; }
+    if (auto t = tbl["serial"].as_table()) {
+        getInt(*t, "baud", s.baud);
+        getDouble(*t, "output_rate_hz", s.rateHz);
+    }
+    return s;
+}
+
+SafetyConfig MotionConfig::loadSafety(const std::string& path) {
+    SafetyConfig s = SafetyConfig::defaults();
+    toml::table tbl;
+    try { tbl = toml::parse_file(path); } catch (const toml::parse_error&) { return s; }
+    if (auto t = tbl["safety"].as_table()) {
+        getDouble(*t, "max_velocity_cps", s.maxVelocity);
+        getDouble(*t, "max_acceleration_cps2", s.maxAcceleration);
+    }
+    return s;
+}

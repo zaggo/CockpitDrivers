@@ -1,10 +1,14 @@
 #pragma once
 #include <memory>
+#include <string>
 #include "MotionCues.h"
 #include "StewartKinematics.h"
 #include "StatusData.h"
 #include "WashoutFilter.h"
 #include "EffectsLayer.h"
+#include "SerialLink.h"
+#include "SafetyLimiter.h"
+#include "BffEncoder.h"
 
 class StatusWindow;
 class DataRefManager;
@@ -26,6 +30,9 @@ public:
     void reloadConfig();
     void onUiAction(int action);   // UiAction code from a status-window button
 
+    void selectPort(const std::string& port);
+    void rescanPorts();
+
 private:
     void pushStatus();             // build a StatusData and refresh the window now
 
@@ -34,6 +41,8 @@ private:
     std::unique_ptr<StewartKinematics> kin_;
     std::unique_ptr<WashoutFilter> washout_;
     std::unique_ptr<EffectsLayer> effects_;
+    std::unique_ptr<SerialLink> serial_;
+    std::unique_ptr<SafetyLimiter> safety_;
 
     MotionCues latestCues_;
     SolveResult latestSolve_;
@@ -47,4 +56,8 @@ private:
     Pose manualPose_;
     bool lastReloadOk_ = true;
     float reloadFlashRemaining_ = 0.0f;  // seconds left to show "Config loaded"
+
+    // Serial + safety
+    bool armed_ = false;
+    uint16_t sentSetpoints_[6] = {32640,32640,32640,32640,32640,32640};
 };
