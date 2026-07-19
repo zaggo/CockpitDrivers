@@ -13,6 +13,8 @@ struct StewartGeometry {
     double psiDeg[6]  = { 83.75, 336.25, 323.75, 216.25, 203.75, 96.25 };
     double betaDeg[6] = { 150.0, 270.0,  30.0, 150.0, 270.0,  30.0 };
     int    bff[6]     = { 5, 6, 1, 2, 3, 4 };
+    // Physical actuator/node name per leg (P1..P6) for identify/debug display.
+    const char* legName[6] = { "N1C2", "N2C1", "N2C2", "N3C1", "N3C2", "N1C1" };
 
     double angleAtFullScale = 45.0;  // deg mapped to demand extremes
     int    demandHome = 32640;

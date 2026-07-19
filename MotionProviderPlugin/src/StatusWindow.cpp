@@ -231,9 +231,12 @@ void StatusWindow::draw() {
         y -= 16;
     }
 
-    // Manual DOF controls (only when armed in MANUAL).
+    // Manual DOF controls (only when armed in MANUAL). Axis 6 = Identify actor.
     if (manActive) {
-        std::snprintf(buf, sizeof(buf), "[ Axis: %s ]", kAxis[data_.manualAxis]);
+        if (data_.manualAxis == 6)
+            std::snprintf(buf, sizeof(buf), "[ Identify: %s ]", data_.identifyActor.c_str());
+        else
+            std::snprintf(buf, sizeof(buf), "[ Axis: %s ]", kAxis[data_.manualAxis]);
         int bx = x;
         bx += button(bx, y, buf, UI_NEXT_AXIS, 1.0f, 0.9f, 0.5f) + gap;
         bx += button(bx, y, "[ - ]", UI_NUDGE_MINUS, 0.9f, 0.9f, 0.6f) + gap;

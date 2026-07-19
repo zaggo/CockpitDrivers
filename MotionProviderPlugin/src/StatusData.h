@@ -23,8 +23,9 @@ struct StatusData {
     MotionCues  cues;
     SolveResult solve;
     bool        manualMode = false;
-    int         manualAxis = 0;      // 0..5: surge,sway,heave,roll,pitch,yaw
+    int         manualAxis = 0;      // 0..5: surge,sway,heave,roll,pitch,yaw; 6: Identify
     Pose        manualPose;
+    std::string identifyActor;       // selected actor name in Identify mode (axis 6)
     Pose        commandedPose;       // pose actually fed to the IK this tick
     bool        lastReloadOk = true;
     bool        reloadFlash = false; // show transient "Config loaded" confirmation

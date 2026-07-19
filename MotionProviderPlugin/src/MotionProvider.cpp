@@ -15,6 +15,10 @@
 #include <string>
 
 namespace {
+constexpr double kIdentifyAmpDeg    = 5.0;   // jitter amplitude, deg
+constexpr double kIdentifyPeriodSec = 1.0;   // jitter period
+constexpr double kTwoPi = 6.28318530717958647692;
+
 // Resolve <plugins>/MotionProvider/configuration.toml from this plugin's own
 // .xpl path (.../MotionProvider/<arch>/mac.xpl -> strip filename + arch dir).
 // Returns "" if the API path is unusable (caller falls back to ~).
@@ -145,11 +149,19 @@ void MotionProvider::onUiAction(int action) {
             }
             break;
         case UI_DISARM:      armRamp_.requestDisarm(); break;
-        case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 6; break;
-        case UI_RESET:       manualPose_ = Pose{}; break;
+        case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 7; break;  // 6 = Identify
+        case UI_RESET:
+            if (manualAxis_ == 6) identifyLeg_ = 0;
+            else manualPose_ = Pose{};
+            break;
         case UI_NUDGE_PLUS:
         case UI_NUDGE_MINUS: {
-            const float dir = (action == UI_NUDGE_PLUS) ? 1.0f : -1.0f;
+            const bool plus = (action == UI_NUDGE_PLUS);
+            if (manualAxis_ == 6) {   // Identify: +/- selects the actor
+                identifyLeg_ = (identifyLeg_ + (plus ? 1 : 5)) % 6;
+                break;
+            }
+            const float dir = plus ? 1.0f : -1.0f;
             switch (manualAxis_) {
                 case 0: manualPose_.surge += dir * kTransStep; break;
                 case 1: manualPose_.sway  += dir * kTransStep; break;
@@ -185,6 +197,8 @@ void MotionProvider::pushStatus() {
     for (int i=0;i<6;i++) sd.sentSetpoints[i] = sentSetpoints_[i];
     sd.armState = static_cast<int>(armRamp_.state());
     sd.armBlend = static_cast<float>(armRamp_.blend());
+    sd.identifyActor = (kin_ && identifyLeg_ >= 0 && identifyLeg_ < 6)
+                       ? kin_->geometry().legName[identifyLeg_] : "";
     sd.faultCode = static_cast<int>(monitor_.fault());
     sd.faultReason = monitor_.reason();
     sd.serialConnected = serial_ && serial_->isConnected();
@@ -208,7 +222,9 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
 
     Pose rawLive;
     if (manualMode_) {
-        rawLive = manualPose_;
+        // Identify mode (axis 6) commands the home pose as base; a per-actuator
+        // jitter is added after IK below. Other manual axes use the hand pose.
+        rawLive = (manualAxis_ == 6) ? Pose{} : manualPose_;
     } else if (washout_ && effects_) {
         Pose w = washout_->update(latestCues_, dt);
         Pose e = effects_->update(latestCues_, dt);
@@ -236,6 +252,22 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
 
     uint16_t target[6];
     for (int i = 0; i < 6; ++i) target[i] = latestSolve_.setpoints[i];
+
+    // Identify: jitter only the selected actuator (+-kIdentifyAmpDeg, 1 s period)
+    // as an offset on its setpoint, scaled by the arm blend. Others hold at home.
+    if (manualMode_ && manualAxis_ == 6 && kin_) {
+        const StewartGeometry& gg = kin_->geometry();
+        identifyPhase_ += kTwoPi * (1.0 / kIdentifyPeriodSec) * dt;
+        if (identifyPhase_ > kTwoPi) identifyPhase_ -= kTwoPi;
+        const double amp = (kIdentifyAmpDeg / gg.angleAtFullScale)
+                           * static_cast<double>(gg.demandHome) * armRamp_.blend();
+        const int slot = gg.bff[identifyLeg_] - 1;
+        double v = static_cast<double>(target[slot]) + amp * std::sin(identifyPhase_);
+        if (v < 0.0) v = 0.0;
+        if (v > static_cast<double>(gg.demandMax)) v = static_cast<double>(gg.demandMax);
+        target[slot] = static_cast<uint16_t>(std::lround(v));
+    }
+
     if (safety_) safety_->limit(target, dt, sentSetpoints_);
     else for (int i=0;i<6;i++) sentSetpoints_[i] = target[i];
 

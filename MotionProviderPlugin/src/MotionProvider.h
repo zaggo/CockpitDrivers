@@ -58,10 +58,12 @@ private:
 
     float statusAccumSec_ = 0.0f;
 
-    // Manual DOF control state
+    // Manual DOF control state. manualAxis_ 0..5 = surge..yaw; 6 = Identify mode.
     bool manualMode_ = false;
     int manualAxis_ = 0;
     Pose manualPose_;
+    int identifyLeg_ = 0;          // 0..5 actor selected in Identify mode
+    double identifyPhase_ = 0.0;   // jitter phase (rad)
     bool lastReloadOk_ = true;
     float reloadFlashRemaining_ = 0.0f;  // seconds left to show "Config loaded"
 
