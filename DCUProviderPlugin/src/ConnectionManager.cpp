@@ -1,6 +1,7 @@
 #include "ConnectionManager.h"
 #include <cstdio>
 #include <ctime>
+#include <chrono>
 
 ConnectionManager::ConnectionManager(const std::string& devicePath, int baudRate, MessageQueue& queue)
     : devicePath_(devicePath), baudRate_(baudRate), queue_(queue) {
@@ -57,6 +58,12 @@ void ConnectionManager::stopIoThread() {
 }
 
 void ConnectionManager::ioThreadLoop() {
+    // Let the gateway's AVR finish its reset/boot before we start talking to
+    // it (see kPostConnectSettleMs). Chunked so stopIoThread() stays responsive.
+    for (int waited = 0; waited < kPostConnectSettleMs && ioThreadRunning_.load(std::memory_order_relaxed); waited += 50) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     while (ioThreadRunning_.load(std::memory_order_relaxed)) {
         // ============ TX: Send queued messages ============
         while (queue_.hasTxPending()) {

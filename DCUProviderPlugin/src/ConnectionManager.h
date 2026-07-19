@@ -89,6 +89,12 @@ private:
     float reconnectAccumulator_ = 0.0f;
     static constexpr float RECONNECT_INTERVAL = 2.0f;
 
+    // Opening the port pulses DTR, which resets the DCU's AVR. Hold off
+    // TX/RX for this long after connect so we don't race the gateway's
+    // boot/reinit window. Runs inside ioThreadLoop() (dedicated I/O thread),
+    // never on the flight-loop thread, so it can't stall X-Plane.
+    static constexpr int kPostConnectSettleMs = 1000;
+
     // RX Frame reassembly buffer (only touched by ioThread_)
     std::vector<uint8_t> rxBuffer_;
     static constexpr size_t MAX_RX_BUFFER = 2048;

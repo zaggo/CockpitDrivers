@@ -52,4 +52,11 @@ private:
 
     float reconnectAccum_ = 0.0f;
     static constexpr float kReconnectInterval = 2.0f;  // s
+
+    // Opening the port pulses DTR, which resets the MotionGateway AVR (same
+    // issue DCUProviderPlugin works around). Hold off streaming for this long
+    // after connect so the gateway's boot/CAN-reinit window doesn't overlap
+    // with the actor heartbeat timeout on the other side. Lives in the
+    // dedicated I/O thread (not flight-loop update()), so it never blocks X-Plane.
+    static constexpr int kPostConnectSettleMs = 1200;
 };

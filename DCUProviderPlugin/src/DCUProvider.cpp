@@ -3,8 +3,6 @@
 #include "ConfigUtils.h"
 #include <cstdio>
 #include <ctime>
-#include <thread>
-#include <chrono>
 #include <SerialMessageId.h>
 
 DCUProvider::DCUProvider() = default;
@@ -113,8 +111,9 @@ void DCUProvider::changePort(const std::string &newPort)
     {
         connMgr_ = std::make_unique<ConnectionManager>(currentPort_, 115200, *msgQueue_);
         connMgr_->connect();
-        // Längeres Delay nach Port-Öffnung (1 Sekunde) für Arduino-Reset
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        // Reset-settle delay now lives in ConnectionManager::ioThreadLoop()
+        // (kPostConnectSettleMs) - runs on the I/O thread, not here, so this
+        // no longer blocks the flight loop.
     }
     // Optionally, update status window immediately
     updateStatusWindow();

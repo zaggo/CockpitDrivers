@@ -42,6 +42,12 @@ void SerialLink::stopIoThread() {
 }
 
 void SerialLink::ioThreadLoop() {
+    // Let the gateway's AVR finish its reset/boot before we start writing to
+    // it (see kPostConnectSettleMs). Chunked so stop() stays responsive.
+    for (int waited = 0; waited < kPostConnectSettleMs && running_.load(std::memory_order_relaxed); waited += 50) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     const auto period = std::chrono::microseconds(
         static_cast<long long>(1'000'000.0 / (rateHz_ > 0.0 ? rateHz_ : 60.0)));
     while (running_.load(std::memory_order_relaxed) && serial_.isOpen()) {
