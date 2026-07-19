@@ -2,6 +2,7 @@
 #include "SafetyConfig.h"
 #include "StewartKinematics.h"
 #include "StewartGeometry.h"
+#include "ArmRamp.h"
 #include "Pose.h"
 #include <cstdio>
 #include <cmath>
@@ -59,6 +60,36 @@ int main() {
         Pose small; small.pitch = 1.0f;
         Pose c2 = k.clampToReachable(small);
         check(std::fabs(c2.pitch - small.pitch) < 1e-6, "reachable pose unchanged");
+    }
+
+    // ArmRamp: disarmed -> arm over ~armRampSec reaches Armed(blend 1); disarm
+    // over ~disarmRampSec returns to Disarmed(blend 0); blend stays in [0,1].
+    {
+        ArmRamp r;
+        check(r.state() == ArmState::Disarmed && r.blend() == 0.0, "starts disarmed at park");
+        r.toggle();  // -> Arming
+        check(r.state() == ArmState::Arming, "toggle from disarmed -> arming");
+        double prev = -1.0; bool monotonic = true, inRange = true;
+        for (int i = 0; i < 200; ++i) {   // 200*(1/60)=3.33s > 3s arm ramp
+            r.update(1.0/60.0, 3.0, 2.0);
+            if (r.blend() < prev - 1e-9) monotonic = false;
+            if (r.blend() < 0.0 || r.blend() > 1.0) inRange = false;
+            prev = r.blend();
+        }
+        check(monotonic, "arming blend monotonic up");
+        check(inRange, "arming blend in [0,1]");
+        check(r.state() == ArmState::Armed && std::fabs(r.blend()-1.0) < 1e-9, "reaches armed blend=1");
+
+        r.toggle();  // -> Disarming
+        check(r.state() == ArmState::Disarming, "toggle from armed -> disarming");
+        for (int i = 0; i < 200; ++i) r.update(1.0/60.0, 3.0, 2.0);   // >2s disarm ramp
+        check(r.state() == ArmState::Disarmed && r.blend() == 0.0, "returns to disarmed blend=0");
+
+        // requestDisarm from armed forces a ramp-down.
+        ArmRamp r2; r2.toggle(); for (int i=0;i<200;i++) r2.update(1.0/60.0,3.0,2.0);
+        check(r2.state()==ArmState::Armed, "r2 armed");
+        r2.requestDisarm();
+        check(r2.state()==ArmState::Disarming, "requestDisarm -> disarming");
     }
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

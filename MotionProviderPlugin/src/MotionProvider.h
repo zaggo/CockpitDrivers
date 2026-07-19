@@ -8,6 +8,8 @@
 #include "EffectsLayer.h"
 #include "SerialLink.h"
 #include "SafetyLimiter.h"
+#include "SafetyConfig.h"
+#include "ArmRamp.h"
 #include "BffEncoder.h"
 
 class StatusWindow;
@@ -34,6 +36,9 @@ public:
 
 private:
     void pushStatus();             // build a StatusData and refresh the window now
+    // Blend the live pose toward the park pose by the arm ramp, then clamp to a
+    // reachable pose (every intermediate is a valid rigid config).
+    Pose blendedCommand(const Pose& rawLive) const;
 
     std::unique_ptr<StatusWindow> statusWindow_;
     std::unique_ptr<DataRefManager> dataRefs_;
@@ -56,7 +61,9 @@ private:
     bool lastReloadOk_ = true;
     float reloadFlashRemaining_ = 0.0f;  // seconds left to show "Config loaded"
 
-    // Serial + safety
-    bool armed_ = false;
+    // Serial + safety (arm/disarm soft-start in pose space)
+    ArmRamp armRamp_;
+    SafetyConfig safetyCfg_;       // cached for ramp durations
+    Pose parkPose_;                // low, level park pose (reachable)
     uint16_t sentSetpoints_[6] = {32640,32640,32640,32640,32640,32640};
 };

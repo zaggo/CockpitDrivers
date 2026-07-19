@@ -235,13 +235,21 @@ void StatusWindow::draw() {
     }
 
     y -= 22;
-    // ARM state + serial status
-    button(x, y, data_.armed ? "[ DISARM ]" : "[ ARM ]", UI_ARM_TOGGLE,
-           data_.armed ? 1.0f : 0.5f, data_.armed ? 0.4f : 1.0f, 0.4f);
+    // ARM state + serial status. armState: 0 Disarmed,1 Arming,2 Armed,3 Disarming.
+    const bool live = (data_.armState == 1 || data_.armState == 2);  // arming/armed
+    button(x, y, live ? "[ DISARM ]" : "[ ARM ]", UI_ARM_TOGGLE,
+           live ? 1.0f : 0.5f, live ? 0.4f : 1.0f, 0.4f);
     {
+        char stateStr[32];
+        switch (data_.armState) {
+            case 1: std::snprintf(stateStr, sizeof(stateStr), "ARMING %.0f%%", data_.armBlend * 100.0f); break;
+            case 2: std::snprintf(stateStr, sizeof(stateStr), "ARMED"); break;
+            case 3: std::snprintf(stateStr, sizeof(stateStr), "DISARMING %.0f%%", data_.armBlend * 100.0f); break;
+            default: std::snprintf(stateStr, sizeof(stateStr), "disarmed (park)"); break;
+        }
         char sb[128];
         std::snprintf(sb, sizeof(sb), "   %s  %s  frames %llu",
-                      data_.armed ? "ARMED" : "disarmed",
+                      stateStr,
                       data_.serialConnected ? "CONNECTED" : "no link",
                       (unsigned long long)data_.framesSent);
         drawString(x + 90, y, sb, data_.serialConnected ? 0.6f : 0.8f,

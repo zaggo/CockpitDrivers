@@ -142,6 +142,9 @@ SafetyConfig MotionConfig::loadSafety(const std::string& path) {
     if (auto t = tbl["safety"].as_table()) {
         getDouble(*t, "max_velocity_cps", s.maxVelocity);
         getDouble(*t, "max_acceleration_cps2", s.maxAcceleration);
+        getDouble(*t, "park_heave_mm", s.parkHeaveMm);
+        getDouble(*t, "arm_ramp_sec", s.armRampSec);
+        getDouble(*t, "disarm_ramp_sec", s.disarmRampSec);
     }
     return s;
 }
