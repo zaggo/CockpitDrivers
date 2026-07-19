@@ -52,6 +52,10 @@ set(SOURCES
     src/MotionConfig.cpp
     src/WashoutFilter.cpp
     src/EffectsLayer.cpp
+    src/SerialPort.cpp
+    src/SerialPortUtils.cpp
+    src/BffEncoder.cpp
+    src/SerialLink.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -68,6 +72,11 @@ set(HEADERS
     src/WashoutFilter.h
     src/EffectsConfig.h
     src/EffectsLayer.h
+    src/SerialPort.h
+    src/SerialPortUtils.h
+    src/BffEncoder.h
+    src/SerialConfig.h
+    src/SerialLink.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})

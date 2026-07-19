@@ -16,8 +16,12 @@ target_include_directories(test_washout PRIVATE ../src)
 add_executable(test_effects test_effects.cpp ../src/EffectsLayer.cpp)
 target_include_directories(test_effects PRIVATE ../src)
 
+add_executable(test_bff test_bff.cpp ../src/BffEncoder.cpp)
+target_include_directories(test_bff PRIVATE ../src)
+
 enable_testing()
 add_test(NAME kinematics COMMAND test_kinematics)
 add_test(NAME config COMMAND test_config)
 add_test(NAME washout COMMAND test_washout)
 add_test(NAME effects COMMAND test_effects)
+add_test(NAME bff COMMAND test_bff)
