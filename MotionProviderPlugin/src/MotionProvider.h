@@ -11,6 +11,7 @@
 #include "SafetyConfig.h"
 #include "ArmRamp.h"
 #include "BffEncoder.h"
+#include "SafetyMonitor.h"
 
 class StatusWindow;
 class DataRefManager;
@@ -67,4 +68,6 @@ private:
     SafetyConfig safetyCfg_;       // cached for ramp durations
     Pose parkPose_;                // low, level park pose (reachable)
     uint16_t sentSetpoints_[6] = {32640,32640,32640,32640,32640,32640};
+    SafetyMonitor monitor_;
+    bool serialWasConnected_ = false;   // latches true once a link comes up
 };

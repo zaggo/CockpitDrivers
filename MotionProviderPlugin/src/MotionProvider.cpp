@@ -9,6 +9,7 @@
 #include "BffEncoder.h"
 #include "ConfigUtils.h"
 #include "XPLMUtilities.h"
+#include <cmath>
 
 MotionProvider::MotionProvider() = default;
 MotionProvider::~MotionProvider() = default;
@@ -30,6 +31,7 @@ bool MotionProvider::initialize() {
 
     safetyCfg_ = MotionConfig::loadSafety(MotionConfig::defaultPath());
     safety_ = std::make_unique<SafetyLimiter>(safetyCfg_);
+    monitor_.setConfig(safetyCfg_);
     // Park pose = lowest reachable pose along parkHeaveMm; start disarmed there
     // with the limiter pre-seeded to the park setpoints (no startup jump).
     recomputeParkPose();
@@ -70,6 +72,7 @@ void MotionProvider::reloadConfig() {
     if (effects_) { effects_->setConfig(MotionConfig::loadEffects(path)); effects_->reset(); }
     safetyCfg_ = MotionConfig::loadSafety(path);
     if (safety_) safety_->setConfig(safetyCfg_);
+    monitor_.setConfig(safetyCfg_);
     recomputeParkPose();   // geometry and/or park heave may have changed
     // serial rate/baud change needs a reconnect to take effect:
     if (serial_) {
@@ -114,7 +117,10 @@ void MotionProvider::onUiAction(int action) {
             }
             break;
         }
-        case UI_ARM_TOGGLE:  armRamp_.toggle(); break;
+        case UI_ARM_TOGGLE:
+            if (monitor_.fault() != FaultCode::None) monitor_.clear();  // ARM clears + re-arms
+            armRamp_.toggle();
+            break;
         case UI_RESCAN_PORTS: /* window rescans; nothing to do here */ break;
         default: break;
     }
@@ -140,6 +146,8 @@ void MotionProvider::pushStatus() {
     for (int i=0;i<6;i++) sd.sentSetpoints[i] = sentSetpoints_[i];
     sd.armState = static_cast<int>(armRamp_.state());
     sd.armBlend = static_cast<float>(armRamp_.blend());
+    sd.faultCode = static_cast<int>(monitor_.fault());
+    sd.faultReason = monitor_.reason();
     sd.serialConnected = serial_ && serial_->isConnected();
     sd.framesSent = serial_ ? serial_->framesSent() : 0;
     sd.serialPort = serial_ ? serial_->port() : std::string();
@@ -147,45 +155,56 @@ void MotionProvider::pushStatus() {
 }
 
 void MotionProvider::onFlightLoopTick(float elapsedSec) {
-    if (dataRefs_) {
-        latestCues_ = dataRefs_->sample();
-    }
+    if (dataRefs_) latestCues_ = dataRefs_->sample();
+
     if (reloadFlashRemaining_ > 0.0f) {
         reloadFlashRemaining_ -= elapsedSec;
         if (reloadFlashRemaining_ < 0.0f) reloadFlashRemaining_ = 0.0f;
     }
+
+    // Pause/stall guard: clamp the timestep the stateful filters/ramp see so a
+    // long X-Plane stall can't diverge them. Serial reconnect uses real dt.
+    double dt = static_cast<double>(elapsedSec);
+    if (dt > safetyCfg_.maxDtSec) dt = safetyCfg_.maxDtSec;
+
     Pose rawLive;
     if (manualMode_) {
         rawLive = manualPose_;
     } else if (washout_ && effects_) {
-        Pose w = washout_->update(latestCues_, static_cast<double>(elapsedSec));
-        Pose e = effects_->update(latestCues_, static_cast<double>(elapsedSec));
-        rawLive.surge = w.surge + e.surge;
-        rawLive.sway  = w.sway  + e.sway;
-        rawLive.heave = w.heave + e.heave;
-        rawLive.roll  = w.roll  + e.roll;
-        rawLive.pitch = w.pitch + e.pitch;
-        rawLive.yaw   = w.yaw   + e.yaw;
+        Pose w = washout_->update(latestCues_, dt);
+        Pose e = effects_->update(latestCues_, dt);
+        rawLive.surge = w.surge + e.surge;  rawLive.sway  = w.sway  + e.sway;
+        rawLive.heave = w.heave + e.heave;  rawLive.roll  = w.roll  + e.roll;
+        rawLive.pitch = w.pitch + e.pitch;  rawLive.yaw   = w.yaw   + e.yaw;
     }
 
-    // Arm/disarm soft-start: advance the ramp, then command a pose blended
-    // between the park pose (disarmed) and the live pose (armed). Pose-space
-    // blend + reachability clamp keeps every intermediate a valid rigid config.
-    armRamp_.update(static_cast<double>(elapsedSec), safetyCfg_.armRampSec, safetyCfg_.disarmRampSec);
+    // Watchdog + runaway/NaN monitor (before the envelope clamp masks divergence).
+    if (serial_ && serial_->isConnected()) serialWasConnected_ = true;
+    const bool notDisarmed = (armRamp_.state() != ArmState::Disarmed);
+    const bool serialLost = notDisarmed && serialWasConnected_ &&
+                            serial_ && !serial_->isConnected();
+    const bool finite =
+        std::isfinite(rawLive.surge) && std::isfinite(rawLive.sway) &&
+        std::isfinite(rawLive.heave) && std::isfinite(rawLive.roll) &&
+        std::isfinite(rawLive.pitch) && std::isfinite(rawLive.yaw);
+    monitor_.update(rawLive, finite, serialLost, dt);
+    if (monitor_.fault() != FaultCode::None) armRamp_.requestDisarm();  // home-on-fault (latched)
+
+    // Arm ramp + pose-space blend -> IK.
+    armRamp_.update(dt, safetyCfg_.armRampSec, safetyCfg_.disarmRampSec);
     latestPose_ = blendedCommand(rawLive);
     if (kin_) latestSolve_ = kin_->solve(latestPose_);
 
-    // SafetyLimiter is the final velocity/acceleration backstop on the setpoints.
     uint16_t target[6];
     for (int i = 0; i < 6; ++i) target[i] = latestSolve_.setpoints[i];
-    if (safety_) safety_->limit(target, static_cast<double>(elapsedSec), sentSetpoints_);
+    if (safety_) safety_->limit(target, dt, sentSetpoints_);
     else for (int i=0;i<6;i++) sentSetpoints_[i] = target[i];
 
     if (serial_) {
         uint8_t frame[BffEncoder::kFrameSize];
         BffEncoder::encode(sentSetpoints_, frame);
         serial_->setFrame(frame, sizeof(frame));
-        serial_->update(elapsedSec);
+        serial_->update(elapsedSec);   // real dt for reconnect timing
     }
 
     statusAccumSec_ += elapsedSec;

@@ -30,6 +30,8 @@ struct StatusData {
     uint16_t    sentSetpoints[6] = {32640,32640,32640,32640,32640,32640};
     int         armState = 0;        // ArmState: 0 Disarmed,1 Arming,2 Armed,3 Disarming
     float       armBlend = 0.0f;     // 0 = park pose, 1 = live pose
+    int         faultCode = 0;       // FaultCode: 0 None,1 Nan,2 Runaway,3 SerialLost
+    std::string faultReason;         // human-readable, empty if no fault
     bool        serialConnected = false;
     unsigned long long framesSent = 0;
     std::string serialPort;         // empty = none selected

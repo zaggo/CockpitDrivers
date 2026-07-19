@@ -179,7 +179,7 @@ void StatusWindow::draw() {
     char buf[160];
     static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
 
-    drawString(x, y, "Motion Provider v0.6 (Phase 4)", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "Motion Provider v0.7 (Phase 5)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
     // Mode toggle button
@@ -256,6 +256,10 @@ void StatusWindow::draw() {
                    data_.serialConnected ? 1.0f : 0.7f, 0.6f);
     }
     y -= 18;
+    if (data_.faultCode != 0) {
+        drawString(x, y, data_.faultReason.c_str(), 1.0f, 0.3f, 0.3f);
+        y -= 16;
+    }
     std::snprintf(buf, sizeof(buf), "port: %s",
                   data_.serialPort.empty() ? "(none - pick below)" : data_.serialPort.c_str());
     drawString(x, y, buf, 0.8f, 0.8f, 0.9f);
