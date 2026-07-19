@@ -29,14 +29,17 @@ static double rodClosureError(const Pose& pose, int leg) {
     double hx = G.baseRadius*std::cos(phi) + G.hornLength*std::cos(th)*std::cos(beta);
     double hy = G.baseRadius*std::sin(phi) + G.hornLength*std::cos(th)*std::sin(beta);
     double hz = G.hornLength*std::sin(th);
-    double cr=std::cos(pose.roll*d2r), sr=std::sin(pose.roll*d2r);
-    double cp=std::cos(pose.pitch*d2r), sp=std::sin(pose.pitch*d2r);
+    // Matches StewartKinematics::solve()'s rig-frame swap: surge/sway and
+    // roll/pitch are swapped-and-negated versus the Pose convention.
+    double roll = -pose.pitch, pitch = -pose.roll;
+    double cr=std::cos(roll*d2r), sr=std::sin(roll*d2r);
+    double cp=std::cos(pitch*d2r), sp=std::sin(pitch*d2r);
     double cy=std::cos(pose.yaw*d2r), sy=std::sin(pose.yaw*d2r);
     double px=G.platformRadius*std::cos(psi), py=G.platformRadius*std::sin(psi), pz=0.0;
     double ax=px, ay=cr*py - sr*pz, az=sr*py + cr*pz;
     double bx=cp*ax + sp*az, by=ay, bz=-sp*ax + cp*az;
-    double qx=cy*bx - sy*by + pose.surge;
-    double qy=sy*bx + cy*by + pose.sway;
+    double qx=cy*bx - sy*by + (-pose.sway);
+    double qy=sy*bx + cy*by + (-pose.surge);
     double qz=bz + K.homeHeight() + pose.heave;
     double dx=qx-hx, dy=qy-hy, dz=qz-hz;
     return std::sqrt(dx*dx+dy*dy+dz*dz) - G.rodLength;

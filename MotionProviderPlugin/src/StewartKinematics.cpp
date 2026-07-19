@@ -34,9 +34,13 @@ SolveResult StewartKinematics::solve(const Pose& pose) const {
     SolveResult out{};
     out.allReachable = true;
 
-    const Vec3 origin{ pose.surge, pose.sway, z0_ + pose.heave };
-    const double roll = pose.roll * kDeg2Rad;
-    const double pitch = pose.pitch * kDeg2Rad;
+    // Rig geometry frame (phiDeg/psiDeg zero-reference) is rotated+mirrored 90deg
+    // from the Pose convention in Pose.h: swap surge/sway and roll/pitch, negate
+    // both of each swapped pair. Heave (Z) and yaw (about Z) are unaffected since
+    // they're invariant to the in-plane reference direction.
+    const Vec3 origin{ -pose.sway, -pose.surge, z0_ + pose.heave };
+    const double roll = -pose.pitch * kDeg2Rad;
+    const double pitch = -pose.roll * kDeg2Rad;
     const double yaw = pose.yaw * kDeg2Rad;
     const double s2ma2 = geo_.rodLength * geo_.rodLength - geo_.hornLength * geo_.hornLength;
 
