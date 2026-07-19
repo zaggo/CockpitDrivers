@@ -130,24 +130,10 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
         LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${CMAKE_BINARY_DIR}/output")
 endforeach()
 
-if(APPLE)
-    set(DEFAULT_XPLANE_PLUGINS_DIR "${HOME}/Library/Preferences/X-Plane 12/Resources/plugins")
-elseif(WIN32)
-    set(DEFAULT_XPLANE_PLUGINS_DIR "C:/Users/$ENV{USERNAME}/AppData/Roaming/X-Plane 12/Resources/plugins")
-elseif(UNIX AND NOT APPLE)
-    set(DEFAULT_XPLANE_PLUGINS_DIR "${HOME}/.x-plane_12/Resources/plugins")
-endif()
-if(NOT XPLANE_PLUGINS_DIR)
-    set(XPLANE_PLUGINS_DIR "${DEFAULT_XPLANE_PLUGINS_DIR}")
-endif()
-
-if(EXISTS "${XPLANE_PLUGINS_DIR}")
-    add_custom_command(TARGET MotionProvider POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:MotionProvider>
-        "${XPLANE_PLUGINS_DIR}/MotionProvider.xpl"
-        COMMENT "Copying plugin to X-Plane plugins directory")
-endif()
+# Installation is handled by the build scripts (build-macos.sh / build-windows.sh),
+# which place the artifact as the correctly-named mac.xpl / win.xpl under the
+# X-Plane fat-plugin layout (<plugins>/MotionProvider/<arch>/). No CMake
+# POST_BUILD auto-copy here - it wrote a wrongly-named MotionProvider.xpl.
 
 enable_testing()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
