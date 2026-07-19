@@ -20,6 +20,7 @@ bool MotionProvider::initialize() {
     statusWindow_ = std::make_unique<StatusWindow>();
     statusWindow_->initialize();
     statusWindow_->setCommandCallback([this](int a){ onUiAction(a); });
+    statusWindow_->setPortSelectedCallback([this](const std::string& p){ selectPort(p); });
 
     kin_ = std::make_unique<StewartKinematics>(
         MotionConfig::loadGeometry(MotionConfig::defaultPath()));

@@ -18,7 +18,7 @@ void StatusWindow::initialize() {
     params.left = 100;
     params.top = 500;
     params.right = 540;
-    params.bottom = 150;
+    params.bottom = 40;
     params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
@@ -40,6 +40,8 @@ void StatusWindow::initialize() {
         return;
     }
     lastKnownVisible_ = shouldBeVisible;
+
+    rescanPorts();
 
     pluginMenuId_ = XPLMFindPluginsMenu();
     if (pluginMenuId_) {
@@ -90,6 +92,14 @@ void StatusWindow::setCommandCallback(std::function<void(int)> cb) {
     commandCallback_ = std::move(cb);
 }
 
+void StatusWindow::setPortSelectedCallback(std::function<void(const std::string&)> cb) {
+    portSelectedCallback_ = std::move(cb);
+}
+
+void StatusWindow::rescanPorts() {
+    ports_ = enumerateSerialPorts();
+}
+
 void StatusWindow::drawCallback(XPLMWindowID inWindowID, void* inRefcon) {
     (void)inWindowID;
     StatusWindow* self = static_cast<StatusWindow*>(inRefcon);
@@ -114,7 +124,12 @@ void StatusWindow::mouseCallback(XPLMWindowID, int x, int y, XPLMMouseStatus s, 
     if (s != xplm_MouseDown) return;
     for (const Button& b : buttons_) {
         if (x >= b.left && x <= b.right && y >= b.bottom && y <= b.top) {
-            if (commandCallback_) commandCallback_(b.action);
+            if (!b.port.empty()) {
+                if (portSelectedCallback_) portSelectedCallback_(b.port);
+            } else {
+                if (b.action == UI_RESCAN_PORTS) rescanPorts();
+                if (commandCallback_) commandCallback_(b.action);
+            }
             return;
         }
     }
@@ -127,7 +142,19 @@ int StatusWindow::button(int x, int y, const std::string& label, int action,
     if (cw <= 0) cw = 7;
     if (ch <= 0) ch = 12;
     const int w = static_cast<int>(label.size()) * cw;
-    buttons_.push_back({ x, y + ch, x + w, y - 3, action });
+    buttons_.push_back({ x, y + ch, x + w, y - 3, action, "" });
+    drawString(x, y, label, r, g, b);
+    return w;
+}
+
+int StatusWindow::portButton(int x, int y, const std::string& label, const std::string& port,
+                             float r, float g, float b) {
+    int cw = 0, ch = 0;
+    XPLMGetFontDimensions(xplmFont_Basic, &cw, &ch, nullptr);
+    if (cw <= 0) cw = 7;
+    if (ch <= 0) ch = 12;
+    const int w = static_cast<int>(label.size()) * cw;
+    buttons_.push_back({ x, y + ch, x + w, y - 3, UI_RESCAN_PORTS, port });
     drawString(x, y, label, r, g, b);
     return w;
 }
@@ -150,7 +177,7 @@ void StatusWindow::draw() {
     char buf[160];
     static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
 
-    drawString(x, y, "Motion Provider v0.5 (Phase 3)", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "Motion Provider v0.6 (Phase 4)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
     // Mode toggle button
@@ -203,6 +230,34 @@ void StatusWindow::draw() {
             drawString(rx, y, "Config loaded", 0.4f, 1.0f, 0.5f);
         else
             drawString(rx, y, "No config file - using defaults", 1.0f, 0.8f, 0.3f);
+    }
+
+    y -= 22;
+    // ARM state + serial status
+    button(x, y, data_.armed ? "[ DISARM ]" : "[ ARM ]", UI_ARM_TOGGLE,
+           data_.armed ? 1.0f : 0.5f, data_.armed ? 0.4f : 1.0f, 0.4f);
+    {
+        char sb[128];
+        std::snprintf(sb, sizeof(sb), "   %s  %s  frames %llu",
+                      data_.armed ? "ARMED" : "disarmed",
+                      data_.serialConnected ? "CONNECTED" : "no link",
+                      (unsigned long long)data_.framesSent);
+        drawString(x + 90, y, sb, data_.serialConnected ? 0.6f : 0.8f,
+                   data_.serialConnected ? 1.0f : 0.7f, 0.6f);
+    }
+    y -= 18;
+    std::snprintf(buf, sizeof(buf), "port: %s",
+                  data_.serialPort.empty() ? "(none - pick below)" : data_.serialPort.c_str());
+    drawString(x, y, buf, 0.8f, 0.8f, 0.9f);
+    y -= 16;
+    int px = x;
+    px += button(px, y, "[ Rescan ]", UI_RESCAN_PORTS, 0.7f, 0.8f, 0.9f) + gap;
+    y -= 16;
+    for (const auto& p : ports_) {
+        bool sel = (p == data_.serialPort);
+        std::snprintf(buf, sizeof(buf), "%s %s", sel ? ">" : " ", p.c_str());
+        portButton(x, y, buf, p, sel ? 1.0f : 0.7f, sel ? 1.0f : 0.7f, sel ? 0.4f : 0.7f);
+        y -= 16;
     }
 }
 
