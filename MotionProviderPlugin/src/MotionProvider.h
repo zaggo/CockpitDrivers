@@ -27,7 +27,6 @@ public:
     void onUiAction(int action);   // UiAction code from a status-window button
 
 private:
-    Pose currentPose() const;      // manual pose, or the AUTO attitude placeholder
     void pushStatus();             // build a StatusData and refresh the window now
 
     std::unique_ptr<StatusWindow> statusWindow_;

@@ -1,7 +1,6 @@
 #include "MotionProvider.h"
 #include "StatusWindow.h"
 #include "DataRefManager.h"
-#include "StewartGeometry.h"
 #include "MotionConfig.h"
 #include "WashoutFilter.h"
 #include "EffectsLayer.h"
