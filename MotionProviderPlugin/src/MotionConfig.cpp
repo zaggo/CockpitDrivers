@@ -81,3 +81,45 @@ StewartGeometry MotionConfig::loadGeometry(const std::string& path, bool* outLoa
 
     return g;
 }
+
+WashoutConfig MotionConfig::loadWashout(const std::string& path) {
+    WashoutConfig w = WashoutConfig::defaults();
+    toml::table tbl;
+    try { tbl = toml::parse_file(path); } catch (const toml::parse_error&) { return w; }
+    if (auto t = tbl["washout"].as_table()) {
+        getDouble(*t, "heave_gain", w.heaveGain);
+        getDouble(*t, "heave_hp_tau", w.heaveHpTau);
+        getDouble(*t, "heave_vel_washout_tau", w.heaveVelWashoutTau);
+        getDouble(*t, "heave_pos_washout_tau", w.heavePosWashoutTau);
+        getDouble(*t, "heave_limit_mm", w.heaveLimitMm);
+        getDouble(*t, "tilt_surge_gain", w.tiltSurgeGain);
+        getDouble(*t, "tilt_sway_gain", w.tiltSwayGain);
+        getDouble(*t, "tilt_lp_tau", w.tiltLpTau);
+        getDouble(*t, "tilt_limit_deg", w.tiltLimitDeg);
+        getDouble(*t, "tilt_rate_limit_dps", w.tiltRateLimitDps);
+        getDouble(*t, "rot_roll_gain", w.rotRollGain);
+        getDouble(*t, "rot_pitch_gain", w.rotPitchGain);
+        getDouble(*t, "rot_yaw_gain", w.rotYawGain);
+        getDouble(*t, "rot_hp_tau", w.rotHpTau);
+        getDouble(*t, "rot_washout_tau", w.rotWashoutTau);
+        getDouble(*t, "rot_limit_deg", w.rotLimitDeg);
+    }
+    return w;
+}
+
+EffectsConfig MotionConfig::loadEffects(const std::string& path) {
+    EffectsConfig e = EffectsConfig::defaults();
+    toml::table tbl;
+    try { tbl = toml::parse_file(path); } catch (const toml::parse_error&) { return e; }
+    if (auto t = tbl["effects"].as_table()) {
+        getDouble(*t, "touchdown_gain", e.touchdownGain);
+        getDouble(*t, "touchdown_freq_hz", e.touchdownFreqHz);
+        getDouble(*t, "touchdown_decay_tau", e.touchdownDecayTau);
+        getDouble(*t, "rumble_gain", e.rumbleGain);
+        getDouble(*t, "rumble_freq_hz", e.rumbleFreqHz);
+        getDouble(*t, "rumble_speed_ref_mps", e.rumbleSpeedRefMps);
+        getDouble(*t, "engine_gain", e.engineGain);
+        getDouble(*t, "buffet_gain", e.buffetGain);
+    }
+    return e;
+}

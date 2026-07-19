@@ -1,5 +1,7 @@
 #include "MotionConfig.h"
 #include "StewartGeometry.h"
+#include "WashoutConfig.h"
+#include "EffectsConfig.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -64,6 +66,27 @@ int main() {
         near(g.phiDeg[0], 1.0, "int array honored phi[0]");
         near(g.phiDeg[5], 6.0, "int array honored phi[5]");
         near(g.angleAtFullScale, 60.0, "int scalar honored (angle_at_full_scale)");
+        std::remove(tmp.c_str());
+    }
+
+    // [washout] / [effects] partial override + defaults.
+    {
+        std::string tmp = tmpPath();
+        { std::ofstream f(tmp);
+          f << "[washout]\n"
+               "heave_gain = 0.9\n"
+               "tilt_limit_deg = 4\n"          // int for a double field
+               "[effects]\n"
+               "rumble_gain = 3.5\n"; }
+        WashoutConfig w = MotionConfig::loadWashout(tmp);
+        EffectsConfig e = MotionConfig::loadEffects(tmp);
+        WashoutConfig wd = WashoutConfig::defaults();
+        EffectsConfig ed = EffectsConfig::defaults();
+        near(w.heaveGain, 0.9, "washout heave_gain override");
+        near(w.tiltLimitDeg, 4.0, "washout tilt_limit_deg int override");
+        near(w.rotRollGain, wd.rotRollGain, "washout default kept");
+        near(e.rumbleGain, 3.5, "effects rumble_gain override");
+        near(e.touchdownGain, ed.touchdownGain, "effects default kept");
         std::remove(tmp.c_str());
     }
 
