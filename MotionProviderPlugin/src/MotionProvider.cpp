@@ -48,7 +48,8 @@ void MotionProvider::shutdown() {
         statusWindow_->destroy();
         statusWindow_.reset();
     }
-    if (serial_) serial_->stop(); serial_.reset();
+    if (serial_) { serial_->stop(); }
+    serial_.reset();
     safety_.reset();
     dataRefs_.reset();
     kin_.reset();
