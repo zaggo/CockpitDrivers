@@ -9,7 +9,27 @@
 #include "BffEncoder.h"
 #include "ConfigUtils.h"
 #include "XPLMUtilities.h"
+#include "XPLMPlugin.h"
 #include <cmath>
+#include <fstream>
+#include <string>
+
+namespace {
+// Resolve <plugins>/MotionProvider/configuration.toml from this plugin's own
+// .xpl path (.../MotionProvider/<arch>/mac.xpl -> strip filename + arch dir).
+// Returns "" if the API path is unusable (caller falls back to ~).
+std::string resolvePluginConfigPath() {
+    char path[512] = {0};
+    XPLMGetPluginInfo(XPLMGetMyID(), nullptr, path, nullptr, nullptr);
+    std::string p(path);
+    const size_t f = p.find_last_of("/\\");
+    if (f == std::string::npos) return "";
+    const std::string archDir = p.substr(0, f);          // .../MotionProvider/<arch>
+    const size_t a = archDir.find_last_of("/\\");
+    if (a == std::string::npos) return "";
+    return archDir.substr(0, a) + "/configuration.toml";  // .../MotionProvider/
+}
+}  // namespace
 
 MotionProvider::MotionProvider() = default;
 MotionProvider::~MotionProvider() = default;
@@ -23,13 +43,22 @@ bool MotionProvider::initialize() {
     statusWindow_->setCommandCallback([this](int a){ onUiAction(a); });
     statusWindow_->setPortSelectedCallback([this](const std::string& p){ selectPort(p); });
 
-    kin_ = std::make_unique<StewartKinematics>(
-        MotionConfig::loadGeometry(MotionConfig::defaultPath()));
+    // configuration.toml lives in the plugin directory (next to the arch folder);
+    // fall back to ~ if the plugin path can't be resolved. Seed it with defaults
+    // if it doesn't exist yet.
+    configPath_ = resolvePluginConfigPath();
+    if (configPath_.empty()) configPath_ = MotionConfig::defaultPath();
+    {
+        std::ifstream test(configPath_);
+        if (!test.good()) MotionConfig::writeDefaults(configPath_);
+    }
 
-    washout_ = std::make_unique<WashoutFilter>(MotionConfig::loadWashout(MotionConfig::defaultPath()));
-    effects_ = std::make_unique<EffectsLayer>(MotionConfig::loadEffects(MotionConfig::defaultPath()));
+    kin_ = std::make_unique<StewartKinematics>(MotionConfig::loadGeometry(configPath_));
 
-    safetyCfg_ = MotionConfig::loadSafety(MotionConfig::defaultPath());
+    washout_ = std::make_unique<WashoutFilter>(MotionConfig::loadWashout(configPath_));
+    effects_ = std::make_unique<EffectsLayer>(MotionConfig::loadEffects(configPath_));
+
+    safetyCfg_ = MotionConfig::loadSafety(configPath_);
     safety_ = std::make_unique<SafetyLimiter>(safetyCfg_);
     monitor_.setConfig(safetyCfg_);
     // Park pose = lowest reachable pose along parkHeaveMm; start disarmed there
@@ -39,7 +68,7 @@ bool MotionProvider::initialize() {
     safety_->reset(parkSolve.setpoints);
 
     serial_ = std::make_unique<SerialLink>();
-    SerialConfig sc = MotionConfig::loadSerial(MotionConfig::defaultPath());
+    SerialConfig sc = MotionConfig::loadSerial(configPath_);
     std::string lastPort = loadLastUsedPort();   // ConfigUtils (~/.motionprovider.cfg)
     if (!lastPort.empty()) {
         serial_->configure(lastPort, sc.baud, sc.rateHz);
@@ -66,7 +95,7 @@ void MotionProvider::shutdown() {
 
 void MotionProvider::reloadConfig() {
     bool loaded = false;
-    const std::string path = MotionConfig::defaultPath();
+    const std::string path = configPath_;
     kin_ = std::make_unique<StewartKinematics>(MotionConfig::loadGeometry(path, &loaded));
     if (washout_) { washout_->setConfig(MotionConfig::loadWashout(path)); washout_->reset(); }
     if (effects_) { effects_->setConfig(MotionConfig::loadEffects(path)); effects_->reset(); }
@@ -86,7 +115,7 @@ void MotionProvider::reloadConfig() {
 void MotionProvider::selectPort(const std::string& port) {
     if (!serial_) return;
     serial_->stop();
-    SerialConfig sc = MotionConfig::loadSerial(MotionConfig::defaultPath());
+    SerialConfig sc = MotionConfig::loadSerial(configPath_);
     serial_->configure(port, sc.baud, sc.rateHz);
     serial_->connect();
     saveLastUsedPort(port);      // ConfigUtils persist

@@ -90,6 +90,27 @@ int main() {
         std::remove(tmp.c_str());
     }
 
+    // writeDefaults produces a file that round-trips back to the defaults.
+    {
+        std::string tmp = tmpPath();
+        check(MotionConfig::writeDefaults(tmp), "writeDefaults succeeds");
+        bool loaded = false;
+        StewartGeometry g = MotionConfig::loadGeometry(tmp, &loaded);
+        WashoutConfig   w = MotionConfig::loadWashout(tmp);
+        SafetyConfig    s = MotionConfig::loadSafety(tmp);
+        StewartGeometry gd = StewartGeometry::defaults();
+        WashoutConfig   wd = WashoutConfig::defaults();
+        SafetyConfig    sd = SafetyConfig::defaults();
+        check(loaded, "written file parses");
+        near(g.baseRadius, gd.baseRadius, "roundtrip Rb");
+        near(g.psiDeg[1], gd.psiDeg[1], "roundtrip anchor angle (float)");
+        near(g.phiDeg[0], gd.phiDeg[0], "roundtrip base angle (int-looking)");
+        near(w.rotWashoutTau, wd.rotWashoutTau, "roundtrip washout tau");
+        near(s.parkHeaveMm, sd.parkHeaveMm, "roundtrip park heave");
+        near(s.armRampSec, sd.armRampSec, "roundtrip arm ramp");
+        std::remove(tmp.c_str());
+    }
+
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

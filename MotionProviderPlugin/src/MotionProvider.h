@@ -50,6 +50,8 @@ private:
     std::unique_ptr<SerialLink> serial_;
     std::unique_ptr<SafetyLimiter> safety_;
 
+    std::string configPath_;       // configuration.toml in the plugin dir (or ~ fallback)
+
     MotionCues latestCues_;
     SolveResult latestSolve_;
     Pose latestPose_;              // pose fed to the IK this tick (for display)

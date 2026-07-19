@@ -11,6 +11,7 @@
 #  pragma GCC diagnostic pop
 #endif
 #include <cstdlib>
+#include <fstream>
 
 namespace {
 
@@ -161,4 +162,89 @@ SafetyConfig MotionConfig::loadSafety(const std::string& path) {
         getDouble(*t, "max_dt_sec", s.maxDtSec);
     }
     return s;
+}
+
+bool MotionConfig::writeDefaults(const std::string& path) {
+    std::ofstream f(path);
+    if (!f.is_open()) return false;
+    f.precision(12);
+
+    const StewartGeometry g = StewartGeometry::defaults();
+    const WashoutConfig   w = WashoutConfig::defaults();
+    const EffectsConfig   e = EffectsConfig::defaults();
+    const SerialConfig    s = SerialConfig::defaults();
+    const SafetyConfig   sf = SafetyConfig::defaults();
+
+    auto arrD = [&](const char* key, const double v[6]) {
+        f << key << " = [" << v[0];
+        for (int i = 1; i < 6; ++i) f << ", " << v[i];
+        f << "]\n";
+    };
+    auto arrI = [&](const char* key, const int v[6]) {
+        f << key << " = [" << v[0];
+        for (int i = 1; i < 6; ++i) f << ", " << v[i];
+        f << "]\n";
+    };
+
+    f << "# MotionProviderPlugin configuration (auto-generated with default values).\n";
+    f << "# Edit values and click \"Reload config\" in the status window to apply.\n\n";
+
+    f << "[geometry]\n";
+    f << "base_radius_mm = "     << g.baseRadius     << "\n";
+    f << "platform_radius_mm = " << g.platformRadius << "\n";
+    f << "horn_length_mm = "     << g.hornLength     << "\n";
+    f << "rod_length_mm = "      << g.rodLength      << "\n";
+    arrD("base_angle_deg",   g.phiDeg);
+    arrD("anchor_angle_deg", g.psiDeg);
+    arrD("horn_azimuth_deg", g.betaDeg);
+    arrI("bff_actuator",     g.bff);
+    f << "\n[servo]\n";
+    f << "angle_at_full_scale_deg = " << g.angleAtFullScale << "\n";
+    f << "demand_home = " << g.demandHome << "\n";
+    f << "demand_max = "  << g.demandMax  << "\n";
+
+    f << "\n[washout]\n";
+    f << "heave_gain = "            << w.heaveGain          << "\n";
+    f << "heave_hp_tau = "          << w.heaveHpTau         << "\n";
+    f << "heave_vel_washout_tau = " << w.heaveVelWashoutTau << "\n";
+    f << "heave_pos_washout_tau = " << w.heavePosWashoutTau << "\n";
+    f << "heave_limit_mm = "        << w.heaveLimitMm       << "\n";
+    f << "tilt_surge_gain = "       << w.tiltSurgeGain      << "\n";
+    f << "tilt_sway_gain = "        << w.tiltSwayGain       << "\n";
+    f << "tilt_lp_tau = "           << w.tiltLpTau          << "\n";
+    f << "tilt_limit_deg = "        << w.tiltLimitDeg       << "\n";
+    f << "tilt_rate_limit_dps = "   << w.tiltRateLimitDps   << "\n";
+    f << "rot_roll_gain = "         << w.rotRollGain        << "\n";
+    f << "rot_pitch_gain = "        << w.rotPitchGain       << "\n";
+    f << "rot_yaw_gain = "          << w.rotYawGain         << "\n";
+    f << "rot_hp_tau = "            << w.rotHpTau           << "\n";
+    f << "rot_washout_tau = "       << w.rotWashoutTau      << "\n";
+    f << "rot_limit_deg = "         << w.rotLimitDeg        << "\n";
+
+    f << "\n[effects]\n";
+    f << "touchdown_gain = "       << e.touchdownGain     << "\n";
+    f << "touchdown_freq_hz = "    << e.touchdownFreqHz   << "\n";
+    f << "touchdown_decay_tau = "  << e.touchdownDecayTau << "\n";
+    f << "rumble_gain = "          << e.rumbleGain        << "\n";
+    f << "rumble_freq_hz = "       << e.rumbleFreqHz      << "\n";
+    f << "rumble_speed_ref_mps = " << e.rumbleSpeedRefMps << "\n";
+    f << "engine_gain = "          << e.engineGain        << "\n";
+    f << "buffet_gain = "          << e.buffetGain        << "\n";
+
+    f << "\n[serial]\n";
+    f << "baud = "           << s.baud   << "\n";
+    f << "output_rate_hz = " << s.rateHz << "\n";
+
+    f << "\n[safety]\n";
+    f << "max_velocity_cps = "      << sf.maxVelocity     << "\n";
+    f << "max_acceleration_cps2 = " << sf.maxAcceleration << "\n";
+    f << "park_heave_mm = "         << sf.parkHeaveMm     << "\n";
+    f << "arm_ramp_sec = "          << sf.armRampSec      << "\n";
+    f << "disarm_ramp_sec = "       << sf.disarmRampSec   << "\n";
+    f << "runaway_tilt_deg = "      << sf.runawayTiltDeg  << "\n";
+    f << "runaway_trans_mm = "      << sf.runawayTransMm  << "\n";
+    f << "runaway_hold_sec = "      << sf.runawayHoldSec  << "\n";
+    f << "max_dt_sec = "            << sf.maxDtSec        << "\n";
+
+    return f.good();
 }

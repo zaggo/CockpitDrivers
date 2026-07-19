@@ -7,8 +7,13 @@
 #include "SafetyConfig.h"
 
 namespace MotionConfig {
-    // Full path to the tuning config (~/.motionprovider.toml).
+    // Fallback path if the plugin directory can't be resolved (~/.motionprovider.toml).
     std::string defaultPath();
+
+    // Write a complete configuration.toml (all sections, all default values) to
+    // `path`. Used to seed the file when none exists. Returns false if the file
+    // could not be written. XPLM-free (std::ofstream only).
+    bool writeDefaults(const std::string& path);
 
     // Load geometry from a TOML file. Missing file or parse error -> defaults();
     // individual absent keys fall back to their default value. Numeric fields

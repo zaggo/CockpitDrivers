@@ -22,6 +22,10 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
     std::strcpy(outSig,  "com.pleasantsoftware.motion.provider");
     std::strcpy(outDesc, "6DOF Motion Platform Cueing - X-Plane Plugin");
 
+    // Native (OS-style) paths, so XPLMGetPluginInfo returns POSIX/Windows paths
+    // (not legacy ':'-separated macOS paths) for the config-file location.
+    XPLMEnableFeature("XPLMUseNativePaths", 1);
+
     gProvider = std::make_unique<MotionProvider>();
     if (!gProvider->initialize()) {
         XPLMDebugString("MotionProvider: Failed to initialize\n");
