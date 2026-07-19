@@ -8,13 +8,14 @@
 // Clickable UI actions the status window emits (via the command callback).
 enum UiAction {
     UI_RELOAD = 0,
-    UI_TOGGLE_MODE,
     UI_NEXT_AXIS,
     UI_NUDGE_MINUS,
     UI_NUDGE_PLUS,
     UI_RESET,
-    UI_ARM_TOGGLE,
-    UI_RESCAN_PORTS
+    UI_RESCAN_PORTS,
+    UI_ARM,       // arm in AUTO (washout+effects)
+    UI_MANUAL,    // arm in MANUAL (hand-set pose)
+    UI_DISARM
 };
 
 // Everything the status window renders in one snapshot.

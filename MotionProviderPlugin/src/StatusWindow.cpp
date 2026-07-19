@@ -182,13 +182,57 @@ void StatusWindow::draw() {
     drawString(x, y, "Motion Provider v0.7 (Phase 5)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
-    // Mode toggle button
-    button(x, y, data_.manualMode ? "[ Switch to AUTO ]" : "[ Switch to MANUAL ]",
-           UI_TOGGLE_MODE, 0.7f, 0.9f, 1.0f);
+    // ---- ARM / MANUAL / DISARM: single 3-button control ----
+    // Active state = yellow (not clickable); clickable = cyan; disabled = grey.
+    // ARM/MANUAL enabled only when fully disarmed; DISARM enabled otherwise.
+    const int  st        = data_.armState;              // 0 Disarmed,1 Arming,2 Armed,3 Disarming
+    const bool disarmed  = (st == 0);
+    const bool armedish  = (st == 1 || st == 2);        // live (arming or armed)
+    const bool armActive = armedish && !data_.manualMode;
+    const bool manActive = armedish &&  data_.manualMode;
+    const bool disActive = (st == 0 || st == 3);
+    auto stateBtn = [&](int bx, const char* label, int action, bool active, bool enabled) -> int {
+        float r, g, b;
+        if (active)       { r = 1.0f;  g = 0.85f; b = 0.2f; }   // yellow = current state
+        else if (enabled) { r = 0.7f;  g = 0.9f;  b = 1.0f; }   // cyan = clickable
+        else              { r = 0.45f; g = 0.45f; b = 0.5f; }   // grey = disabled
+        if (enabled && !active) return button(bx, y, label, action, r, g, b);
+        drawString(bx, y, label, r, g, b);                      // static (active/disabled)
+        return static_cast<int>(std::string(label).size()) * cw;
+    };
+    {
+        int bx = x;
+        bx += stateBtn(bx, "[ ARM ]",    UI_ARM,    armActive, disarmed) + gap;
+        bx += stateBtn(bx, "[ MANUAL ]", UI_MANUAL, manActive, disarmed) + gap;
+        stateBtn(bx, "[ DISARM ]", UI_DISARM, disActive, !disarmed);
+    }
     y -= 18;
 
-    // Manual controls (only meaningful in MANUAL mode)
-    if (data_.manualMode) {
+    // State + serial status line.
+    {
+        char stateStr[40];
+        if (disarmed)              std::snprintf(stateStr, sizeof(stateStr), "disarmed (park)");
+        else if (st == 3)          std::snprintf(stateStr, sizeof(stateStr), "DISARMING %.0f%%", data_.armBlend * 100.0f);
+        else if (data_.manualMode) { if (st == 1) std::snprintf(stateStr, sizeof(stateStr), "MANUAL arming %.0f%%", data_.armBlend * 100.0f);
+                                     else          std::snprintf(stateStr, sizeof(stateStr), "MANUAL"); }
+        else                       { if (st == 1) std::snprintf(stateStr, sizeof(stateStr), "ARMING %.0f%%", data_.armBlend * 100.0f);
+                                     else          std::snprintf(stateStr, sizeof(stateStr), "ARMED"); }
+        char sb[128];
+        std::snprintf(sb, sizeof(sb), "%s   %s   frames %llu", stateStr,
+                      data_.serialConnected ? "CONNECTED" : "no link",
+                      (unsigned long long)data_.framesSent);
+        drawString(x, y, sb, data_.serialConnected ? 0.6f : 0.8f,
+                   data_.serialConnected ? 1.0f : 0.7f, 0.6f);
+    }
+    y -= 16;
+
+    if (data_.faultCode != 0) {
+        drawString(x, y, data_.faultReason.c_str(), 1.0f, 0.3f, 0.3f);
+        y -= 16;
+    }
+
+    // Manual DOF controls (only when armed in MANUAL).
+    if (manActive) {
         std::snprintf(buf, sizeof(buf), "[ Axis: %s ]", kAxis[data_.manualAxis]);
         int bx = x;
         bx += button(bx, y, buf, UI_NEXT_AXIS, 1.0f, 0.9f, 0.5f) + gap;
@@ -196,13 +240,9 @@ void StatusWindow::draw() {
         bx += button(bx, y, "[ + ]", UI_NUDGE_PLUS, 0.9f, 0.9f, 0.6f) + gap;
         button(bx, y, "[ Reset ]", UI_RESET, 0.9f, 0.7f, 0.6f);
         y -= 16;
-    } else {
-        drawString(x, y, "AUTO: washout + effects motion cueing",
-                   0.7f, 0.8f, 0.9f);
-        y -= 16;
     }
 
-    // Commanded pose fed to the IK (what actually moves), both modes.
+    // Commanded pose fed to the IK (what actually moves).
     const Pose& cp = data_.commandedPose;
     std::snprintf(buf, sizeof(buf),
         "cmd  x%+.1f y%+.1f z%+.1f mm | r%+.1f p%+.1f w%+.1f deg",
@@ -224,48 +264,21 @@ void StatusWindow::draw() {
         y -= 16;
     }
 
-    // Reload button + transient confirmation
+    // Reload button + transient confirmation.
     y -= 4;
     int rx = x + button(x, y, "[ Reload config ]", UI_RELOAD, 0.7f, 0.9f, 0.9f) + gap;
     if (data_.reloadFlash) {
-        if (data_.lastReloadOk)
-            drawString(rx, y, "Config loaded", 0.4f, 1.0f, 0.5f);
-        else
-            drawString(rx, y, "No config file - using defaults", 1.0f, 0.8f, 0.3f);
-    }
-
-    y -= 22;
-    // ARM state + serial status. armState: 0 Disarmed,1 Arming,2 Armed,3 Disarming.
-    const bool live = (data_.armState == 1 || data_.armState == 2);  // arming/armed
-    button(x, y, live ? "[ DISARM ]" : "[ ARM ]", UI_ARM_TOGGLE,
-           live ? 1.0f : 0.5f, live ? 0.4f : 1.0f, 0.4f);
-    {
-        char stateStr[32];
-        switch (data_.armState) {
-            case 1: std::snprintf(stateStr, sizeof(stateStr), "ARMING %.0f%%", data_.armBlend * 100.0f); break;
-            case 2: std::snprintf(stateStr, sizeof(stateStr), "ARMED"); break;
-            case 3: std::snprintf(stateStr, sizeof(stateStr), "DISARMING %.0f%%", data_.armBlend * 100.0f); break;
-            default: std::snprintf(stateStr, sizeof(stateStr), "disarmed (park)"); break;
-        }
-        char sb[128];
-        std::snprintf(sb, sizeof(sb), "   %s  %s  frames %llu",
-                      stateStr,
-                      data_.serialConnected ? "CONNECTED" : "no link",
-                      (unsigned long long)data_.framesSent);
-        drawString(x + 90, y, sb, data_.serialConnected ? 0.6f : 0.8f,
-                   data_.serialConnected ? 1.0f : 0.7f, 0.6f);
+        if (data_.lastReloadOk) drawString(rx, y, "Config loaded", 0.4f, 1.0f, 0.5f);
+        else                    drawString(rx, y, "No config file - using defaults", 1.0f, 0.8f, 0.3f);
     }
     y -= 18;
-    if (data_.faultCode != 0) {
-        drawString(x, y, data_.faultReason.c_str(), 1.0f, 0.3f, 0.3f);
-        y -= 16;
-    }
+
+    // Serial port chooser.
     std::snprintf(buf, sizeof(buf), "port: %s",
                   data_.serialPort.empty() ? "(none - pick below)" : data_.serialPort.c_str());
     drawString(x, y, buf, 0.8f, 0.8f, 0.9f);
     y -= 16;
-    int px = x;
-    px += button(px, y, "[ Rescan ]", UI_RESCAN_PORTS, 0.7f, 0.8f, 0.9f) + gap;
+    button(x, y, "[ Rescan ]", UI_RESCAN_PORTS, 0.7f, 0.8f, 0.9f);
     y -= 16;
     for (const auto& p : ports_) {
         bool sel = (p == data_.serialPort);

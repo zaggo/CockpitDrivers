@@ -98,10 +98,24 @@ void MotionProvider::onUiAction(int action) {
     const float kRotStep   = 0.5f;   // deg
     switch (action) {
         case UI_RELOAD:      reloadConfig(); break;
-        case UI_TOGGLE_MODE:
-            manualMode_ = !manualMode_;
-            if (!manualMode_ && washout_ && effects_) { washout_->reset(); effects_->reset(); }
+        case UI_ARM:
+            // ARM in AUTO — only from a fully-disarmed state.
+            if (armRamp_.state() == ArmState::Disarmed) {
+                if (monitor_.fault() != FaultCode::None) monitor_.clear();
+                manualMode_ = false;
+                if (washout_ && effects_) { washout_->reset(); effects_->reset(); }
+                armRamp_.toggle();   // -> Arming
+            }
             break;
+        case UI_MANUAL:
+            // ARM in MANUAL — only from a fully-disarmed state.
+            if (armRamp_.state() == ArmState::Disarmed) {
+                if (monitor_.fault() != FaultCode::None) monitor_.clear();
+                manualMode_ = true;
+                armRamp_.toggle();   // -> Arming (blends park -> manual pose)
+            }
+            break;
+        case UI_DISARM:      armRamp_.requestDisarm(); break;
         case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 6; break;
         case UI_RESET:       manualPose_ = Pose{}; break;
         case UI_NUDGE_PLUS:
@@ -117,10 +131,6 @@ void MotionProvider::onUiAction(int action) {
             }
             break;
         }
-        case UI_ARM_TOGGLE:
-            if (monitor_.fault() != FaultCode::None) monitor_.clear();  // ARM clears + re-arms
-            armRamp_.toggle();
-            break;
         case UI_RESCAN_PORTS: /* window rescans; nothing to do here */ break;
         default: break;
     }
