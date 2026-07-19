@@ -1,5 +1,15 @@
 #include "MotionConfig.h"
+// toml++ (vendored) trips -Wdeprecated-literal-operator on newer clang/gcc in
+// its own headers. Silence it just for this include; don't edit the vendored
+// file (it's a local, re-vendorable copy). MSVC ignores the unknown pragma.
+#if defined(__clang__) || defined(__GNUC__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wdeprecated-literal-operator"
+#endif
 #include "toml.hpp"
+#if defined(__clang__) || defined(__GNUC__)
+#  pragma GCC diagnostic pop
+#endif
 #include <cstdlib>
 
 namespace {
