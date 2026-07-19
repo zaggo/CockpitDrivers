@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cstdint>
+#include <algorithm>
 
 static int g_failures = 0, g_checks = 0;
 static void check(bool c, const char* w){ ++g_checks; if(!c){++g_failures; std::printf("  FAIL: %s\n", w);} }
