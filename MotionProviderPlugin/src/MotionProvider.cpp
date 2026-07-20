@@ -132,6 +132,10 @@ void MotionProvider::onUiAction(int action) {
     const float kRotStep   = 0.5f;   // deg
     switch (action) {
         case UI_RELOAD:      reloadConfig(); break;
+        case UI_TOGGLE_MODE:
+            // Switch SIM <-> MANUAL only while fully disarmed (avoids a pose jump).
+            if (armRamp_.state() == ArmState::Disarmed) manualMode_ = !manualMode_;
+            break;
         case UI_DISARM:      armRamp_.requestDisarm(); armGate_.latchDisarm(); break;
         case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 7; break;  // 6 = Identify
         case UI_RESET:

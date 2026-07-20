@@ -13,9 +13,8 @@ enum UiAction {
     UI_NUDGE_PLUS,
     UI_RESET,
     UI_RESCAN_PORTS,
-    UI_ARM,       // arm in AUTO (washout+effects)
-    UI_MANUAL,    // arm in MANUAL (hand-set pose)
-    UI_DISARM
+    UI_TOGGLE_MODE,   // toggle SIM <-> MANUAL (only while disarmed)
+    UI_DISARM         // manual e-stop
 };
 
 // Everything the status window renders in one snapshot.

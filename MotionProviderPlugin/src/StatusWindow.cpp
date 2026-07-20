@@ -182,29 +182,30 @@ void StatusWindow::draw() {
     drawString(x, y, "Motion Provider v0.7 (Phase 5)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
-    // ---- ARM / MANUAL / DISARM: single 3-button control ----
-    // Active state = yellow (not clickable); clickable = cyan; disabled = grey.
-    // ARM/MANUAL enabled only when fully disarmed; DISARM enabled otherwise.
-    const int  st        = data_.armState;              // 0 Disarmed,1 Arming,2 Armed,3 Disarming
-    const bool disarmed  = (st == 0);
-    const bool armedish  = (st == 1 || st == 2);        // live (arming or armed)
-    const bool armActive = armedish && !data_.manualMode;
-    const bool manActive = armedish &&  data_.manualMode;
-    const bool disActive = (st == 0 || st == 3);
-    auto stateBtn = [&](int bx, const char* label, int action, bool active, bool enabled) -> int {
-        float r, g, b;
-        if (active)       { r = 1.0f;  g = 0.85f; b = 0.2f; }   // yellow = current state
-        else if (enabled) { r = 0.7f;  g = 0.9f;  b = 1.0f; }   // cyan = clickable
-        else              { r = 0.45f; g = 0.45f; b = 0.5f; }   // grey = disabled
-        if (enabled && !active) return button(bx, y, label, action, r, g, b);
-        drawString(bx, y, label, r, g, b);                      // static (active/disabled)
-        return static_cast<int>(std::string(label).size()) * cw;
-    };
+    // ---- Mode toggle (SIM/MANUAL, disarmed only) + DISARM e-stop ----
+    // Arming is driven by the hardware switch; the UI only chooses the mode to
+    // arm into and offers a software e-stop. Active/static = yellow; clickable =
+    // cyan; disabled = grey.
+    const int  st       = data_.armState;   // 0 Disarmed,1 Arming,2 Armed,3 Disarming
+    const bool disarmed = (st == 0);
+    const bool armedish = (st == 1 || st == 2);
+    const bool manActive = armedish && data_.manualMode;   // used by manual DOF UI below
     {
         int bx = x;
-        bx += stateBtn(bx, "[ ARM ]",    UI_ARM,    armActive, disarmed) + gap;
-        bx += stateBtn(bx, "[ MANUAL ]", UI_MANUAL, manActive, disarmed) + gap;
-        stateBtn(bx, "[ DISARM ]", UI_DISARM, disActive, !disarmed);
+        // Mode toggle: clickable only while disarmed.
+        const char* modeLabel = data_.manualMode ? "[ MANUAL ]" : "[ SIM ]";
+        if (disarmed) {
+            bx += button(bx, y, modeLabel, UI_TOGGLE_MODE, 0.7f, 0.9f, 1.0f) + gap;
+        } else {
+            drawString(bx, y, modeLabel, 1.0f, 0.85f, 0.2f);   // yellow = locked-in mode
+            bx += static_cast<int>(std::string(modeLabel).size()) * cw + gap;
+        }
+        // DISARM e-stop: clickable whenever not fully disarmed.
+        if (!disarmed) {
+            button(bx, y, "[ DISARM ]", UI_DISARM, 0.7f, 0.9f, 1.0f);
+        } else {
+            drawString(bx, y, "[ DISARM ]", 0.45f, 0.45f, 0.5f);  // grey = disabled
+        }
     }
     y -= 18;
 
