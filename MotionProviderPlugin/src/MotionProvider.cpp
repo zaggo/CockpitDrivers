@@ -18,6 +18,7 @@ namespace {
 constexpr double kIdentifyAmpDeg    = 5.0;   // jitter amplitude, deg
 constexpr double kIdentifyPeriodSec = 1.0;   // jitter period
 constexpr double kTwoPi = 6.28318530717958647692;
+constexpr double kHeartbeatMaxAgeSec = 1.5;   // 3x the gateway's 500ms send period
 
 // Resolve <plugins>/MotionProvider/configuration.toml from this plugin's own
 // .xpl path (.../MotionProvider/<arch>/mac.xpl -> strip filename + arch dir).
@@ -131,24 +132,7 @@ void MotionProvider::onUiAction(int action) {
     const float kRotStep   = 0.5f;   // deg
     switch (action) {
         case UI_RELOAD:      reloadConfig(); break;
-        case UI_ARM:
-            // ARM in AUTO — only from a fully-disarmed state.
-            if (armRamp_.state() == ArmState::Disarmed) {
-                if (monitor_.fault() != FaultCode::None) monitor_.clear();
-                manualMode_ = false;
-                if (washout_ && effects_) { washout_->reset(); effects_->reset(); }
-                armRamp_.toggle();   // -> Arming
-            }
-            break;
-        case UI_MANUAL:
-            // ARM in MANUAL — only from a fully-disarmed state.
-            if (armRamp_.state() == ArmState::Disarmed) {
-                if (monitor_.fault() != FaultCode::None) monitor_.clear();
-                manualMode_ = true;
-                armRamp_.toggle();   // -> Arming (blends park -> manual pose)
-            }
-            break;
-        case UI_DISARM:      armRamp_.requestDisarm(); break;
+        case UI_DISARM:      armRamp_.requestDisarm(); armGate_.latchDisarm(); break;
         case UI_NEXT_AXIS:   manualAxis_ = (manualAxis_ + 1) % 7; break;  // 6 = Identify
         case UI_RESET:
             if (manualAxis_ == 6) identifyLeg_ = 0;
@@ -243,7 +227,22 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         std::isfinite(rawLive.heave) && std::isfinite(rawLive.roll) &&
         std::isfinite(rawLive.pitch) && std::isfinite(rawLive.yaw);
     monitor_.update(rawLive, finite, serialLost, dt);
-    if (monitor_.fault() != FaultCode::None) armRamp_.requestDisarm();  // home-on-fault (latched)
+    // Hardware arm switch: fresh heartbeat AND armed. A fault or e-stop latches
+    // disarm (ArmGate) until the switch is cycled off.
+    const bool hwArmed = serial_ &&
+                         serial_->heartbeatFresh(kHeartbeatMaxAgeSec) &&
+                         serial_->heartbeatArmed();
+    if (armGate_.update(hwArmed)) monitor_.clear();   // switch cycled off -> reset latch + fault
+    if (monitor_.fault() != FaultCode::None) armGate_.latchDisarm();  // home-on-fault (latched)
+
+    const bool armIntent = hwArmed && !armGate_.latched();
+    if (armIntent && armRamp_.state() == ArmState::Disarmed) {
+        // Rising edge into an auto (SIM) arm: reset the stateful filters so the
+        // ramp starts from a clean pose. Manual mode has no filters to reset.
+        if (!manualMode_ && washout_ && effects_) { washout_->reset(); effects_->reset(); }
+    }
+    if (armIntent) armRamp_.requestArm();
+    else           armRamp_.requestDisarm();
 
     // Arm ramp + pose-space blend -> IK.
     armRamp_.update(dt, safetyCfg_.armRampSec, safetyCfg_.disarmRampSec);

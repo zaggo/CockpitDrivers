@@ -10,6 +10,7 @@
 #include "SafetyLimiter.h"
 #include "SafetyConfig.h"
 #include "ArmRamp.h"
+#include "ArmGate.h"
 #include "BffEncoder.h"
 #include "SafetyMonitor.h"
 
@@ -69,6 +70,7 @@ private:
 
     // Serial + safety (arm/disarm soft-start in pose space)
     ArmRamp armRamp_;
+    ArmGate armGate_;
     SafetyConfig safetyCfg_;       // cached for ramp durations
     Pose parkPose_;                // low, level park pose (reachable)
     uint16_t sentSetpoints_[6] = {32640,32640,32640,32640,32640,32640};
