@@ -43,9 +43,11 @@ MotionGateway::MotionGateway(CAN *canBus) : canBus(canBus)
 
   lastModeCheckTimestampMs = millis() - 200;
   lastDemandBatchSendTimestampMs = millis() - kDemandBatchIntervalMs;
+  lastUsbHeartbeatTimestampMs = millis();
 
   pinMode(kMode1Pin, INPUT_PULLUP);
   pinMode(kMode2Pin, INPUT_PULLUP);
+  pinMode(kArmPin, INPUT_PULLUP);
 
   for (uint8_t i = 0; i < kActorNodeCount; ++i)
   {
@@ -98,6 +100,12 @@ void MotionGateway::loop()
 
   // Check for maxAge resync
   checkMaxAgeResync();
+
+  if ((now - lastUsbHeartbeatTimestampMs) >= kUsbHeartbeatIntervalMs)
+  {
+    lastUsbHeartbeatTimestampMs = now;
+    sendUsbHeartbeat();
+  }
 
   handleSerialInput();
 }
@@ -355,4 +363,11 @@ void MotionGateway::sendStop()
     data[0] = i + 1; // nodeId
     canBus->sendMessage(MotionMessageId::actorPairStop, 8, data);
   }
+}
+
+void MotionGateway::sendUsbHeartbeat()
+{
+  const uint8_t armed = (digitalRead(kArmPin) == LOW) ? 0x01 : 0x00;
+  const uint8_t frame[4] = {'H', 'B', armed, 0x0D};
+  Serial.write(frame, sizeof(frame));
 }

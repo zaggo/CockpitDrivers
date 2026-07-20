@@ -45,10 +45,12 @@ class MotionGateway {
 
         void sendHome();
         void sendStop();
+        void sendUsbHeartbeat();
 
         MotionMode mode = MotionMode::mode0;
         unsigned long lastModeCheckTimestampMs = 0;
         unsigned long lastDemandBatchSendTimestampMs = 0;
+        unsigned long lastUsbHeartbeatTimestampMs = 0;
 
         // Actor mappings for different modes (6 actors)
         static const ActorMapping actorMappingMode1[6];
