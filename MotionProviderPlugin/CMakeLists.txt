@@ -55,6 +55,7 @@ set(SOURCES
     src/SerialPort.cpp
     src/SerialPortUtils.cpp
     src/BffEncoder.cpp
+    src/HeartbeatDecoder.cpp
     src/SerialLink.cpp
     src/SafetyLimiter.cpp
     src/SafetyMonitor.cpp
@@ -77,6 +78,7 @@ set(HEADERS
     src/SerialPort.h
     src/SerialPortUtils.h
     src/BffEncoder.h
+    src/HeartbeatDecoder.h
     src/SerialConfig.h
     src/SerialLink.h
     src/SafetyConfig.h
