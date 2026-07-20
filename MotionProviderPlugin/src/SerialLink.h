@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <cstdint>
+#include "HeartbeatDecoder.h"
 
 // TX-only serial streamer. A dedicated I/O thread writes the latest frame at a
 // fixed rate and never touches the flight-loop thread. update(dt) (called from
@@ -30,11 +31,14 @@ public:
     bool isConnected() const { return connected_.load(); }
     uint64_t framesSent() const { return frames_.load(); }
     std::string port() const { return port_; }
+    bool heartbeatArmed() const { return hbArmed_.load(); }
+    bool heartbeatFresh(double maxAgeSec) const;
 
 private:
     void startIoThread();
     void stopIoThread();
     void ioThreadLoop();
+    void rxThreadLoop();
 
     SerialPort serial_;
     std::string port_;
@@ -45,6 +49,11 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> connected_{false};
     std::atomic<uint64_t> frames_{0};
+
+    std::thread rxThread_;
+    HeartbeatDecoder rxDecoder_;                 // touched only by the RX thread
+    std::atomic<bool> hbArmed_{false};
+    std::atomic<long long> hbLastMicros_{0};     // steady_clock micros of last valid frame; 0 = never
 
     std::mutex frameMutex_;
     uint8_t frame_[BffEncoder::kFrameSize] = {0};

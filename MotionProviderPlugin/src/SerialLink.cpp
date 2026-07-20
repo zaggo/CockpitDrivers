@@ -32,12 +32,19 @@ void SerialLink::startIoThread() {
     running_.store(true);
     connected_.store(true);
     ioThread_ = std::thread(&SerialLink::ioThreadLoop, this);
+    if (rxThread_.joinable()) rxThread_.join();  // reap a self-exited RX thread
+    rxDecoder_.reset();
+    rxThread_ = std::thread(&SerialLink::rxThreadLoop, this);
 }
 
 void SerialLink::stopIoThread() {
     if (ioThread_.joinable()) {
         running_.store(false);
         ioThread_.join();
+    }
+    if (rxThread_.joinable()) {
+        running_.store(false);
+        rxThread_.join();
     }
 }
 
@@ -66,6 +73,33 @@ void SerialLink::ioThreadLoop() {
         std::this_thread::sleep_for(period);
     }
     connected_.store(false);  // port dropped or stopped; update() will reconnect
+}
+
+void SerialLink::rxThreadLoop() {
+    uint8_t buf[64];
+    while (running_.load(std::memory_order_relaxed) && serial_.isOpen()) {
+        // Blocks up to SerialPort's internal read timeout (~20ms), then returns
+        // whatever arrived (0 on timeout). Low-CPU wait, not a busy-poll.
+        const std::size_t n = serial_.readBlocking(buf, sizeof(buf));
+        for (std::size_t i = 0; i < n; ++i) {
+            if (rxDecoder_.feed(buf[i])) {
+                hbArmed_.store(rxDecoder_.armed(), std::memory_order_relaxed);
+                const auto now = std::chrono::steady_clock::now().time_since_epoch();
+                const long long us =
+                    std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+                hbLastMicros_.store(us, std::memory_order_relaxed);
+            }
+        }
+    }
+}
+
+bool SerialLink::heartbeatFresh(double maxAgeSec) const {
+    const long long last = hbLastMicros_.load(std::memory_order_relaxed);
+    if (last == 0) return false;   // never received one
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const long long us =
+        std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+    return (us - last) <= static_cast<long long>(maxAgeSec * 1e6);
 }
 
 void SerialLink::update(float dt) {
