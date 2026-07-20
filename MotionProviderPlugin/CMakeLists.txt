@@ -85,6 +85,7 @@ set(HEADERS
     src/SafetyLimiter.h
     src/SafetyMonitor.h
     src/ArmRamp.h
+    src/ArmGate.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})
