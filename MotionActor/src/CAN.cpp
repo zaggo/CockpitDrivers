@@ -119,6 +119,24 @@ void CAN::loop()
 
         handleFrame(static_cast<MotionMessageId>(rxId), ext, len, buf);
     }
+
+    // Apply the newest coalesced demand outside the drain loop; setDemands() blocks on
+    // the Kangaroo serial round-trip.
+    if (demandPending)
+    {
+        demandPending = false;
+        motionActor->setDemands(pendingDemand1, pendingDemand2);
+    }
+}
+
+void CAN::resetHeartbeatClocks()
+{
+    // Called after a long blocking operation (homing takes seconds). Grant the gateway a
+    // fresh timeout window instead of tripping on the stale timestamp, and reschedule our
+    // own heartbeat so the catch-up logic doesn't fire a burst of frames.
+    const uint32_t now = millis();
+    lastGatewayHeartbeat = now;
+    lastActorHeartbeat = now + (uint32_t)fwInfo.nodeId * 20;
 }
 
 void CAN::sendActorHeartbeat()
@@ -203,10 +221,12 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
     {
         if (len >= 8 && data[0] == static_cast<uint8_t>(kNodeId))
         {
-            const uint16_t demand1 = (static_cast<uint16_t>(data[1]) << 8) | static_cast<uint16_t>(data[2]);
-            const uint16_t demand2 = (static_cast<uint16_t>(data[3]) << 8) | static_cast<uint16_t>(data[4]);
-            DEBUGLOG_PRINTLN(String(F("Received demands: ")) + demand1 + ", " + demand2);
-            motionActor->setDemands(demand1, demand2);
+            // Coalesce: only remember the newest demand here. setDemands() blocks on the
+            // Kangaroo serial round-trip, which must not happen inside the RX drain loop.
+            pendingDemand1 = (static_cast<uint16_t>(data[1]) << 8) | static_cast<uint16_t>(data[2]);
+            pendingDemand2 = (static_cast<uint16_t>(data[3]) << 8) | static_cast<uint16_t>(data[4]);
+            demandPending = true;
+            DEBUGLOG_PRINTLN(String(F("Received demands: ")) + pendingDemand1 + ", " + pendingDemand2);
         }
         break;
     }
@@ -217,7 +237,9 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
         if (len >= 1 && data[0] == static_cast<uint8_t>(kNodeId))
         {
             DEBUGLOG_PRINTLN(F("Received home command"));
+            demandPending = false; // drop any demand queued before homing
             motionActor->home();
+            resetHeartbeatClocks();
         }
         break;
     case MotionMessageId::actorPairStop:

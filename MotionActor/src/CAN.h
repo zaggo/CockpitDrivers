@@ -25,6 +25,14 @@ private:
     void onGatewayHeartbeatTimeout();
     void onGatewayHeartbeatDiscovered();
     void updateStatusLeds();
+    void resetHeartbeatClocks();
+
+    // Latest demand seen while draining RX frames. Applied once per loop() pass so the
+    // blocking Kangaroo serial round-trip never runs inside the drain loop (RX overflow
+    // there drops gateway heartbeats).
+    bool demandPending = false;
+    uint16_t pendingDemand1 = 0;
+    uint16_t pendingDemand2 = 0;
 
     // Heartbeat monitoring
     uint32_t lastGatewayHeartbeat = 0;
