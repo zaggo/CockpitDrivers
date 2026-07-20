@@ -21,6 +21,12 @@ public:
         if (state_ != ArmState::Disarmed) state_ = ArmState::Disarming;
     }
 
+    // Force a ramp-up to the live pose (symmetric to requestDisarm).
+    void requestArm() {
+        if (state_ == ArmState::Disarmed || state_ == ArmState::Disarming)
+            state_ = ArmState::Arming;
+    }
+
     void update(double dt, double armRampSec, double disarmRampSec) {
         if (dt < 0.0) dt = 0.0;
         switch (state_) {
