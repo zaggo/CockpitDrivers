@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 #define BENCHDEBUG 0          
-#define DEBUGLOG_ENABLE 1     // Set to 1 to enable debug logging, 0 to disable
+#define DEBUGLOG_ENABLE 0     // Set to 1 to enable debug logging, 0 to disable
 
 const uint32_t kHeartbeatInterval = 1000L; // 1 second
 static const unsigned long kSerialProcessingBudgetMs = 100;
