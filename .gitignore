@@ -8,6 +8,3 @@ etc/Unrepo/
 
 # subagent-driven-development scratch (briefs, reports, ledger)
 .superpowers/
-
-# vendored single-header toml++ (user supplies locally)
-MotionProviderPlugin/third_party/tomlplusplus/toml.hpp
