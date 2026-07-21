@@ -36,4 +36,6 @@ struct StatusData {
     bool        serialConnected = false;
     unsigned long long framesSent = 0;
     std::string serialPort;         // empty = none selected
+    bool        heartbeatPresent = false;  // fresh arm heartbeat from the gateway
+    bool        heartbeatArmed = false;    // last decoded arm-switch state (valid if present)
 };

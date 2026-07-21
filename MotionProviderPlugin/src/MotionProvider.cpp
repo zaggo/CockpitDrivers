@@ -192,6 +192,8 @@ void MotionProvider::pushStatus() {
     sd.serialConnected = serial_ && serial_->isConnected();
     sd.framesSent = serial_ ? serial_->framesSent() : 0;
     sd.serialPort = serial_ ? serial_->port() : std::string();
+    sd.heartbeatPresent = serial_ && serial_->heartbeatFresh(kHeartbeatMaxAgeSec);
+    sd.heartbeatArmed = serial_ && serial_->heartbeatArmed();
     statusWindow_->update(sd);
 }
 

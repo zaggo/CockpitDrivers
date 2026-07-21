@@ -227,6 +227,20 @@ void StatusWindow::draw() {
     }
     y -= 16;
 
+    // Gateway arm-switch heartbeat indicator. Green = fresh heartbeat received
+    // (shows the switch state); red = none/stale (no gateway link on the RX side).
+    {
+        char hb[64];
+        if (data_.heartbeatPresent)
+            std::snprintf(hb, sizeof(hb), "gateway HB: RX  (switch %s)",
+                          data_.heartbeatArmed ? "ARMED" : "disarmed");
+        else
+            std::snprintf(hb, sizeof(hb), "gateway HB: none");
+        drawString(x, y, hb, data_.heartbeatPresent ? 0.6f : 1.0f,
+                   data_.heartbeatPresent ? 1.0f : 0.4f, data_.heartbeatPresent ? 0.6f : 0.4f);
+    }
+    y -= 16;
+
     if (data_.faultCode != 0) {
         drawString(x, y, data_.faultReason.c_str(), 1.0f, 0.3f, 0.3f);
         y -= 16;
