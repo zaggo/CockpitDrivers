@@ -51,6 +51,7 @@ class MotionGateway {
         unsigned long lastModeCheckTimestampMs = 0;
         unsigned long lastDemandBatchSendTimestampMs = 0;
         unsigned long lastUsbHeartbeatTimestampMs = 0;
+        int8_t lastArmedState = -1; // -1 = unknown; logs a DEBUGLOG line on each change
 
         // Actor mappings for different modes (6 actors)
         static const ActorMapping actorMappingMode1[6];

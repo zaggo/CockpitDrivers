@@ -368,6 +368,13 @@ void MotionGateway::sendStop()
 void MotionGateway::sendUsbHeartbeat()
 {
   const uint8_t armed = (digitalRead(kArmPin) == LOW) ? 0x01 : 0x00;
+
+  if (armed != lastArmedState)
+  {
+    lastArmedState = armed;
+    DEBUGLOG_PRINTLN(String(F("Arm state: ")) + (armed ? F("ARMED") : F("DISARMED")));
+  }
+
   const uint8_t frame[4] = {'H', 'B', armed, 0x0D};
   Serial.write(frame, sizeof(frame));
 }
