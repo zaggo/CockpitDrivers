@@ -55,7 +55,13 @@ bool MotionProvider::initialize() {
     if (configPath_.empty()) configPath_ = MotionConfig::defaultPath();
     {
         std::ifstream test(configPath_);
-        if (!test.good()) MotionConfig::writeDefaults(configPath_);
+        if (!test.good()) {
+            const bool ok = MotionConfig::writeDefaults(configPath_);
+            XPLMDebugString(("MotionProvider: config " + configPath_ +
+                             (ok ? " created\n" : " WRITE FAILED\n")).c_str());
+        } else {
+            XPLMDebugString(("MotionProvider: config " + configPath_ + " loaded\n").c_str());
+        }
     }
 
     kin_ = std::make_unique<StewartKinematics>(MotionConfig::loadGeometry(configPath_));

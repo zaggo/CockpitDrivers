@@ -57,6 +57,7 @@ void getArr6i(const toml::table& t, const char* key, int out[6]) {
 
 std::string MotionConfig::defaultPath() {
     const char* home = std::getenv("HOME");
+    if (!home) home = std::getenv("USERPROFILE");  // Windows has no HOME
     return home ? std::string(home) + "/.motionprovider.toml"
                 : std::string(".motionprovider.toml");
 }
