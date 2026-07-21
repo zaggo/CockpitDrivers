@@ -231,15 +231,22 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         std::isfinite(rawLive.heave) && std::isfinite(rawLive.roll) &&
         std::isfinite(rawLive.pitch) && std::isfinite(rawLive.yaw);
     monitor_.update(rawLive, finite, serialLost, dt);
-    // Hardware arm switch: fresh heartbeat AND armed. A fault or e-stop latches
-    // disarm (ArmGate) until the switch is cycled off.
-    const bool hwArmed = serial_ &&
-                         serial_->heartbeatFresh(kHeartbeatMaxAgeSec) &&
-                         serial_->heartbeatArmed();
-    if (armGate_.update(hwArmed)) monitor_.clear();   // switch cycled off -> reset latch + fault
+    // Hardware arm switch. Trust the switch position only from FRESH heartbeat
+    // frames; freeze the last known position while the heartbeat is stale, so a
+    // transient gap is NOT mistaken for the pilot physically cycling the switch.
+    const bool hbFresh = serial_ && serial_->heartbeatFresh(kHeartbeatMaxAgeSec);
+    if (hbFresh) lastSwitchArmed_ = serial_->heartbeatArmed();
+
+    // Reset point = a genuine armed->disarmed switch transition. Because
+    // lastSwitchArmed_ is frozen while stale, this edge fires only on a fresh
+    // frame reporting the switch open — matching a physical E-stop reset (flip
+    // off, then on). It clears the fault + e-stop latch.
+    if (armGate_.update(lastSwitchArmed_)) monitor_.clear();
     if (monitor_.fault() != FaultCode::None) armGate_.latchDisarm();  // home-on-fault (latched)
 
-    const bool armIntent = hwArmed && !armGate_.latched();
+    // Arm only when the heartbeat is fresh AND the switch is armed AND not latched.
+    // A stale heartbeat forces disarm but must NOT have cleared the latch above.
+    const bool armIntent = hbFresh && lastSwitchArmed_ && !armGate_.latched();
     if (armIntent && armRamp_.state() == ArmState::Disarmed) {
         // Rising edge into an auto (SIM) arm: reset the stateful filters so the
         // ramp starts from a clean pose. Manual mode has no filters to reset.
