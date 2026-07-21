@@ -105,10 +105,13 @@ rate (`rateHz_`, typically 60Hz) and never reads. This adds a receive path:
 ## MotionProviderPlugin: arm state becomes hardware-driven
 
 Today, `onUiAction` handles `UI_ARM`/`UI_MANUAL` by calling `armRamp_.toggle()`, gated to only fire
-from `ArmState::Disarmed`. This is replaced by a per-tick computation in `onFlightLoopTick`:
+from `ArmState::Disarmed`. This is replaced by a per-tick computation in `onFlightLoopTick` that
+combines heartbeat freshness with the switch reading (refined into the freshness-frozen
+`lastSwitchArmed_` in "The gate/reset latch" below):
 
 ```cpp
-bool hwArmed = serial_ && serial_->heartbeatFresh(1.5) && serial_->heartbeatArmed();
+bool hbFresh = serial_ && serial_->heartbeatFresh(1.5);
+// armed reading trusted only while fresh; see the gate/reset latch section
 ```
 
 `ArmRamp` gains a new method, symmetric to the existing `requestDisarm()`:
@@ -127,20 +130,27 @@ e-stop click needs to force a disarm: the switch is still physically ON, so `hwA
 `true` on the very next tick, and `requestArm()` would immediately undo the forced disarm —
 thrashing between `Arming`/`Disarming` every frame instead of ever reaching `Disarmed`.
 
-To prevent that, `MotionProvider` tracks one new bool, `gateClosed_` (default `false`):
+To prevent that, a pure `ArmGate` latch (`latchDisarm()` / `latched()` / `update()`) is fed the
+switch position, and `MotionProvider` distinguishes a **physical switch cycle** from a **stale
+heartbeat**. The switch position is trusted only from *fresh* heartbeat frames and frozen while the
+signal is stale (`lastSwitchArmed_`, default `false`) — otherwise a transient heartbeat gap would
+look identical to the pilot opening the switch and would silently clear a latched fault.
 
-- Set `true` whenever:
-  - a fault newly triggers a forced disarm (existing `if (monitor_.fault() != FaultCode::None)
-    armRamp_.requestDisarm();` path), or
+- `ArmGate` latches disarm whenever:
+  - a fault newly triggers a forced disarm (`if (monitor_.fault() != FaultCode::None)
+    armGate_.latchDisarm();`), or
   - the `[DISARM]` e-stop button is clicked (`UI_DISARM`).
-- Cleared (`false`), along with `monitor_.clear()`, at the reset point: when `hwArmed` transitions
-  **true → false** (i.e. the pilot cycles the switch off). This is the only way to clear a fault or
-  an e-stop latch going forward — matches how a physical E-stop normally resets (flip off, then
-  back on).
+- The latch clears, along with `monitor_.clear()`, only at the reset point: a **fresh** frame
+  reporting the switch open (a genuine armed→disarmed transition of `lastSwitchArmed_`, which by
+  construction can only change on a fresh frame). This is the only way to clear a fault or e-stop
+  latch — matching how a physical E-stop resets (flip off, then back on). A stale heartbeat forces
+  disarm but must **not** clear the latch or the fault.
 
-Per-tick arm intent: `armIntent = hwArmed && !gateClosed_`. If `armIntent` and
-`armRamp_.state()` is `Disarmed`/`Disarming` → `requestArm()`. If `!armIntent` and state is
-`Arming`/`Armed` → `requestDisarm()`.
+Per-tick: `hbFresh = serial_->heartbeatFresh(1.5)`; if `hbFresh`, `lastSwitchArmed_ =
+heartbeatArmed()`. Arm intent = `hbFresh && lastSwitchArmed_ && !armGate_.latched()`. When true,
+`armRamp_.requestArm()`; otherwise `armRamp_.requestDisarm()` (both are state-guarded and
+idempotent). On the `Disarmed`→arm rising edge in SIM mode, the washout/effects filters are reset
+so the ramp starts from a clean pose.
 
 ## MotionProviderPlugin: status window UI
 
@@ -158,10 +168,13 @@ Per-tick arm intent: `armIntent = hwArmed && !gateClosed_`. If `armIntent` and
 ## Error handling / edge cases
 
 - **Heartbeat never arrives** (gateway not connected, wrong port, powered off): `heartbeatFresh()`
-  is false forever → `hwArmed` false → platform stays/goes `Disarmed`. Same as today's "no serial
+  is false forever → arm intent false → platform stays/goes `Disarmed`. Same as today's "no serial
   link" behavior, just via a different signal path.
 - **Heartbeat was arriving, then stops** (USB unplugged, gateway resets): within 1500ms,
-  `heartbeatFresh()` goes false → forced disarm, same ramp-to-park behavior as any other disarm.
+  `heartbeatFresh()` goes false → arm intent false → forced disarm, same ramp-to-park behavior as
+  any other disarm. Crucially, a stale heartbeat does **not** clear the fault/e-stop latch (the
+  switch position is frozen while stale), so a latched fault survives a heartbeat dropout and the
+  platform does not auto-re-arm when the signal returns — only a physical switch cycle resets it.
   This is a second, independent path from the existing `SafetyMonitor` `SerialLost` fault (which
   reacts to `serial_->isConnected()`); both can fire together and both just call
   `armRamp_.requestDisarm()`, which is idempotent.
@@ -169,8 +182,8 @@ Per-tick arm intent: `armIntent = hwArmed && !gateClosed_`. If `armIntent` and
   both defined in terms of current state, so this smoothly reverses the ramp direction from
   wherever the blend currently is — no special-casing needed, same as the existing
   `requestDisarm()` behavior today.
-- **Fault while hardware-armed**: forced disarm + `gateClosed_ = true`, platform stays disarmed
-  even though the switch is still on, until the pilot cycles the switch.
+- **Fault while hardware-armed**: forced disarm + `armGate_.latchDisarm()`, platform stays disarmed
+  even though the switch is still on, until the pilot cycles the switch (a fresh switch-open frame).
 - **Garbled heartbeat bytes** (partial frame, noise): `HeartbeatDecoder` simply fails to complete a
   frame; `heartbeatFresh()` ages out normally, no special error handling needed.
 
