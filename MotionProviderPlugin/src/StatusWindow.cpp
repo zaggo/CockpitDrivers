@@ -291,12 +291,17 @@ void StatusWindow::draw() {
     }
     y -= 18;
 
-    // Serial port chooser.
+    // Serial port chooser + disconnect.
     std::snprintf(buf, sizeof(buf), "port: %s",
                   data_.serialPort.empty() ? "(none - pick below)" : data_.serialPort.c_str());
     drawString(x, y, buf, 0.8f, 0.8f, 0.9f);
+    if (data_.serialConnected) {
+        int dx = x + static_cast<int>(std::string(buf).size()) * cw + gap;
+        button(dx, y, "[ DISCONNECT ]", UI_DISCONNECT, 1.0f, 0.7f, 0.6f);
+    }
     y -= 16;
-    button(x, y, "[ Rescan ]", UI_RESCAN_PORTS, 0.7f, 0.8f, 0.9f);
+    int sx = x + button(x, y, "[ Rescan ]", UI_RESCAN_PORTS, 0.7f, 0.8f, 0.9f) + gap;
+    if (data_.rescanFlash) drawString(sx, y, "Ports rescanned", 0.4f, 1.0f, 0.5f);
     y -= 16;
     for (const auto& p : ports_) {
         bool sel = (p == data_.serialPort);

@@ -67,6 +67,7 @@ private:
     double identifyPhase_ = 0.0;   // jitter phase (rad)
     bool lastReloadOk_ = true;
     float reloadFlashRemaining_ = 0.0f;  // seconds left to show "Config loaded"
+    float rescanFlashRemaining_ = 0.0f;  // seconds left to show "Ports rescanned"
 
     // Serial + safety (arm/disarm soft-start in pose space)
     ArmRamp armRamp_;

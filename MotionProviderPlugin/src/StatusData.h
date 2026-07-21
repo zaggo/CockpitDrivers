@@ -14,7 +14,8 @@ enum UiAction {
     UI_RESET,
     UI_RESCAN_PORTS,
     UI_TOGGLE_MODE,   // toggle SIM <-> MANUAL (only while disarmed)
-    UI_DISARM         // manual e-stop
+    UI_DISARM,        // manual e-stop
+    UI_DISCONNECT     // close the serial connection
 };
 
 // Everything the status window renders in one snapshot.
@@ -28,6 +29,7 @@ struct StatusData {
     Pose        commandedPose;       // pose actually fed to the IK this tick
     bool        lastReloadOk = true;
     bool        reloadFlash = false; // show transient "Config loaded" confirmation
+    bool        rescanFlash = false; // show transient "Ports rescanned" confirmation
     uint16_t    sentSetpoints[6] = {32640,32640,32640,32640,32640,32640};
     int         armState = 0;        // ArmState: 0 Disarmed,1 Arming,2 Armed,3 Disarming
     float       armBlend = 0.0f;     // 0 = park pose, 1 = live pose

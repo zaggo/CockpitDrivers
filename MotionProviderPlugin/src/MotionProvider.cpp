@@ -160,7 +160,14 @@ void MotionProvider::onUiAction(int action) {
             }
             break;
         }
-        case UI_RESCAN_PORTS: /* window rescans; nothing to do here */ break;
+        case UI_RESCAN_PORTS: rescanFlashRemaining_ = 2.0f; break;  // window did the rescan; flash confirmation
+        case UI_DISCONNECT:
+            // Deliberate manual disconnect: stop the link and disarm. The
+            // heartbeat goes stale immediately, so arm intent drops to false;
+            // reconnect (pick a port) resumes hardware-switch control.
+            if (serial_) serial_->stop();
+            armRamp_.requestDisarm();
+            break;
         default: break;
     }
     // Re-solve and refresh immediately so the click has instant visual feedback.
@@ -182,6 +189,7 @@ void MotionProvider::pushStatus() {
     sd.commandedPose = latestPose_;
     sd.lastReloadOk = lastReloadOk_;
     sd.reloadFlash = reloadFlashRemaining_ > 0.0f;
+    sd.rescanFlash = rescanFlashRemaining_ > 0.0f;
     for (int i=0;i<6;i++) sd.sentSetpoints[i] = sentSetpoints_[i];
     sd.armState = static_cast<int>(armRamp_.state());
     sd.armBlend = static_cast<float>(armRamp_.blend());
@@ -203,6 +211,10 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
     if (reloadFlashRemaining_ > 0.0f) {
         reloadFlashRemaining_ -= elapsedSec;
         if (reloadFlashRemaining_ < 0.0f) reloadFlashRemaining_ = 0.0f;
+    }
+    if (rescanFlashRemaining_ > 0.0f) {
+        rescanFlashRemaining_ -= elapsedSec;
+        if (rescanFlashRemaining_ < 0.0f) rescanFlashRemaining_ = 0.0f;
     }
 
     // Pause/stall guard: clamp the timestep the stateful filters/ramp see so a
