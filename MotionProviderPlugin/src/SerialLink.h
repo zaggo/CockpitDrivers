@@ -51,7 +51,8 @@ private:
     std::atomic<uint64_t> frames_{0};
 
     std::thread rxThread_;
-    HeartbeatDecoder rxDecoder_;                 // touched only by the RX thread
+    HeartbeatDecoder rxDecoder_;                 // owned by the RX thread; reset() only from
+                                                 // startIoThread() before that thread is spawned
     std::atomic<bool> hbArmed_{false};
     std::atomic<long long> hbLastMicros_{0};     // steady_clock micros of last valid frame; 0 = never
 

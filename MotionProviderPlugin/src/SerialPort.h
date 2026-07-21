@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <mutex>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -41,6 +42,11 @@ public:
     size_t readBlocking(void* outBuf, size_t maxLen);
     
 private:
+    // Guards the OS handle (fd_/hComm_) so the RX thread (readBlocking/isOpen)
+    // and the TX thread (writeBestEffort/closePort) can't race on it. The
+    // blocking poll/read runs on a handle SNAPSHOT taken under this lock and
+    // released before the syscall, so a slow read never stalls a concurrent write.
+    mutable std::mutex portMutex_;
 #ifdef _WIN32
     HANDLE hComm_ = INVALID_HANDLE_VALUE;
 #else

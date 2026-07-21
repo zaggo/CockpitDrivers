@@ -27,16 +27,15 @@ SerialPort::~SerialPort() {
 // ============ Windows Implementation ============
 
 bool SerialPort::openPort(const std::string& devicePath, int baudRate) {
-    // Already open?
-    if (hComm_ != INVALID_HANDLE_VALUE) {
-        closePort();
-    }
-    
+    // Close any existing handle first (locks internally). Configure a LOCAL
+    // handle, then publish it under the lock once fully set up.
+    closePort();
+
     // Windows serial port path format: \\\\.\\COMx
     std::string winPath = "\\\\.\\" + devicePath;
-    
+
     // Open COM port
-    hComm_ = CreateFileA(
+    HANDLE h = CreateFileA(
         winPath.c_str(),
         GENERIC_READ | GENERIC_WRITE,
         0,      // No sharing
@@ -45,33 +44,33 @@ bool SerialPort::openPort(const std::string& devicePath, int baudRate) {
         0,      // Not overlapped I/O
         NULL
     );
-    
-    if (hComm_ == INVALID_HANDLE_VALUE) {
+
+    if (h == INVALID_HANDLE_VALUE) {
         return false;
     }
-    
+
     // Configure COM port
     DCB dcbSerialParams;
     memset(&dcbSerialParams, 0, sizeof(dcbSerialParams));
     dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-    
-    if (!GetCommState(hComm_, &dcbSerialParams)) {
-        closePort();
+
+    if (!GetCommState(h, &dcbSerialParams)) {
+        CloseHandle(h);
         return false;
     }
-    
+
     dcbSerialParams.BaudRate = baudRate;
     dcbSerialParams.ByteSize = 8;
     dcbSerialParams.StopBits = ONESTOPBIT;
     dcbSerialParams.Parity = NOPARITY;
     dcbSerialParams.fDtrControl = DTR_CONTROL_DISABLE;
     dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
-    
-    if (!SetCommState(hComm_, &dcbSerialParams)) {
-        closePort();
+
+    if (!SetCommState(h, &dcbSerialParams)) {
+        CloseHandle(h);
         return false;
     }
-    
+
     // Read blocks for up to kReadTimeoutMs waiting for data (returns earlier
     // if data arrives sooner); this specific MAXDWORD/MAXDWORD/constant
     // combination is the documented way to get a bounded blocking read on
@@ -83,50 +82,65 @@ bool SerialPort::openPort(const std::string& devicePath, int baudRate) {
     timeouts.ReadTotalTimeoutConstant = kReadTimeoutMs;
     timeouts.WriteTotalTimeoutMultiplier = 0;
     timeouts.WriteTotalTimeoutConstant = 0;
-    
-    if (!SetCommTimeouts(hComm_, &timeouts)) {
-        closePort();
+
+    if (!SetCommTimeouts(h, &timeouts)) {
+        CloseHandle(h);
         return false;
     }
-    
+
     // Flush buffers
-    PurgeComm(hComm_, PURGE_RXCLEAR | PURGE_TXCLEAR);
-    
+    PurgeComm(h, PURGE_RXCLEAR | PURGE_TXCLEAR);
+
+    { std::lock_guard<std::mutex> lk(portMutex_); hComm_ = h; }
     return true;
 }
 
 void SerialPort::closePort() {
-    if (hComm_ != INVALID_HANDLE_VALUE) {
-        CloseHandle(hComm_);
-        hComm_ = INVALID_HANDLE_VALUE;
+    HANDLE h;
+    { std::lock_guard<std::mutex> lk(portMutex_); h = hComm_; hComm_ = INVALID_HANDLE_VALUE; }
+    if (h != INVALID_HANDLE_VALUE) {
+        CloseHandle(h);
     }
 }
 
 bool SerialPort::isOpen() const {
+    std::lock_guard<std::mutex> lk(portMutex_);
     return hComm_ != INVALID_HANDLE_VALUE;
 }
 
 bool SerialPort::writeBestEffort(const void* data, size_t len) {
-    if (!isOpen() || !data || len == 0) {
+    if (!data || len == 0) {
         return false;
     }
-    
+    HANDLE h;
+    { std::lock_guard<std::mutex> lk(portMutex_); h = hComm_; }
+    if (h == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
     DWORD bytesWritten = 0;
-    if (!WriteFile(hComm_, data, static_cast<DWORD>(len), &bytesWritten, NULL)) {
+    if (!WriteFile(h, data, static_cast<DWORD>(len), &bytesWritten, NULL)) {
         closePort();
         return false;
     }
-    
+
     return bytesWritten > 0;
 }
 
 size_t SerialPort::readBlocking(void* outBuf, size_t maxLen) {
-    if (!isOpen() || !outBuf || maxLen == 0) {
+    if (!outBuf || maxLen == 0) {
+        return 0;
+    }
+    // Snapshot the handle under the lock, then release it before the (bounded)
+    // blocking read so a concurrent writeBestEffort is never stalled.
+    HANDLE h;
+    { std::lock_guard<std::mutex> lk(portMutex_); h = hComm_; }
+    if (h == INVALID_HANDLE_VALUE) {
         return 0;
     }
 
     DWORD bytesRead = 0;
-    if (!ReadFile(hComm_, outBuf, static_cast<DWORD>(maxLen), &bytesRead, NULL)) {
+    if (!ReadFile(h, outBuf, static_cast<DWORD>(maxLen), &bytesRead, NULL)) {
         // Read error
         closePort();
         return 0;
@@ -139,83 +153,90 @@ size_t SerialPort::readBlocking(void* outBuf, size_t maxLen) {
 // ============ POSIX (macOS/Linux) Implementation ============
 
 bool SerialPort::openPort(const std::string& devicePath, int baudRate) {
-    // Already open?
-    if (fd_ != -1) {
-        closePort();
-    }
-    
+    // Close any existing fd first (locks internally). Configure a LOCAL fd, then
+    // publish it under the lock once fully set up.
+    closePort();
+
     // Open device (non-blocking)
-    fd_ = open(devicePath.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
-    if (fd_ == -1) {
+    int fd = open(devicePath.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (fd == -1) {
         return false;
     }
-    
+
     // Configure terminal
     struct termios options;
-    if (tcgetattr(fd_, &options) != 0) {
-        closePort();
+    if (tcgetattr(fd, &options) != 0) {
+        close(fd);
         return false;
     }
-    
+
     // Set baud rate
     int speed = baudToSpeed(baudRate);
     if (speed == -1) {
-        closePort();
+        close(fd);
         return false;
     }
-    
+
     cfsetispeed(&options, speed);
     cfsetospeed(&options, speed);
-    
+
     // 8N1 (8 data bits, no parity, 1 stop bit)
     options.c_cflag &= ~CSIZE;
     options.c_cflag |= CS8;
     options.c_cflag &= ~PARENB;
     options.c_cflag &= ~CSTOPB;
-    
+
     // Raw mode: no echo, no canonical processing
     options.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
     options.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
     options.c_oflag &= ~OPOST;
-    
+
     // Non-blocking read with timeout
     options.c_cc[VMIN] = 0;   // Return immediately, even if no data
     options.c_cc[VTIME] = 0;  // No timeout
-    
+
     // Hardware flow control
     options.c_cflag &= ~CRTSCTS;
     options.c_cflag |= CREAD | CLOCAL;
-    
-    if (tcsetattr(fd_, TCSANOW, &options) != 0) {
-        closePort();
+
+    if (tcsetattr(fd, TCSANOW, &options) != 0) {
+        close(fd);
         return false;
     }
-    
+
     // Flush buffers
-    tcflush(fd_, TCIOFLUSH);
-    
+    tcflush(fd, TCIOFLUSH);
+
+    { std::lock_guard<std::mutex> lk(portMutex_); fd_ = fd; }
     return true;
 }
 
 void SerialPort::closePort() {
-    if (fd_ != -1) {
-        tcflush(fd_, TCIOFLUSH);
-        close(fd_);
-        fd_ = -1;
+    int fd;
+    { std::lock_guard<std::mutex> lk(portMutex_); fd = fd_; fd_ = -1; }
+    if (fd != -1) {
+        tcflush(fd, TCIOFLUSH);
+        close(fd);
     }
 }
 
 bool SerialPort::isOpen() const {
+    std::lock_guard<std::mutex> lk(portMutex_);
     return fd_ != -1;
 }
 
 bool SerialPort::writeBestEffort(const void* data, size_t len) {
-    if (!isOpen() || !data || len == 0) {
+    if (!data || len == 0) {
         return false;
     }
-    
-    ssize_t written = write(fd_, data, len);
-    
+    int fd;
+    { std::lock_guard<std::mutex> lk(portMutex_); fd = fd_; }
+    if (fd == -1) {
+        return false;
+    }
+
+    ssize_t written = write(fd, data, len);
+
     // EAGAIN/EWOULDBLOCK = buffer full, try later (best effort)
     if (written == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -225,20 +246,27 @@ bool SerialPort::writeBestEffort(const void* data, size_t len) {
         closePort();
         return false;
     }
-    
+
     // Partial write is ok in best-effort mode
     return written > 0;
 }
 
 size_t SerialPort::readBlocking(void* outBuf, size_t maxLen) {
-    if (!isOpen() || !outBuf || maxLen == 0) {
+    if (!outBuf || maxLen == 0) {
+        return 0;
+    }
+    // Snapshot the fd under the lock, then release it before the (bounded)
+    // blocking poll/read so a concurrent writeBestEffort is never stalled.
+    int fd;
+    { std::lock_guard<std::mutex> lk(portMutex_); fd = fd_; }
+    if (fd == -1) {
         return 0;
     }
 
-    // fd_ is opened O_NONBLOCK, so use poll() to actually wait (low CPU)
+    // fd is opened O_NONBLOCK, so use poll() to actually wait (low CPU)
     // for up to kReadTimeoutMs instead of busy-polling read().
     struct pollfd pfd;
-    pfd.fd = fd_;
+    pfd.fd = fd;
     pfd.events = POLLIN;
     pfd.revents = 0;
     int pollResult = poll(&pfd, 1, kReadTimeoutMs);
@@ -246,7 +274,7 @@ size_t SerialPort::readBlocking(void* outBuf, size_t maxLen) {
         return 0;  // Timeout or error - nothing to read right now
     }
 
-    ssize_t bytesRead = read(fd_, outBuf, maxLen);
+    ssize_t bytesRead = read(fd, outBuf, maxLen);
 
     if (bytesRead == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
