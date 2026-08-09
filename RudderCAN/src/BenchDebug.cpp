@@ -174,16 +174,21 @@ void BenchDebug::loop()
 
     handleUserInput();
 
-    RudderStateUpdate update = rudder->getStateUpdate();
-    // Gate the auto-print, not getStateUpdate() itself: at the tightened
-    // change threshold a moving pedal trips `changed` almost every pass, and
-    // Serial.print() blocks once the ~70-char line overruns the TX ring —
-    // which would throttle loop() and stretch the filter's effective time
-    // constant well past its design value. The manual 's' command stays
-    // unthrottled since it is operator-paced, not loop-paced.
-    if (update.changed && millis() - lastPrintMs >= 100) {
-        lastPrintMs = millis();
-        printState();
+    // Gate BEFORE consuming the update, not after: getStateUpdate() latches
+    // _lastReportedState whenever it reports changed == true, regardless of
+    // whether we go on to print. Calling it on every pass while only gating
+    // the print would advance the latch on gate-closed passes too, silently
+    // and permanently dropping any change that lands while the gate is
+    // closed. Checking the time gate first means the latch only advances on
+    // passes that will actually print, so an unprinted change leaves
+    // _lastReportedState stale and gets picked up as an accumulated delta on
+    // the next gate-open pass.
+    if (millis() - lastPrintMs >= 100) {
+        RudderStateUpdate update = rudder->getStateUpdate();
+        if (update.changed) {
+            lastPrintMs = millis();
+            printState();
+        }
     }
 }
 #endif
