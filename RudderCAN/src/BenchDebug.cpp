@@ -37,10 +37,14 @@ void BenchDebug::printState()
     Serial.print(state.leftBrake);
     Serial.print(F(" (raw "));
     Serial.print(rudder->getRawLeftBrake());
+    Serial.print(F(" q6 "));
+    Serial.print(rudder->getFilteredLeftBrakeQ6());
     Serial.print(F(")  rBrk "));
     Serial.print(state.rightBrake);
     Serial.print(F(" (raw "));
     Serial.print(rudder->getRawRightBrake());
+    Serial.print(F(" q6 "));
+    Serial.print(rudder->getFilteredRightBrakeQ6());
     Serial.println(')');
 }
 
@@ -171,7 +175,14 @@ void BenchDebug::loop()
     handleUserInput();
 
     RudderStateUpdate update = rudder->getStateUpdate();
-    if (update.changed) {
+    // Gate the auto-print, not getStateUpdate() itself: at the tightened
+    // change threshold a moving pedal trips `changed` almost every pass, and
+    // Serial.print() blocks once the ~70-char line overruns the TX ring —
+    // which would throttle loop() and stretch the filter's effective time
+    // constant well past its design value. The manual 's' command stays
+    // unthrottled since it is operator-paced, not loop-paced.
+    if (update.changed && millis() - lastPrintMs >= 100) {
+        lastPrintMs = millis();
         printState();
     }
 }

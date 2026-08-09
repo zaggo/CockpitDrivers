@@ -26,6 +26,8 @@ class BenchDebug {
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;
 
+        uint32_t lastPrintMs = 0L;
+
         Rudder* rudder;
 };
 #endif
