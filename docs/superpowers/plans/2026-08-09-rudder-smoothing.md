@@ -716,6 +716,53 @@ git commit -m "feat(RudderCAN): oversample and adaptively filter the pedal axes"
 
 ---
 
+### What the final review changed about Task 4
+
+The whole-branch review (after Tasks 1–3 landed) sharpened this task considerably. Read this
+before running it.
+
+**The tuning's viability depends on a number nobody has yet.** Filtered noise reaches the wire
+scaled by the mapping gain, which is inversely proportional to the sensor span:
+
+| half-span (raw LSB) | gain (wire units / LSB) | centre deadband as % of half-travel |
+| --- | --- | --- |
+| 490 | 2.2 | 2.4 % |
+| 300 | 3.7 | 4 % |
+| 150 | 7.7 | 8 % |
+| 80 | 15.6 | 15 % |
+
+Decision rule once Step 1 gives the real number: **≥300** → the shipped constants are fine;
+**150–300** → borderline, watch mid-travel; **<150** → re-tune before judging the fix
+(`kDefaultAlphaMin` 32 → 16, `kDefaultSlope` 12 → 2–4) and make `kRudderCenterDeadbandQ6`
+proportional. Do not conclude "the smoothing didn't work" from a small-span board still running
+32/12.
+
+**The filter is near-transparent to foot tremor, by construction.** A first-order EMA at
+`alphaMin = 32` has its corner at ~10 Hz, and physiological foot tremor sits at 8–12 Hz — so it
+removes only about a quarter of it, and the adaptive `slope` term makes that worse rather than
+better (±3 LSB of tremor drives alpha to ~56–68, at which point the filter passes ~92 % of it).
+What the filter does remove decisively is broadband electrical and ADC noise above ~50 Hz, where
+attenuation is roughly 8×. `test_low_frequency_noise_is_attenuated` documents the tremor-band
+behaviour as a measured characterisation (3.75 LSB span at 10 Hz), so it is recorded rather than
+assumed.
+
+The practical consequence: **Step 3 of the hardware session is a real gate, not a formality.**
+Which of the two noise sources dominates decides the remedy, and they call for opposite fixes —
+see Step 3a below.
+
+**Lowering the threshold does not by itself reduce jitter.** The change threshold is a deadzone
+of half-width T; the reported value re-latches back and forth whenever the input excursion
+exceeds 2T. Going from T=8 to T=2 makes that condition *easier* to meet. The design's bet is
+that the filter shrinks the excursion by more than the threshold shrank. That bet is what the
+bench session tests.
+
+**Look for jitter at mid-travel.** The centre deadband pins the output to 0 near neutral and the
+5 % end deadband pins it to ±1000 at the stops, so the only region where re-latching can happen
+is between them.
+
+**The existing EEPROM calibration stays valid.** The Q6 port changes mapped values by well under
+1 %, so there is no need to re-calibrate at cutover.
+
 ### Task 4: Bench and end-to-end verification
 
 **Files:** none — this task changes no code. It exists because every claim in the spec about jitter, lag, and CAN health is unverified until it runs on real hardware.
@@ -742,7 +789,38 @@ With the pedals untouched, watch the `q6` figure for 30 seconds. Expected: it se
 
 - [ ] **Step 3: Check for lag on real movement**
 
-Sweep the pedals from stop to stop at normal speed and watch `rud`. Expected: the value tracks the pedal with no perceptible delay and no staircase. If it feels sluggish, raise `kFilterSlope`; if it still steps, the change threshold is the remaining cause.
+Sweep the pedals from stop to stop at normal speed and watch `rud`. Expected: the value tracks the pedal with no perceptible delay and no staircase. If it feels sluggish, raise `kDefaultSlope`; if it still steps, the change threshold is the remaining cause.
+
+Use the `s` command for endpoint checks rather than trusting the auto-print: it is rate-gated to
+100 ms, so a fast in-and-out excursion to a stop can land and reverse entirely inside one closed
+window and never appear on the console.
+
+- [ ] **Step 3a: Separate the two noise sources — they need opposite fixes**
+
+Fit the 100 nF A0→GND capacitor as a *separate trial*, not at the same time as flashing.
+
+- Jitter largely gone after the cap → the noise was electrical, and the filter is doing its job.
+- Jitter survives the cap → it is 8–12 Hz foot tremor, and the answer is a **lower**
+  `kDefaultAlphaMin` with a near-zero `kDefaultSlope`. More oversampling will not help.
+
+Watching `q6` while holding the pedal still distinguishes them directly: fast dither is
+electrical, slow wander is tremor.
+
+- [ ] **Step 3b: Rule out ADC mux crosstalk**
+
+Three back-to-back `analogRead`s on A0/A1/A2 now run 500×/s instead of 50×/s, with no settling
+delay between channels. Press one toe brake hard and watch whether the rudder `q6` shifts.
+Low-impedance hall outputs should be immune; this is the cheapest way to confirm it, and it was
+never exercised at this rate before.
+
+- [ ] **Step 3c: If you re-tune, fix the constants' single source of truth first**
+
+`kDefaultAlphaMin` / `kDefaultSlope` live in `RudderCAN/include/AdaptiveFilter.h` and are used
+both as the constructor defaults and by `Rudder.cpp`, and the native tests construct the filter
+with them explicitly. Change them there and the tests follow. `test_ramp_tracking_error_stays_small`
+and `test_low_frequency_noise_is_attenuated` assert tight bounds around the shipped values, so
+expect them to fail after a re-tune — re-measure and update the bounds deliberately rather than
+widening them.
 
 - [ ] **Step 4: Confirm CAN is healthy under the added ADC load**
 
