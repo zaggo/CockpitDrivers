@@ -43,6 +43,7 @@ class CAN : public BaseCAN {
         void updateInstrumentHeartbeat(uint8_t len, const uint8_t* data);
         void updateTransponder(uint8_t len, const uint8_t* data);
         void updateHandbrake(uint8_t len, const uint8_t* data);
+        void updateRudder(uint8_t len, const uint8_t* data);
 
         void sendGatewayHeartbeat();
         void checkInstrumentHeartbeats();

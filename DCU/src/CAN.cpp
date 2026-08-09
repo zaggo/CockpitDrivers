@@ -3,6 +3,7 @@
 #include "DebugLog.h"
 #include "DCUSender.h"
 #include "Heartbeat.h"
+#include "WireEncoding.h"
 
 CAN::CAN()
     : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint8_t>(CanNodeId::gatewayNodeId), 1, 0})
@@ -58,10 +59,11 @@ bool CAN::begin()
     canBus->init_Filt(0, 0, instrumentHeartbeat);
     canBus->init_Filt(1, 0, instrumentHeartbeat);
 
-    // RXB1: (reserved for future inputs)
+    // RXB1: instrument inputs. The heartbeat is still covered by RXB0's F0/F1,
+    // so F4 can carry a real input filter instead of a third heartbeat copy.
     canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::transponderInput));
     canBus->init_Filt(3, 0, CAN_STD_ID(CanMessageId::handbrakeStatus));
-    canBus->init_Filt(4, 0, instrumentHeartbeat);
+    canBus->init_Filt(4, 0, CAN_STD_ID(CanMessageId::rudder));
     canBus->init_Filt(5, 0, instrumentHeartbeat);
 
     canBus->setMode(MCP_NORMAL);
@@ -148,6 +150,9 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
         break;
     case CanMessageId::handbrakeStatus:
         updateHandbrake(len, data);
+        break;
+    case CanMessageId::rudder:
+        updateRudder(len, data);
         break;
     default:
         // Unknown/unhandled CAN ID - ignore for now but log
@@ -246,6 +251,28 @@ void CAN::updateHandbrake(uint8_t len, const uint8_t *data)
        dcuSender->sendFrame(MessageType::SerialMessageHandbrake, 1, data);
     }
 }
+void CAN::updateRudder(uint8_t len, const uint8_t *data)
+{
+    // CAN frame 0x303 is big-endian: [0..1] rudder int16, [2..3] left brake,
+    // [4..5] right brake, [6..7] reserved. The serial struct is host order, so
+    // unpack rather than reinterpret_cast the CAN buffer directly.
+    if (len < 6)
+        return;
+
+    RudderToDcuMessage message;
+    message.rudder     = static_cast<int16_t>(unpackBE16(data + 0));
+    message.leftBrake  = unpackBE16(data + 2);
+    message.rightBrake = unpackBE16(data + 4);
+
+    if (dcuSender != nullptr)
+    {
+        // DEBUGLOG_PRINTLN(String(F("Send Rudder: ")) + String(message.rudder) + String(F(" L")) + String(message.leftBrake) + String(F(" R")) + String(message.rightBrake));
+        dcuSender->sendFrame(MessageType::SerialMessageRudder,
+                             sizeof(RudderToDcuMessage),
+                             reinterpret_cast<const uint8_t *>(&message));
+    }
+}
+
 void CAN::checkInstrumentHeartbeats()
 {
     const uint32_t now = millis();

@@ -43,8 +43,10 @@ gateway, so it implements the other half of the heartbeat protocol described in 
 - Tracks `instrumentHeartbeat` (0x301) per node in `lastInstrumentHeartbeatMs[nodeId]`
   (`kMaxInstrumentNodes = 16`), and flags a node dead after 1500ms of silence
   (`checkInstrumentHeartbeats()`).
-- Filters/decodes `transponderInput` (0x311) and `handbrakeStatus` (0x330) frames from instruments and
-  forwards them to the plugin via `DCUSender`.
+- Filters/decodes `transponderInput` (0x311), `handbrakeStatus` (0x330) and `rudder` (0x303) frames from
+  instruments and forwards them to the plugin via `DCUSender`. Note `rudder` arrives big-endian on CAN
+  but the serial `RudderToDcuMessage` struct is host order, so `updateRudder()` converts via
+  `unpackBE16` instead of reinterpret_cast'ing the CAN buffer (unlike `updateTransponder`).
 - CAN alarm LED (`kCANAlarmPin`) lights if CAN isn't started, or if any tracked CAN ID has an
   outstanding TX/RX/heartbeat-timeout error — tracked in the fixed-size `canIdErrors[]`
   (`kMaxCanIdErrors = 8`, linear scan, no dynamic allocation per Arduino convention).
