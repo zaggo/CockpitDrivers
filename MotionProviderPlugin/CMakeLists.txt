@@ -7,9 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ============ Find X-Plane SDK ============
 if(NOT XPLANE_SDK)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/SDK")
-        set(XPLANE_SDK "${CMAKE_CURRENT_SOURCE_DIR}/SDK")
-        message(STATUS "Using local SDK: ${XPLANE_SDK}")
+    # Shared SDK at the repo root, vendored once for every X-Plane plugin here
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../XPlaneSDK")
+        set(XPLANE_SDK "${CMAKE_CURRENT_SOURCE_DIR}/../XPlaneSDK")
+        message(STATUS "Using shared repo SDK: ${XPLANE_SDK}")
     elseif(DEFINED ENV{XPLANE_SDK})
         set(XPLANE_SDK "$ENV{XPLANE_SDK}")
         message(STATUS "Using XPLANE_SDK environment variable: ${XPLANE_SDK}")
@@ -22,7 +23,7 @@ if(NOT XPLANE_SDK)
     else()
         message(FATAL_ERROR
             "X-Plane SDK not found!\n"
-            "  1. Place SDK folder in: ${CMAKE_CURRENT_SOURCE_DIR}/SDK\n"
+            "  1. Restore the shared SDK at: ${CMAKE_CURRENT_SOURCE_DIR}/../XPlaneSDK\n"
             "  2. Set environment: export XPLANE_SDK=/path/to/sdk\n"
             "  3. Pass to cmake: cmake -DXPLANE_SDK=/path/to/sdk ..")
     endif()

@@ -135,13 +135,15 @@ DCUProviderPlugin/
 │   ├── SerialPort.cpp     # Serielle Kommunikation
 │   ├── TransportLayer.cpp # Protokoll-Implementierung
 │   └── ...
-├── SDK/                   # X-Plane SDK
 ├── build-debug/           # Debug-Build-Ausgabe
 ├── build-macos/           # Release-Build-Ausgabe
 ├── .vscode/               # VS Code Konfiguration
 │   ├── launch.json       # Debug-Konfigurationen
 │   └── tasks.json        # Build-Tasks
 └── CMakeLists.txt        # Build-Konfiguration
+
+Das X-Plane SDK liegt nicht mehr hier, sondern einmal für alle Plugins unter
+`../XPlaneSDK/` im Repo-Root.
 
 ```
 

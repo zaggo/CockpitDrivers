@@ -72,7 +72,7 @@ cd "${BUILD_DIR}"
 
 cmake .. \
     -A x64 \
-    -DXPLANE_SDK="${SCRIPT_DIR}/SDK"
+    -DXPLANE_SDK="${SCRIPT_DIR}/../XPlaneSDK"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}✗ CMake configuration failed${NC}"

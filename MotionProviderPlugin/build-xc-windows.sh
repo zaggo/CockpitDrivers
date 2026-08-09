@@ -55,7 +55,7 @@ cd "${BUILD_DIR}"
 cmake .. \
     -DCMAKE_TOOLCHAIN_FILE="${SCRIPT_DIR}/toolchain-mingw64.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DXPLANE_SDK="${SCRIPT_DIR}/SDK"
+    -DXPLANE_SDK="${SCRIPT_DIR}/../XPlaneSDK"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}✗ CMake configuration failed${NC}"

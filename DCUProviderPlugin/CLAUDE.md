@@ -18,7 +18,8 @@ Not PlatformIO — plain CMake + shell scripts, run from this directory:
 ```
 
 Requires the X-Plane SDK. `CMakeLists.txt` looks for it in this order: `-DXPLANE_SDK=...`,
-`$XPLANE_SDK` env var, `./SDK` (present in this repo), then a couple of hardcoded macOS paths.
+`../XPlaneSDK` (the shared copy vendored at the repo root, used by every X-Plane plugin here),
+`$XPLANE_SDK` env var, then a couple of hardcoded macOS paths.
 
 Debugging (macOS): VS Code + CodeLLDB, via `.vscode/launch.json` — "Debug X-Plane Plugin" (launches
 X-Plane with debugger attached) or "Attach to X-Plane" (already-running instance). Must open a `.cpp`

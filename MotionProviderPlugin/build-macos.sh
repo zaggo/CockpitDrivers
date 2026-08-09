@@ -68,14 +68,14 @@ echo -e "${GREEN}✓ Clang: $(clang --version | head -1)${NC}\n"
 
 echo -e "${BLUE}Checking X-Plane SDK...${NC}"
 
-if [ -d "${SCRIPT_DIR}/SDK" ]; then
-    echo -e "${GREEN}✓ Found local SDK at: ${SCRIPT_DIR}/SDK${NC}"
-    XPLANE_SDK="${SCRIPT_DIR}/SDK"
+if [ -d "${SCRIPT_DIR}/../XPlaneSDK" ]; then
+    echo -e "${GREEN}✓ Found shared repo SDK at: ${SCRIPT_DIR}/../XPlaneSDK${NC}"
+    XPLANE_SDK="${SCRIPT_DIR}/../XPlaneSDK"
 elif [ -n "$XPLANE_SDK" ] && [ -d "$XPLANE_SDK" ]; then
     echo -e "${GREEN}✓ Using XPLANE_SDK: ${XPLANE_SDK}${NC}"
 else
     echo -e "${RED}✗ X-Plane SDK not found${NC}"
-    echo -e "${YELLOW}Place SDK folder at: ${SCRIPT_DIR}/SDK${NC}"
+    echo -e "${YELLOW}Expected the shared SDK at: ${SCRIPT_DIR}/../XPlaneSDK${NC}"
     echo -e "${YELLOW}Or set: export XPLANE_SDK=/path/to/sdk${NC}"
     exit 1
 fi

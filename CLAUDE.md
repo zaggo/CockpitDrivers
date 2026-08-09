@@ -20,6 +20,9 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
   Board projects pull it in via `lib_extra_dirs = ../shared` in `platformio.ini`.
 - `DCUProviderPlugin`: X-Plane 12 plugin (C++/CMake, not PlatformIO) bridging DCU serial data into
   X-Plane. Has its own build/debug flow — see its README.
+- `XPlaneSDK/`: the X-Plane SDK, vendored once and shared by every X-Plane plugin project
+  (`DCUProviderPlugin`, `MotionProviderPlugin`). Their CMake/build scripts resolve it as
+  `../XPlaneSDK`; don't re-vendor a per-plugin `SDK/` copy.
 - `etc/`: reference material only (Fusion360 CAD, AirManager backups/cleartext LUA) — not source to edit.
 
 ## Commands
