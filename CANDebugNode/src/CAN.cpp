@@ -3,7 +3,7 @@
 #include "DebugLog.h"
 
 CAN::CAN(LCD *lcd)
-    : InstrumentCAN(kCanCSPin, kCanIntPin, {CanNodeId::debugNodeId, 1, 0}),
+    : InstrumentCAN(kCanCSPin, kCanIntPin, CANFirmwareInfo{static_cast<uint16_t>(kNodeId), 1, 0}),
       lcd(lcd)
 {
     DEBUGLOG_PRINTLN(F("CAN initialized"));

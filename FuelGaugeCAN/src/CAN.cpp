@@ -3,7 +3,7 @@
 #include "DebugLog.h"
 
 CAN::CAN(FuelGauge *fuelGauge) 
-    : InstrumentCAN(kCanCSPin, kCanIntPin,{CanNodeId::fuelGaugeNodeId, 1, 0}),
+    : InstrumentCAN(kCanCSPin, kCanIntPin, CANFirmwareInfo{static_cast<uint16_t>(kNodeId), 1, 0}),
       fuelGauge(fuelGauge)
 {
     DEBUGLOG_PRINTLN(F("CAN initialized"));

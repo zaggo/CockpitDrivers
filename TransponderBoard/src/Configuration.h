@@ -3,8 +3,11 @@
 
 #include <Arduino.h>
 #include <avr/pgmspace.h>
+#include <CanNodeId.h>
 
 #define BENCHDEBUG 0
+
+const CanNodeId kNodeId = CanNodeId::transponderNodeId;
 
 const uint32_t kHeartbeatInterval = 1000L; // 1 second
 

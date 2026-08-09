@@ -40,27 +40,35 @@ void sendChangesToDCU()
     }
 
     TransponderToDcuMessage msg = {};
+
+    // TransponderToDCUCommand is a scoped enum, so accumulate the bitmask as a
+    // plain uint8_t and convert once at the end.
+    uint8_t command = 0;
+
     if (transponder->squawkCodeUpdated)
     {
-        msg.command = static_cast<TransponderToDCUCommand>(msg.command | TransponderToDcuCommandSetCode);
+        command |= static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandSetCode);
         msg.code = static_cast<uint16_t>(transponder->getSquawkCode().toInt());
         transponder->squawkCodeUpdated = false;
     }
 
     if (transponder->modeUpdated) {
-        msg.command = static_cast<TransponderToDCUCommand>(msg.command | TransponderToDcuCommandSetMode);
+        command |= static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandSetMode);
         msg.mode = static_cast<uint8_t>(transponder->getMode());
-        transponder->modeUpdated = false; 
+        transponder->modeUpdated = false;
     }
 
     if (transponder->identRequest) {
-        msg.command = static_cast<TransponderToDCUCommand>(msg.command | TransponderToDcuCommandIdent);
+        command |= static_cast<uint8_t>(TransponderToDCUCommand::TransponderToDcuCommandIdent);
         transponder->identRequest = false;
     }
 
-    if (msg.command != 0)
+    if (command != 0)
     {
-        canBus->sendMessage(CanMessageId::transponderInput, sizeof(msg), reinterpret_cast<uint8_t*>(&msg));
+        msg.command = static_cast<TransponderToDCUCommand>(command);
+        canBus->sendMessage(static_cast<uint16_t>(CanMessageId::transponderInput),
+                            static_cast<uint8_t>(sizeof(msg)),
+                            reinterpret_cast<uint8_t*>(&msg));
     }
 }
 #endif

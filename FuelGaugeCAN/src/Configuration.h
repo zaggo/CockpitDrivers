@@ -2,8 +2,11 @@
 #define CONFIGURATION_H
 
 #include <Arduino.h>
+#include <CanNodeId.h>
 
-#define BENCHDEBUG 0                                           
+#define BENCHDEBUG 0
+
+const CanNodeId kNodeId = CanNodeId::fuelGaugeNodeId;
 
 enum ServoId {
     leftTank = 0,

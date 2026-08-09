@@ -3,7 +3,7 @@
 #include "DebugLog.h"
 
 CAN::CAN(Transponder *transponder)
-    : InstrumentCAN(kCanCSPin, kCanIntPin, {CanNodeId::transponderNodeId, 1, 0}),
+    : InstrumentCAN(kCanCSPin, kCanIntPin, CANFirmwareInfo{static_cast<uint16_t>(kNodeId), 1, 0}),
       transponder(transponder)
 {
     DEBUGLOG_PRINTLN(F("CAN initialized"));
