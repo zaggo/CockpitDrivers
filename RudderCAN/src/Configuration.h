@@ -5,7 +5,7 @@
 #include <CanNodeId.h>
 
 #define BENCHDEBUG 0
-#define DEBUGLOG_ENABLE 1
+#define DEBUGLOG_ENABLE 0
 
 const CanNodeId kNodeId = CanNodeId::rudderNodeId;
 

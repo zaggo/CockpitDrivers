@@ -23,6 +23,10 @@ class BenchDebug {
         void sendRpm();
         void sendOdometer();
 
+        void startRudderWatch();
+        void stopRudderWatch();
+        void handleRudderWatch();
+
         String inputBuffer;
 
         float leftTankLevelKg = 0.;
@@ -32,7 +36,13 @@ class BenchDebug {
 
         uint16_t rpmValue = 0;
         float odometerHours = 0.;
-                
+
+        // Rudder watch: prints incoming 0x303 frames until any key is pressed.
+        bool rudderWatchActive = false;
+        bool rudderWatchPrinted = false; // false = print the next sample unconditionally
+        RudderToDcuMessage lastRudderPrinted = {0, 0, 0};
+
+
         CAN* canBus;
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;

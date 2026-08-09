@@ -128,6 +128,9 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Odometer hours set to "))+odometerHours);
         sendOdometer();
         return true;
+    } else if (command.startsWith("rw")) {
+        startRudderWatch();
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
@@ -135,14 +138,78 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("cl<0..255>: set light brightness"));
         Serial.println(F("rp<rpm>: set RPM gauge value"));
         Serial.println(F("oh<hours>: set odometer total hours"));
+        Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         return true;
     }
     return false;
 }
 
+void BenchDebug::startRudderWatch()
+{
+    // Drop whatever the CAN layer holds from before the watch was armed, so only
+    // frames that arrive while watching get printed.
+    RudderToDcuMessage stale;
+    canBus->takeRudderSample(stale);
+
+    rudderWatchActive = true;
+    rudderWatchPrinted = false;
+    Serial.println(F("Rudder watch on - press any key to stop"));
+}
+
+void BenchDebug::stopRudderWatch()
+{
+    rudderWatchActive = false;
+    Serial.println(F("Rudder watch off"));
+}
+
+void BenchDebug::handleRudderWatch()
+{
+    RudderToDcuMessage sample;
+    if (!canBus->takeRudderSample(sample))
+    {
+        return;
+    }
+
+    // RudderCAN resends periodically even when the pedals are still - only the
+    // changed triples are worth a line.
+    if (rudderWatchPrinted &&
+        sample.rudder == lastRudderPrinted.rudder &&
+        sample.leftBrake == lastRudderPrinted.leftBrake &&
+        sample.rightBrake == lastRudderPrinted.rightBrake)
+    {
+        return;
+    }
+
+    lastRudderPrinted = sample;
+    rudderWatchPrinted = true;
+
+    // No String here: heap churn in a frequently-hit print path is what froze the
+    // CAN link on other AVR nodes.
+    Serial.print(F("Rudder "));
+    Serial.print(sample.rudder);
+    Serial.print(F(" lBrk "));
+    Serial.print(sample.leftBrake);
+    Serial.print(F(" rBrk "));
+    Serial.println(sample.rightBrake);
+}
+
 void BenchDebug::handleUserInput()
 {
     static String inputBuffer = ""; // Zwischenspeicher für serielle Eingaben
+
+    if (rudderWatchActive)
+    {
+        // Any key leaves the watch; the keystroke itself is not a command.
+        if (Serial.available() > 0)
+        {
+            while (Serial.available() > 0)
+            {
+                Serial.read();
+            }
+            stopRudderWatch();
+        }
+        return;
+    }
 
     while (Serial.available() > 0)
     {
@@ -190,5 +257,10 @@ void BenchDebug::loop()
     }
 
     handleUserInput();
+
+    if (rudderWatchActive)
+    {
+        handleRudderWatch();
+    }
 }
 #endif

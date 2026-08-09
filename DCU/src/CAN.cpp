@@ -264,6 +264,13 @@ void CAN::updateRudder(uint8_t len, const uint8_t *data)
     message.leftBrake  = unpackBE16(data + 2);
     message.rightBrake = unpackBE16(data + 4);
 
+#if BENCHDEBUG
+    // No DCUSender in bench builds - hand the frame to BenchDebug's rudder watch
+    // instead of dropping it below.
+    rudderSample = message;
+    rudderSampleValid = true;
+#endif
+
     if (dcuSender != nullptr)
     {
         // DEBUGLOG_PRINTLN(String(F("Send Rudder: ")) + String(message.rudder) + String(F(" L")) + String(message.leftBrake) + String(F(" R")) + String(message.rightBrake));
@@ -272,6 +279,22 @@ void CAN::updateRudder(uint8_t len, const uint8_t *data)
                              reinterpret_cast<const uint8_t *>(&message));
     }
 }
+
+#if BENCHDEBUG
+bool CAN::takeRudderSample(RudderToDcuMessage &sample)
+{
+    // updateRudder() runs from CAN::loop() (RX is polled, not ISR-driven), so the
+    // slot needs no interrupt guarding.
+    if (!rudderSampleValid)
+    {
+        return false;
+    }
+
+    sample = rudderSample;
+    rudderSampleValid = false;
+    return true;
+}
+#endif
 
 void CAN::checkInstrumentHeartbeats()
 {

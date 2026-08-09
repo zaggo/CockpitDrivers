@@ -89,3 +89,9 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
 serial-console simulator that drives fuel/light CAN messages directly, for testing instruments on the
 CAN bus without the plugin/X-Plane attached.
+
+Because no `DCUSender` exists in bench builds, instrument→plugin frames decoded by `CAN` have no sink.
+For rudder input the `rw` console command works around that: `CAN` keeps the last decoded
+`RudderToDcuMessage` in a `#if BENCHDEBUG` slot that `BenchDebug` drains via `takeRudderSample()` and
+prints (changed values only) until any key is pressed. Other instrument→plugin messages
+(transponder, handbrake) are still dropped in bench mode.

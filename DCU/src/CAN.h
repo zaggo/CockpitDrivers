@@ -5,6 +5,7 @@
 #include "Configuration.h"
 #include <CanMessageId.h>
 #include <CanNodeId.h>
+#include <SerialMessageId.h>
 #include "CanIdError.h"
 
 // Forward declaration
@@ -23,6 +24,13 @@ class CAN : public BaseCAN {
         
         void setDCUSender(DCUSender* sender);
 
+#if BENCHDEBUG
+        // Bench console tap. In BENCHDEBUG builds no DCUSender is attached, so decoded
+        // rudder frames would otherwise be dropped. Returns true (and clears the slot)
+        // when a frame arrived since the last call.
+        bool takeRudderSample(RudderToDcuMessage& sample);
+#endif
+
     private:
         uint32_t lastGatewayHeartbeatSendMs = 0;
 
@@ -38,6 +46,12 @@ class CAN : public BaseCAN {
 
         // Reference to DCUSender for sending messages back to DCUProvider Plugin
         DCUSender* dcuSender = nullptr;
+
+#if BENCHDEBUG
+        // Last decoded rudder frame, drained by takeRudderSample().
+        RudderToDcuMessage rudderSample = {0, 0, 0};
+        bool rudderSampleValid = false;
+#endif
 
         // Handle incoming Serial Message frames
         void updateInstrumentHeartbeat(uint8_t len, const uint8_t* data);
