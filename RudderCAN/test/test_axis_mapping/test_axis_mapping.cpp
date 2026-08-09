@@ -47,6 +47,17 @@ void test_zero_span_calibration_does_not_divide_by_zero(void) {
     TEST_ASSERT_EQUAL_UINT16(0, mapHalfQ6(5000, 5000, 5000, kDeadband));
 }
 
+void test_half_span_smaller_than_deadband_reports_zero_not_reversed(void) {
+    // Half-span of 5 raw counts, well under the 12-count centre deadband: `from`
+    // (center + deadband) lands past `to` (end - 5% deadband). Without the guard
+    // in mapHalfQ6, mapToWire would divide by a delta of the opposite sign and
+    // report a reversed value across the whole travel instead of 0.
+    const int32_t tinyCenter = 512 * 64;
+    const int32_t tinyEnd    = 517 * 64;
+    TEST_ASSERT_EQUAL_UINT16(0, mapHalfQ6(tinyEnd, tinyCenter, tinyEnd, kDeadband));
+    TEST_ASSERT_EQUAL_UINT16(0, mapHalfQ6(tinyCenter, tinyCenter, tinyEnd, kDeadband));
+}
+
 void test_sub_lsb_input_change_moves_the_wire_value(void) {
     // A quarter of an ADC count apart. Before the Q6 conversion both inputs
     // rounded to the same raw count and produced an identical wire value.
@@ -64,6 +75,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_inverted_wiring_still_maps_positive_towards_max);
     RUN_TEST(test_unipolar_spans_zero_to_thousand);
     RUN_TEST(test_zero_span_calibration_does_not_divide_by_zero);
+    RUN_TEST(test_half_span_smaller_than_deadband_reports_zero_not_reversed);
     RUN_TEST(test_sub_lsb_input_change_moves_the_wire_value);
     return UNITY_END();
 }

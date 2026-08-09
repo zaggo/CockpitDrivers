@@ -41,6 +41,14 @@ inline uint16_t mapHalfQ6(int32_t vQ6, int32_t centerQ6, int32_t endQ6, int32_t 
     }
     const int32_t from = centerQ6 + ((span > 0) ? centerDeadbandQ6 : -centerDeadbandQ6);
     const int32_t to   = endQ6 - span / 20; // 5% end deadband, guarantees the endpoint is reachable
+
+    // If the centre deadband is as wide as (or wider than) the half-span, `from`
+    // has crossed past `to` and the usable interval has collapsed or inverted.
+    // Report 0 rather than let mapToWire divide by a delta of the opposite sign,
+    // which would reverse the axis over its whole travel.
+    if ((to - from) * ((span > 0) ? 1 : -1) <= 0) {
+        return 0;
+    }
     return (uint16_t)mapToWire(vQ6, from, to);
 }
 

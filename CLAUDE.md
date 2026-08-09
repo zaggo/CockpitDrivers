@@ -36,9 +36,14 @@ pio run -t upload        # flash to connected board
 pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
 pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
-                          # DCU has real Unity tests, run natively (no device needed):
-pio test -e native       # (from DCU/) runs DCU/test/test_* against DCU/include headers
+                          # DCU and RudderCAN have real Unity tests, run natively (no device needed):
+pio test -e native       # (from DCU/ or RudderCAN/) runs test/test_* against that board's include headers
 ```
+
+RudderCAN's `platformio.ini` factors the AVR-common settings (`platform`, `framework`, `lib_deps`, ...)
+into an `[avr]` section that `env:nano` / `env:diecimilaatmega328` pick up via `extends = avr`, rather
+than repeating them per env as DCU's does — copy this shape for any future board that adds a native
+test env.
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
 

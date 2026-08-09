@@ -1,4 +1,5 @@
 #include "Rudder.h"
+#include "AdaptiveFilter.h"
 #include "AxisMapping.h"
 #include "DebugLog.h"
 #include <EEPROM.h>
@@ -11,25 +12,30 @@ static const uint16_t kRudderEepromAddress = 0;
 // Raw ADC counts around the calibrated center that still report 0. Rudder pedals
 // have mechanical slop, so without this the aircraft would never track straight.
 // Expressed in Q6, like everything else downstream of the filter.
+//
+// This is an absolute count, unlike the proportional 5% end deadbands in
+// AxisMapping.h (span / 20): at a +-490 raw span it is 2.4% of half-travel, but
+// 24% at +-50. Deliberately left absolute here and not made proportional — that
+// would be a behaviour change, and the real sensor span hasn't been measured yet.
+// Revisit once it has.
 static const int32_t kRudderCenterDeadbandQ6 = 12 * 64;
 
 // The axis filters run far faster than the CAN send cadence: 10 samples per
 // 20ms frame. Three ADC conversions at ~112us every 2ms is about 17% CPU, which
 // leaves the MCP2515 SPI traffic plenty of room.
 static const uint32_t kSampleIntervalMs = 2;
-static const int32_t  kFilterAlphaMin   = 32; // Q8: tau ~16ms at rest, ~4x noise reduction
-static const int32_t  kFilterSlope      = 12; // fully transparent from ~19 LSB of deviation
 
-// Report thresholds on the 0..1000 wire scale. The filtered value carries
-// sub-LSB resolution, so the wire quantum is about 1 unit and a threshold of 2
-// suppresses nothing real. Send rate stays capped at 50Hz by kMinSendIntervalMs.
+// Report thresholds on the 0..1000 wire scale. Effective deadzone is +-2 units
+// (the compare in getStateUpdate() is strict), so a report needs a >=3 unit
+// move: about 1.4 raw LSB at a +-490 span, under half an LSB at +-150. Send
+// rate stays capped at 50Hz by kMinSendIntervalMs.
 static const int16_t kRudderChangeThreshold = 2;
 static const int16_t kBrakeChangeThreshold  = 2;
 
 Rudder::Rudder()
-    : _rudderFilter(kFilterAlphaMin, kFilterSlope),
-      _leftBrakeFilter(kFilterAlphaMin, kFilterSlope),
-      _rightBrakeFilter(kFilterAlphaMin, kFilterSlope),
+    : _rudderFilter(kDefaultAlphaMin, kDefaultSlope),
+      _leftBrakeFilter(kDefaultAlphaMin, kDefaultSlope),
+      _rightBrakeFilter(kDefaultAlphaMin, kDefaultSlope),
       _lastSampleMs(0)
 {
     pinMode(kRudderPin, INPUT);

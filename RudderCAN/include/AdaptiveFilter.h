@@ -12,12 +12,22 @@
 // smooths hard, on fast movement it saturates at 256/256 and the filter becomes
 // transparent. That is what keeps the axis quiet at rest without adding lag
 // when a pedal is actually moved.
+// Shipped tuning, and the one source of truth for it: Rudder.cpp constructs its
+// filters with these same constants, and the tests below construct AdaptiveFilter
+// with them explicitly so tuning-sensitive tests actually validate what ships,
+// not just whatever the constructor's defaults happen to be.
+// Q8: tau ~16ms / -3dB at ~10Hz at rest. ~8x on broadband ADC noise; near-transparent
+// to 8-12Hz foot tremor, which the slope term makes worse — revisit once the real
+// sensor span is measured.
+static const int32_t kDefaultAlphaMin = 32;
+static const int32_t kDefaultSlope    = 12; // fully transparent from ~19 LSB of deviation
+
 class AdaptiveFilter
 {
 public:
     // alphaMin: Q8 smoothing factor applied when the input is not moving.
     // slope:    added to alpha per LSB of deviation between input and estimate.
-    AdaptiveFilter(int32_t alphaMin = 32, int32_t slope = 12)
+    AdaptiveFilter(int32_t alphaMin = kDefaultAlphaMin, int32_t slope = kDefaultSlope)
         : _alphaMin(alphaMin), _slope(slope), _q6(0), _seeded(false) {}
 
     // Jumps the estimate straight to `raw`, skipping the settling ramp.
@@ -43,9 +53,9 @@ public:
             alpha = 256;
         }
 
-        // Division, not a shift: it truncates towards zero, so the residual
-        // sub-step deadband is symmetric. An arithmetic shift would floor and
-        // leave the estimate creeping downwards on small negative deltas.
+        // Division, not a shift: an arithmetic shift would floor, biasing the
+        // settling point about 0.06 LSB low. Division truncates towards zero,
+        // so the residual sub-step deadband is symmetric.
         _q6 += (d * alpha) / 256;
     }
 
