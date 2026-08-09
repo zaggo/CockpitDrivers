@@ -46,6 +46,13 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
    accumulator (fuel 5 Hz, lights/transponder/odometer 10 Hz, RPM 50 Hz — constants in `DCUProvider.h`).
 4. `DCUProvider::updateUplink()` — gateway → X-Plane. Drains `MessageQueue` RX, `switch`es on
    `MessageType`, writes into `DataRefManager` setters.
+5. `DCUProvider::updateRudderOverride()` — watchdog for the rudder/toe-brake axes. X-Plane rewrites
+   `sim/joystick/yoke_heading_ratio` and the brake ratios from its own joystick input every frame, so
+   writing them only sticks while `sim/operation/override/override_joystick_heading` and
+   `.../override_toe_brakes` are set. The override is claimed on the first `SerialMessageRudder` frame
+   and released again after `RUDDER_SIGNAL_TIMEOUT` of silence, on disconnect, in `changePort()`, and in
+   `shutdown()` — leaving it set with nobody writing values would leave the sim with dead rudder pedals.
+   `DataRefManager::setRudderOverrideEnabled()` is idempotent, so the per-frame call is cheap.
 
 `StatusWindow` is updated once per second (accumulator in `onFlightLoopTick`) and separately owns the
 X-Plane menu item / ImGui-ish window for serial port selection; port changes go through

@@ -52,6 +52,16 @@ public:
     
     // Parking Brake
     void setParkingBrakeRatio(float ratio);
+
+    // Rudder pedals + toe brakes
+    void setRudderRatio(float ratio);      // -1.0 .. 1.0, left negative
+    void setLeftBrakeRatio(float ratio);   //  0.0 .. 1.0
+    void setRightBrakeRatio(float ratio);  //  0.0 .. 1.0
+
+    /// Takes the rudder/toe-brake axes away from X-Plane's own joystick input, so the
+    /// values written above survive instead of being overwritten every frame.
+    /// Idempotent — only writes when the state actually changes.
+    void setRudderOverrideEnabled(bool enabled);
     
     // ============ UPLINK (Gateway → Plugin) ============
     /// Sets barometer altimeter setting (inHg)
@@ -94,6 +104,12 @@ private:
     XPLMDataRef dr_TransponderModeW = nullptr;
     XPLMDataRef dr_TransponderLight = nullptr;
     XPLMDataRef dr_ParkingBrake = nullptr;
+    XPLMDataRef dr_Rudder = nullptr;
+    XPLMDataRef dr_LeftBrake = nullptr;
+    XPLMDataRef dr_RightBrake = nullptr;
+    XPLMDataRef dr_OverrideJoystickHeading = nullptr;
+    XPLMDataRef dr_OverrideToeBrakes = nullptr;
+    bool rudderOverrideEnabled = false;
 
     XPLMDataRef dr_rpm = nullptr;
     mutable XPLMDataRef dr_tachHrs1000 = nullptr;

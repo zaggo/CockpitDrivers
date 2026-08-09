@@ -65,6 +65,12 @@ private:
     /// Uplink: Process received messages from gateway and write to X-Plane datarefs.
     void updateUplink();
     
+    /// Claim or release X-Plane's rudder/toe-brake axes depending on whether the
+    /// RudderCAN node is still reporting over a live link.
+    ///
+    /// @param dt Delta time since last call (seconds)
+    void updateRudderOverride(float dt);
+
     /// Update status window display (every 1 second).
     void updateStatusWindow();
     
@@ -88,4 +94,14 @@ private:
     static constexpr float TRANSPONDER_RATE = 10.0f; // Hz
     static constexpr float RPM_RATE = 50.0f;      // Hz
     static constexpr float ODOMETER_RATE = 10.0f; // Hz
+
+    // ============ Rudder Override Watchdog ============
+
+    // Time without a rudder frame after which the joystick override is released.
+    // Without this, unplugging the DCU would leave the sim with dead rudder pedals
+    // and no way to fly. Generous next to the node's 2s periodic refresh.
+    static constexpr float RUDDER_SIGNAL_TIMEOUT = 3.0f; // seconds
+
+    // Starts timed out, so the override is only ever claimed after real data arrives.
+    float rudderSilenceAccumulator_ = RUDDER_SIGNAL_TIMEOUT;
 };

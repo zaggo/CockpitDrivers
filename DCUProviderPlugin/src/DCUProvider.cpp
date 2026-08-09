@@ -99,6 +99,13 @@ void DCUProvider::changePort(const std::string &newPort)
         connMgr_->disconnect();
         connMgr_.reset();
     }
+    // Release the axes here too: with no connMgr_, onFlightLoopTick() bails out
+    // before the watchdog runs, so it could never hand them back itself.
+    rudderSilenceAccumulator_ = RUDDER_SIGNAL_TIMEOUT;
+    if (dataRefMgr_)
+    {
+        dataRefMgr_->setRudderOverrideEnabled(false);
+    }
     // Queue leeren
     if (msgQueue_)
     {
@@ -122,6 +129,13 @@ void DCUProvider::changePort(const std::string &newPort)
 void DCUProvider::shutdown()
 {
     XPLMDebugString("DCUProvider: Shutting down\n");
+
+    // Hand the rudder/toe-brake axes back before tearing down, otherwise X-Plane
+    // keeps the override flags set with nobody left to write the values.
+    if (dataRefMgr_)
+    {
+        dataRefMgr_->setRudderOverrideEnabled(false);
+    }
 
     if (statusWin_)
     {
@@ -167,6 +181,9 @@ void DCUProvider::onFlightLoopTick(float elapsedTime)
 
     // ============ Uplink: Gateway → X-Plane ============
     updateUplink();
+
+    // ============ Rudder Override Watchdog ============
+    updateRudderOverride(elapsedTime);
 
     // ============ Status Window Update (1Hz) ============
     static float statusUpdateAccum = 0.0f;
@@ -369,11 +386,46 @@ void DCUProvider::updateUplink()
             }
             break;
 
+        case MessageType::SerialMessageRudder:
+            // Gateway → Plugin: rudder pedal axis + toe brakes from the RudderCAN node
+            if (msg->payload.size() >= sizeof(RudderToDcuMessage))
+            {
+                const RudderToDcuMessage *message = reinterpret_cast<const RudderToDcuMessage *>(msg->payload.data());
+
+                // Claim the axes before writing, otherwise this frame's values are
+                // still the ones X-Plane discards.
+                rudderSilenceAccumulator_ = 0.0f;
+                dataRefMgr_->setRudderOverrideEnabled(true);
+
+                dataRefMgr_->setRudderRatio(static_cast<float>(message->rudder) / 1000.0f);
+                dataRefMgr_->setLeftBrakeRatio(static_cast<float>(message->leftBrake) / 1000.0f);
+                dataRefMgr_->setRightBrakeRatio(static_cast<float>(message->rightBrake) / 1000.0f);
+            }
+            break;
+
         default:
             // Unknown message type
             break;
         }
     }
+}
+
+void DCUProvider::updateRudderOverride(float dt)
+{
+    if (!dataRefMgr_)
+    {
+        return;
+    }
+
+    if (rudderSilenceAccumulator_ < RUDDER_SIGNAL_TIMEOUT)
+    {
+        rudderSilenceAccumulator_ += dt;
+    }
+
+    // Give the axes straight back if the hardware goes quiet or the link drops,
+    // so a dead DCU never costs the user their rudder.
+    const bool active = isConnected() && rudderSilenceAccumulator_ < RUDDER_SIGNAL_TIMEOUT;
+    dataRefMgr_->setRudderOverrideEnabled(active);
 }
 
 void DCUProvider::updateStatusWindow()

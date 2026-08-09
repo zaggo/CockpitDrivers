@@ -32,6 +32,29 @@ void DataRefManager::onAircraftLoaded()
 
     dr_ParkingBrake = XPLMFindDataRef("sim/cockpit2/controls/parking_brake_ratio");
 
+    // Rudder pedals + toe brakes. X-Plane rewrites these from its own joystick
+    // input every frame, so they only hold while the override datarefs below are
+    // set (see setRudderOverrideEnabled).
+    dr_Rudder = XPLMFindDataRef("sim/joystick/yoke_heading_ratio");
+    dr_LeftBrake = XPLMFindDataRef("sim/cockpit2/controls/left_brake_ratio");
+    dr_RightBrake = XPLMFindDataRef("sim/cockpit2/controls/right_brake_ratio");
+
+    dr_OverrideJoystickHeading = XPLMFindDataRef("sim/operation/override/override_joystick_heading");
+    dr_OverrideToeBrakes = XPLMFindDataRef("sim/operation/override/override_toe_brakes");
+
+    if (!dr_OverrideJoystickHeading)
+    {
+        XPLMDebugString("DCUProvider: dataref sim/operation/override/override_joystick_heading not found - rudder input will be overwritten by X-Plane\n");
+    }
+    if (!dr_OverrideToeBrakes)
+    {
+        XPLMDebugString("DCUProvider: dataref sim/operation/override/override_toe_brakes not found - toe brake input will be overwritten by X-Plane\n");
+    }
+
+    // X-Plane clears its override datarefs when an aircraft is loaded, so drop our
+    // cached state here — the next rudder frame re-asserts it.
+    rudderOverrideEnabled = false;
+
     // RPM / Tach (VFLYTEAIR is an aircraft-specific third-party dataref namespace;
     // absent on other aircraft, getters fall back to 0 via readFloat's default.
     // The aircraft's own plugin may register it later than our onAircraftLoaded(),
@@ -171,6 +194,52 @@ void DataRefManager::setParkingBrakeRatio(float ratio)
     {
         XPLMSetDataf(dr_ParkingBrake, ratio);
     }
+}
+// Rudder pedals + toe brakes
+void DataRefManager::setRudderRatio(float ratio)
+{
+    if (dr_Rudder)
+    {
+        XPLMSetDataf(dr_Rudder, ratio);
+    }
+}
+
+void DataRefManager::setLeftBrakeRatio(float ratio)
+{
+    if (dr_LeftBrake)
+    {
+        XPLMSetDataf(dr_LeftBrake, ratio);
+    }
+}
+
+void DataRefManager::setRightBrakeRatio(float ratio)
+{
+    if (dr_RightBrake)
+    {
+        XPLMSetDataf(dr_RightBrake, ratio);
+    }
+}
+
+void DataRefManager::setRudderOverrideEnabled(bool enabled)
+{
+    if (enabled == rudderOverrideEnabled)
+    {
+        return;
+    }
+    rudderOverrideEnabled = enabled;
+
+    const int value = enabled ? 1 : 0;
+    if (dr_OverrideJoystickHeading)
+    {
+        XPLMSetDatai(dr_OverrideJoystickHeading, value);
+    }
+    if (dr_OverrideToeBrakes)
+    {
+        XPLMSetDatai(dr_OverrideToeBrakes, value);
+    }
+
+    XPLMDebugString(enabled ? "DCUProvider: rudder/toe-brake override enabled\n"
+                            : "DCUProvider: rudder/toe-brake override released\n");
 }
 // ----
 
