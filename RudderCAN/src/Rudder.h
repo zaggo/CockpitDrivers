@@ -2,6 +2,7 @@
 #define RUDDER_H
 #include <Arduino.h>
 #include "Configuration.h"
+#include "AdaptiveFilter.h"
 
 struct RudderConfig {
     uint32_t magic;            // identifies a valid config record
@@ -38,6 +39,15 @@ public:
     // last reported state to be worth putting on the bus.
     RudderStateUpdate getStateUpdate();
 
+    // Reads the ADCs into the axis filters. Call this on every loop() pass; it
+    // rate-gates itself to kSampleIntervalMs internally.
+    void sample();
+
+    // Filtered raw values in Q6, for bench diagnostics.
+    int32_t getFilteredRudderQ6() const;
+    int32_t getFilteredLeftBrakeQ6() const;
+    int32_t getFilteredRightBrakeQ6() const;
+
     uint16_t getRawRudder();
     uint16_t getRawLeftBrake();
     uint16_t getRawRightBrake();
@@ -58,7 +68,11 @@ private:
     void loadConfig();
     void saveConfig();
     uint16_t sampleAverage(uint8_t pin, uint8_t count);
-    int16_t mapRudder(uint16_t raw) const;
+
+    AdaptiveFilter _rudderFilter;
+    AdaptiveFilter _leftBrakeFilter;
+    AdaptiveFilter _rightBrakeFilter;
+    uint32_t _lastSampleMs;
 };
 
 #endif // RUDDER_H

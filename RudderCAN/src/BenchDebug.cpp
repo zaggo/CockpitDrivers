@@ -31,6 +31,8 @@ void BenchDebug::printState()
     Serial.print(state.rudder);
     Serial.print(F(" (raw "));
     Serial.print(rudder->getRawRudder());
+    Serial.print(F(" q6 "));
+    Serial.print(rudder->getFilteredRudderQ6());
     Serial.print(F(")  lBrk "));
     Serial.print(state.leftBrake);
     Serial.print(F(" (raw "));
@@ -163,6 +165,8 @@ void BenchDebug::loop()
         digitalWrite(kLedPin, heartbeatLedOn ? HIGH : LOW);
         heartbeatLedOn = !heartbeatLedOn;
     }
+
+    rudder->sample();
 
     handleUserInput();
 

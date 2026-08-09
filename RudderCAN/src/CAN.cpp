@@ -17,6 +17,10 @@ void CAN::loop()
 {
     InstrumentCAN::loop();
 
+    // Must run on every pass — the filters need their 500Hz sample rate, which
+    // the send gate below would otherwise throttle to 50Hz.
+    rudder->sample();
+
     const uint32_t now = millis();
     if (now - lastSendTime < kMinSendIntervalMs)
     {

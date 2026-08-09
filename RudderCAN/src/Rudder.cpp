@@ -1,4 +1,5 @@
 #include "Rudder.h"
+#include "AxisMapping.h"
 #include "DebugLog.h"
 #include <EEPROM.h>
 
@@ -8,49 +9,29 @@ static const uint16_t kRudderConfigVersion = 1;
 static const uint16_t kRudderEepromAddress = 0;
 
 // Raw ADC counts around the calibrated center that still report 0. Rudder pedals
-// have mechanical slop and the ADC drifts a couple of LSB, so without this the
-// aircraft would never track straight.
-static const long kRudderCenterDeadbandRaw = 12;
+// have mechanical slop, so without this the aircraft would never track straight.
+// Expressed in Q6, like everything else downstream of the filter.
+static const int32_t kRudderCenterDeadbandQ6 = 12 * 64;
 
-// Report thresholds on the 0..1000 wire scale. One ADC LSB is roughly 2 units of
-// a full 0..1000 half-travel, so 8 swallows noise without feeling sticky.
-static const int16_t kRudderChangeThreshold = 8;
-static const int16_t kBrakeChangeThreshold  = 8;
+// The axis filters run far faster than the CAN send cadence: 10 samples per
+// 20ms frame. Three ADC conversions at ~112us every 2ms is about 17% CPU, which
+// leaves the MCP2515 SPI traffic plenty of room.
+static const uint32_t kSampleIntervalMs = 2;
+static const int32_t  kFilterAlphaMin   = 32; // Q8: tau ~16ms at rest, ~4x noise reduction
+static const int32_t  kFilterSlope      = 12; // fully transparent from ~19 LSB of deviation
 
-// Maps one half of a travel (from `center` to `end`) onto 0..1000. All offsets are
-// derived from the signed (end - center) delta, so an inverted potentiometer —
-// where the raw value falls as the pedal is pushed — works without special casing.
-static uint16_t mapHalf(long raw, long center, long end, long centerDeadband)
+// Report thresholds on the 0..1000 wire scale. The filtered value carries
+// sub-LSB resolution, so the wire quantum is about 1 unit and a threshold of 2
+// suppresses nothing real. Send rate stays capped at 50Hz by kMinSendIntervalMs.
+static const int16_t kRudderChangeThreshold = 2;
+static const int16_t kBrakeChangeThreshold  = 2;
+
+Rudder::Rudder()
+    : _rudderFilter(kFilterAlphaMin, kFilterSlope),
+      _leftBrakeFilter(kFilterAlphaMin, kFilterSlope),
+      _rightBrakeFilter(kFilterAlphaMin, kFilterSlope),
+      _lastSampleMs(0)
 {
-    const long span = end - center;
-    if (span == 0) {
-        return 0;
-    }
-    const long from = center + ((span > 0) ? centerDeadband : -centerDeadband);
-    const long to   = end - span / 20; // 5% end deadband, guarantees the endpoint is reachable
-    if (from == to) {
-        return 0;
-    }
-    return (uint16_t)constrain(map(raw, from, to, 0L, 1000L), 0L, 1000L);
-}
-
-// Maps a unidirectional axis (brake) between two calibration points onto 0..1000.
-static uint16_t mapUnipolar(long raw, long lo, long hi)
-{
-    const long span = hi - lo;
-    if (span == 0) {
-        return 0;
-    }
-    const long deadband = span / 20; // 5% at each end
-    const long from = lo + deadband;
-    const long to   = hi - deadband;
-    if (from == to) {
-        return 0;
-    }
-    return (uint16_t)constrain(map(raw, from, to, 0L, 1000L), 0L, 1000L);
-}
-
-Rudder::Rudder() {
     pinMode(kRudderPin, INPUT);
     pinMode(kLeftBrakePin, INPUT);
     pinMode(kRightBrakePin, INPUT);
@@ -109,6 +90,24 @@ uint16_t Rudder::getRawRudder()     { return analogRead(kRudderPin); }
 uint16_t Rudder::getRawLeftBrake()  { return analogRead(kLeftBrakePin); }
 uint16_t Rudder::getRawRightBrake() { return analogRead(kRightBrakePin); }
 
+void Rudder::sample()
+{
+    const uint32_t now = millis();
+    // Unsigned subtraction, so this stays correct across the millis() rollover.
+    if (_rudderFilter.seeded() && (now - _lastSampleMs) < kSampleIntervalMs) {
+        return;
+    }
+    _lastSampleMs = now;
+
+    _rudderFilter.update(analogRead(kRudderPin));
+    _leftBrakeFilter.update(analogRead(kLeftBrakePin));
+    _rightBrakeFilter.update(analogRead(kRightBrakePin));
+}
+
+int32_t Rudder::getFilteredRudderQ6() const     { return _rudderFilter.valueQ6(); }
+int32_t Rudder::getFilteredLeftBrakeQ6() const  { return _leftBrakeFilter.valueQ6(); }
+int32_t Rudder::getFilteredRightBrakeQ6() const { return _rightBrakeFilter.valueQ6(); }
+
 // Reads `count` samples with a short delay and returns the rounded average.
 // Averaging cancels out symmetric ADC noise, giving a stable calibration point.
 uint16_t Rudder::sampleAverage(uint8_t pin, uint8_t count) {
@@ -155,29 +154,24 @@ void Rudder::calibrateRightBrakeMax() {
     saveConfig();
 }
 
-int16_t Rudder::mapRudder(uint16_t raw) const {
-    const long v = (long)raw;
-    const long center = (long)_config.rudderCenter;
+RudderState Rudder::getState()
+{
+    // Rate-gated, so this is a no-op on the normal path; it only matters if
+    // getState() is reached before loop() has ever sampled.
+    sample();
 
-    if (v - center <= kRudderCenterDeadbandRaw && center - v <= kRudderCenterDeadbandRaw) {
-        return 0;
-    }
-
-    // Which half of the travel are we on? Decided against the signed direction of
-    // the max endpoint, so it stays correct for inverted wiring too.
-    const bool towardsMax = ((long)_config.rudderMax > center) ? (v > center) : (v < center);
-
-    if (towardsMax) {
-        return (int16_t)mapHalf(v, center, (long)_config.rudderMax, kRudderCenterDeadbandRaw);
-    }
-    return (int16_t)-(int16_t)mapHalf(v, center, (long)_config.rudderMin, kRudderCenterDeadbandRaw);
-}
-
-RudderState Rudder::getState() {
     RudderState state;
-    state.rudder     = mapRudder(getRawRudder());
-    state.leftBrake  = mapUnipolar(getRawLeftBrake(),  (long)_config.leftBrakeMin,  (long)_config.leftBrakeMax);
-    state.rightBrake = mapUnipolar(getRawRightBrake(), (long)_config.rightBrakeMin, (long)_config.rightBrakeMax);
+    state.rudder = mapRudderQ6(_rudderFilter.valueQ6(),
+                               rawToQ6(_config.rudderMin),
+                               rawToQ6(_config.rudderCenter),
+                               rawToQ6(_config.rudderMax),
+                               kRudderCenterDeadbandQ6);
+    state.leftBrake = mapUnipolarQ6(_leftBrakeFilter.valueQ6(),
+                                    rawToQ6(_config.leftBrakeMin),
+                                    rawToQ6(_config.leftBrakeMax));
+    state.rightBrake = mapUnipolarQ6(_rightBrakeFilter.valueQ6(),
+                                     rawToQ6(_config.rightBrakeMin),
+                                     rawToQ6(_config.rightBrakeMax));
     return state;
 }
 
