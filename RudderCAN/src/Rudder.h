@@ -48,6 +48,9 @@ public:
     int32_t getFilteredLeftBrakeQ6() const;
     int32_t getFilteredRightBrakeQ6() const;
 
+    // The calibration currently in effect, for bench diagnostics.
+    const RudderConfig& getConfig() const;
+
     uint16_t getRawRudder();
     uint16_t getRawLeftBrake();
     uint16_t getRawRightBrake();

@@ -9,16 +9,13 @@ static const uint32_t kRudderConfigMagic   = 0x52554443;
 static const uint16_t kRudderConfigVersion = 1;
 static const uint16_t kRudderEepromAddress = 0;
 
-// Raw ADC counts around the calibrated center that still report 0. Rudder pedals
-// have mechanical slop, so without this the aircraft would never track straight.
-// Expressed in Q6, like everything else downstream of the filter.
-//
-// This is an absolute count, unlike the proportional 5% end deadbands in
-// AxisMapping.h (span / 20): at a +-490 raw span it is 2.4% of half-travel, but
-// 24% at +-50. Deliberately left absolute here and not made proportional — that
-// would be a behaviour change, and the real sensor span hasn't been measured yet.
-// Revisit once it has.
-static const int32_t kRudderCenterDeadbandQ6 = 12 * 64;
+// All three deadbands are now proportional and live in Configuration.h as
+// kRudderCenterDeadbandPercent / kRudderEndDeadbandPercent /
+// kBrakeEndDeadbandPercent. The centre deadband used to be an absolute 12 raw
+// counts; proportional means a re-calibration after a mechanical change no
+// longer silently changes how much slop is swallowed, but it also means a
+// calibration with too little travel shrinks it to nothing. The `cal ... travel`
+// line printed by BenchDebug after every calibration is the check for that.
 
 // The axis filters run far faster than the CAN send cadence: 10 samples per
 // 20ms frame. Three ADC conversions at ~112us every 2ms is about 17% CPU, which
@@ -91,6 +88,8 @@ void Rudder::saveConfig() {
     EEPROM.put(kRudderEepromAddress, _config);
     DEBUGLOG_PRINTLN(F("Rudder: config saved"));
 }
+
+const RudderConfig& Rudder::getConfig() const { return _config; }
 
 uint16_t Rudder::getRawRudder()     { return analogRead(kRudderPin); }
 uint16_t Rudder::getRawLeftBrake()  { return analogRead(kLeftBrakePin); }
@@ -171,13 +170,16 @@ RudderState Rudder::getState()
                                rawToQ6(_config.rudderMin),
                                rawToQ6(_config.rudderCenter),
                                rawToQ6(_config.rudderMax),
-                               kRudderCenterDeadbandQ6);
+                               kRudderCenterDeadbandPercent,
+                               kRudderEndDeadbandPercent);
     state.leftBrake = mapUnipolarQ6(_leftBrakeFilter.valueQ6(),
                                     rawToQ6(_config.leftBrakeMin),
-                                    rawToQ6(_config.leftBrakeMax));
+                                    rawToQ6(_config.leftBrakeMax),
+                                    kBrakeEndDeadbandPercent);
     state.rightBrake = mapUnipolarQ6(_rightBrakeFilter.valueQ6(),
                                      rawToQ6(_config.rightBrakeMin),
-                                     rawToQ6(_config.rightBrakeMax));
+                                     rawToQ6(_config.rightBrakeMax),
+                                     kBrakeEndDeadbandPercent);
     return state;
 }
 

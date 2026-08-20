@@ -15,7 +15,10 @@ class BenchDebug {
     private:
         void handleUserInput();
         bool handleRudderInput(const char* command);
+        bool handleCalibrationInput(const char* command);
+        void printCalibration();
         void printState();
+        void noiseProbe();
 
         // Fixed buffer instead of String: heap churn on an ATmega328 eats the
         // headroom the CAN path needs.
@@ -26,6 +29,9 @@ class BenchDebug {
         uint32_t heartbeat = 0L;
         bool heartbeatLedOn = false;
 
+        // Live values are only interesting at reading speed on the bench; a
+        // faster cadence floods the console and starves the sample loop.
+        static const uint32_t kPrintIntervalMs = 100L;
         uint32_t lastPrintMs = 0L;
 
         Rudder* rudder;

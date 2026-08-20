@@ -4,6 +4,57 @@
 
 const int kLedPin = 13;
 
+namespace {
+
+struct AdcStats {
+    uint16_t minValue;
+    uint16_t maxValue;
+    uint32_t sum;
+    uint16_t count;
+};
+
+void statsInit(AdcStats& stats)
+{
+    stats.minValue = 1023;
+    stats.maxValue = 0;
+    stats.sum      = 0;
+    stats.count    = 0;
+}
+
+void statsAdd(AdcStats& stats, uint16_t value)
+{
+    if (value < stats.minValue) {
+        stats.minValue = value;
+    }
+    if (value > stats.maxValue) {
+        stats.maxValue = value;
+    }
+    stats.sum += value;
+    stats.count++;
+}
+
+// Distance between two calibration points, direction-agnostic: inverted sensor
+// wiring puts the larger raw value at either end.
+uint16_t spanOf(uint16_t a, uint16_t b)
+{
+    return (a > b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
+}
+
+void statsPrint(const __FlashStringHelper* label, const AdcStats& stats)
+{
+    Serial.print(label);
+    Serial.print(F(" min "));
+    Serial.print(stats.minValue);
+    Serial.print(F(" max "));
+    Serial.print(stats.maxValue);
+    Serial.print(F(" spread "));
+    Serial.print((uint16_t)(stats.maxValue - stats.minValue));
+    Serial.print(F(" avg "));
+    Serial.println(stats.count ? (uint16_t)((stats.sum + stats.count / 2) / stats.count) : 0);
+}
+
+}
+
 BenchDebug::BenchDebug(Rudder* rudder): rudder(rudder)
 {
     #if !DEBUGLOG_ENABLE
@@ -48,7 +99,98 @@ void BenchDebug::printState()
     Serial.println(')');
 }
 
-bool BenchDebug::handleRudderInput(const char* command)
+// Diagnostic: characterises the raw ADC noise on each axis. printState()'s raw
+// column is a single extra analogRead at print time, so it never shows what the
+// filters are actually being fed between prints — this does.
+//
+// Three passes, so the result tells apart the two candidate noise sources:
+//   A  same channel order and cadence as Rudder::sample() — the filters' real diet
+//   B  one channel, no multiplexer switching at all
+//   C  round robin, but the brake channel is read twice and only the second read
+//      kept, the standard workaround for a sample-and-hold that has not settled
+//      on a high-impedance source
+// A noisy but B quiet  => multiplexer/source-impedance, not the pot.
+// A and B both noisy   => the analog signal itself (pot, wiring, contact).
+// C quiet while A is not => confirms the settling explanation directly.
+void BenchDebug::noiseProbe()
+{
+    const uint16_t kProbeSamples = 200;
+
+    AdcStats rudderRoundRobin, leftRoundRobin, rightRoundRobin;
+    statsInit(rudderRoundRobin);
+    statsInit(leftRoundRobin);
+    statsInit(rightRoundRobin);
+    for (uint16_t i = 0; i < kProbeSamples; i++) {
+        statsAdd(rudderRoundRobin, analogRead(kRudderPin));
+        statsAdd(leftRoundRobin,   analogRead(kLeftBrakePin));
+        statsAdd(rightRoundRobin,  analogRead(kRightBrakePin));
+        delay(2);
+    }
+
+    AdcStats leftSingleChannel;
+    statsInit(leftSingleChannel);
+    for (uint16_t i = 0; i < kProbeSamples; i++) {
+        statsAdd(leftSingleChannel, analogRead(kLeftBrakePin));
+        delay(2);
+    }
+
+    AdcStats leftDoubleRead;
+    statsInit(leftDoubleRead);
+    for (uint16_t i = 0; i < kProbeSamples; i++) {
+        analogRead(kRudderPin);
+        analogRead(kLeftBrakePin);
+        statsAdd(leftDoubleRead, analogRead(kLeftBrakePin));
+        analogRead(kRightBrakePin);
+        delay(2);
+    }
+
+    Serial.println(F("ADC noise probe (200 samples each, hold pedals still):"));
+    statsPrint(F("A rud       "), rudderRoundRobin);
+    statsPrint(F("A lBrk      "), leftRoundRobin);
+    statsPrint(F("A rBrk      "), rightRoundRobin);
+    statsPrint(F("B lBrk solo "), leftSingleChannel);
+    statsPrint(F("C lBrk x2   "), leftDoubleRead);
+}
+
+// Every calibration point is only as good as the travel it spans: a small span
+// means each raw ADC count is worth many wire units, so noise that would be
+// invisible on a wide axis swings the reported value hard. Printing the span
+// right after sampling a point makes a bad mechanical/electrical range obvious
+// at the moment it is calibrated, instead of at fly time.
+void BenchDebug::printCalibration()
+{
+    const RudderConfig& config = rudder->getConfig();
+
+    Serial.print(F("cal rud "));
+    Serial.print(config.rudderMin);
+    Serial.print('/');
+    Serial.print(config.rudderCenter);
+    Serial.print('/');
+    Serial.print(config.rudderMax);
+    Serial.print(F(" travel "));
+    Serial.print(spanOf(config.rudderMin, config.rudderMax));
+    Serial.print(F(" (L "));
+    Serial.print(spanOf(config.rudderCenter, config.rudderMin));
+    Serial.print(F(" R "));
+    Serial.print(spanOf(config.rudderCenter, config.rudderMax));
+    Serial.println(')');
+
+    Serial.print(F("cal lBrk "));
+    Serial.print(config.leftBrakeMin);
+    Serial.print('/');
+    Serial.print(config.leftBrakeMax);
+    Serial.print(F(" travel "));
+    Serial.println(spanOf(config.leftBrakeMin, config.leftBrakeMax));
+
+    Serial.print(F("cal rBrk "));
+    Serial.print(config.rightBrakeMin);
+    Serial.print('/');
+    Serial.print(config.rightBrakeMax);
+    Serial.print(F(" travel "));
+    Serial.println(spanOf(config.rightBrakeMin, config.rightBrakeMax));
+}
+
+bool BenchDebug::handleCalibrationInput(const char* command)
 {
     if (strcmp(command, "r-") == 0) {
         Serial.println(F("Sampling rudder MIN (hold full LEFT)..."));
@@ -85,8 +227,22 @@ bool BenchDebug::handleRudderInput(const char* command)
         rudder->calibrateRightBrakeMax();
         Serial.println(F("Right brake max calibrated."));
         return true;
-    } else if (strcmp(command, "s") == 0) {
+    }
+    return false;
+}
+
+bool BenchDebug::handleRudderInput(const char* command)
+{
+    if (handleCalibrationInput(command)) {
+        printCalibration();
+        return true;
+    }
+
+    if (strcmp(command, "s") == 0) {
         printState();
+        return true;
+    } else if (strcmp(command, "n") == 0) {
+        noiseProbe();
         return true;
     } else if (strcmp(command, "?") == 0) {
         Serial.println(F("Rudder Commands:"));
@@ -96,6 +252,7 @@ bool BenchDebug::handleRudderInput(const char* command)
         Serial.println(F("l0/l1: calibrate LEFT brake released/pressed"));
         Serial.println(F("b0/b1: calibrate RIGHT brake released/pressed"));
         Serial.println(F("s: show current state"));
+        Serial.println(F("n: ADC noise probe (takes ~1.5s, hold pedals still)"));
         return true;
     }
     return false;
@@ -183,7 +340,7 @@ void BenchDebug::loop()
     // passes that will actually print, so an unprinted change leaves
     // _lastReportedState stale and gets picked up as an accumulated delta on
     // the next gate-open pass.
-    if (millis() - lastPrintMs >= 100) {
+    if (millis() - lastPrintMs >= kPrintIntervalMs) {
         RudderStateUpdate update = rudder->getStateUpdate();
         if (update.changed) {
             lastPrintMs = millis();
