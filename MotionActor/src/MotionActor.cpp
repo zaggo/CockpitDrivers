@@ -30,6 +30,7 @@ void MotionActor::home()
 {
     DEBUGLOG_PRINTLN(F("Homing started"));
     state = MotionActorState::homing;
+    haveLastCommanded = false;   // next demand glides gently (see setDemands)
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         if (actors[i] == nullptr)
@@ -147,6 +148,7 @@ void MotionActor::powerDown()
 {
     DEBUGLOG_PRINTLN(F("Shutdown"));
     state = MotionActorState::stopped;
+    haveLastCommanded = false;   // next demand glides gently (see setDemands)
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         if (actors[i] != nullptr)
@@ -164,23 +166,50 @@ void MotionActor::setDemands(uint16_t demand1, uint16_t demand2)
         return;
     }
     const uint16_t demands[kActorCount] = {demand1, demand2};
+
+    // A bare p(pos) makes the Kangaroo run to each new target at its maximum
+    // configured speed and stop there - a smooth 60 Hz demand stream becomes a
+    // staircase of hard micro-snaps. Instead, limit each move's speed so the
+    // actuator arrives roughly when the NEXT demand is due (20% overhead so it
+    // doesn't fall behind), floored so it can still catch up after a gap.
+    const unsigned long now = millis();
+    unsigned long dtMs = now - lastDemandTimestampMs;
+    if (dtMs < 10)  dtMs = 10;   // guard against burst arrivals / div blowup
+    if (dtMs > 100) dtMs = 100;  // after a long gap, don't crawl to the target
+
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
-        DEBUGLOG_PRINT(F("Logical Min/Max Actor "));
-        DEBUGLOG_PRINT(i + 1);
-        DEBUGLOG_PRINTLN(F(":"));
-        DEBUGLOG_PRINT(F("Min: "));
-        DEBUGLOG_PRINTLN(logicalMinPosition[i]);
-        DEBUGLOG_PRINT(F("Max: "));
-        DEBUGLOG_PRINTLN(logicalMaxPosition[i]);
+        const int32_t pos = map(demands[i], 0, 0xffff, logicalMinPosition[i], logicalMaxPosition[i]);
+        const int32_t range = logicalMaxPosition[i] - logicalMinPosition[i];
 
-        int32_t pos = map(demands[i], 0, 0xffff, logicalMinPosition[i], logicalMaxPosition[i]);
-        DEBUGLOG_PRINT(F("Set Actor "));
-        DEBUGLOG_PRINT(i + 1);
-        DEBUGLOG_PRINT(F(" pos "));
-        DEBUGLOG_PRINTLN(String(static_cast<int>(pos)));
-        actors[i]->p(pos);
+        if (!haveLastCommanded)
+        {
+            // First demand after homing: glide gently (5 s over the full logical
+            // range), the platform may be far from the commanded park pose.
+            actors[i]->p(pos, max(range / 5, 1L));
+        }
+        else
+        {
+            int32_t delta = pos - lastCommandedPosition[i];
+            if (delta < 0) delta = -delta;
+            if (delta == 0)
+            {
+                // Unchanged target: the Kangaroo is already heading there (or
+                // holding it) - no need to resend.
+                continue;
+            }
+            // Speed to cover delta in ~dt with 20% headroom...
+            int32_t speed = (delta * 1200L) / static_cast<int32_t>(dtMs);
+            // ...but never slower than range/5 per second, or an actuator that
+            // lags behind the commanded trajectory could never catch up.
+            const int32_t minSpeed = max(range / 5, 1L);
+            if (speed < minSpeed) speed = minSpeed;
+            actors[i]->p(pos, speed);
+        }
+        lastCommandedPosition[i] = pos;
     }
+    lastDemandTimestampMs = now;
+    haveLastCommanded = true;
 }
 
 void MotionActor::calibrationMove(uint8_t channel, uint16_t positionPercent)

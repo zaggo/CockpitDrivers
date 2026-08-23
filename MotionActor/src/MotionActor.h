@@ -43,6 +43,14 @@ class MotionActor {
         int32_t logicalMinPosition[kActorCount] = {0};
         int32_t logicalMaxPosition[kActorCount] = {0};
 
+        // Demand-to-demand speed shaping (see setDemands): remember the previously
+        // commanded position and when it was commanded, so each p() can carry a
+        // speed limit that makes the actuator glide between targets instead of
+        // snapping at the Kangaroo's maximum speed.
+        int32_t lastCommandedPosition[kActorCount] = {0};
+        bool haveLastCommanded = false;
+        unsigned long lastDemandTimestampMs = 0;
+
         KangarooChannel* channelForIndex(uint8_t channel);
         bool readCurrentPosition(uint8_t channel, int32_t& position);
         bool loadLogicalLimitsFromEeprom();
