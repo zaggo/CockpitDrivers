@@ -8,7 +8,10 @@
 
 const uint32_t kHeartbeatInterval = 1000L; // 1 second
 static const unsigned long kSerialProcessingBudgetMs = 100;
-static const unsigned long kDemandBatchIntervalMs = 30;
+// 0 = forward every received frame immediately (plugin sends 60 Hz; per-pair
+// change-dedup in processDemands() still applies). A 30 ms gate aliased against
+// the 60 Hz input into irregular 17/33/50 ms forwarding gaps -> jerky motion.
+static const unsigned long kDemandBatchIntervalMs = 0;
 
 const uint8_t kStatusLedRedPin = 22;
 const uint8_t kStatusLedGreenPin = 23;
