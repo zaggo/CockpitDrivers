@@ -37,4 +37,5 @@ private:
     XPLMDataRef dr_groundspeed_ = nullptr;
     XPLMDataRef dr_engineRpm_ = nullptr;
     XPLMDataRef dr_alpha_ = nullptr;
+    XPLMDataRef dr_paused_ = nullptr;
 };

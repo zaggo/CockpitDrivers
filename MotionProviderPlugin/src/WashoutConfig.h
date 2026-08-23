@@ -25,5 +25,11 @@ struct WashoutConfig {
     double rotWashoutTau = 3.0;        // slow angle recentering
     double rotLimitDeg   = 3.0;        // tilt + rotational sum on one axis stays in envelope
 
+    // Output smoothing: 2nd-order (two cascaded one-pole) low-pass on the final
+    // washout pose. Removes high-frequency grain (turbulence/engine jitter in the
+    // g/PQR datarefs) that the heave/rot channels otherwise pass straight to the
+    // actuators. 0 = off. Cost: ~2*tau of added cue latency.
+    double smoothTau = 0.0;
+
     static WashoutConfig defaults() { return WashoutConfig{}; }
 };

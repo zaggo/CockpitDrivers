@@ -23,4 +23,6 @@ struct MotionCues {
     float groundspeed = 0.0f;  // sim/flightmodel/position/groundspeed (m/s)
     float engineRpm   = 0.0f;  // sim/cockpit2/engine/indicators/engine_speed_rpm[0]
     float alphaDeg    = 0.0f;  // sim/flightmodel/position/alpha
+
+    bool simPaused = false;    // sim/time/paused
 };

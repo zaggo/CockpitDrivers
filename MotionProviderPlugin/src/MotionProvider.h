@@ -56,6 +56,7 @@ private:
     MotionCues latestCues_;
     SolveResult latestSolve_;
     Pose latestPose_;              // pose fed to the IK this tick (for display)
+    Pose lastLivePose_;            // last washout+effects output; held frozen while sim is paused
 
     float statusAccumSec_ = 0.0f;
 

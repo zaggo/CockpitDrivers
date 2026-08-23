@@ -234,11 +234,18 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         // jitter is added after IK below. Other manual axes use the hand pose.
         rawLive = (manualAxis_ == 6) ? Pose{} : manualPose_;
     } else if (washout_ && effects_) {
-        Pose w = washout_->update(latestCues_, dt);
-        Pose e = effects_->update(latestCues_, dt);
-        rawLive.surge = w.surge + e.surge;  rawLive.sway  = w.sway  + e.sway;
-        rawLive.heave = w.heave + e.heave;  rawLive.roll  = w.roll  + e.roll;
-        rawLive.pitch = w.pitch + e.pitch;  rawLive.yaw   = w.yaw   + e.yaw;
+        // While the sim is paused, the flight-loop callback keeps ticking with real
+        // (wall-clock) dt even though the flight model is frozen. Don't feed that real
+        // time into the filters/effects (their internal decay and oscillator phases
+        // would keep running against a stale snapshot) - just hold the last live pose.
+        if (!latestCues_.simPaused) {
+            Pose w = washout_->update(latestCues_, dt);
+            Pose e = effects_->update(latestCues_, dt);
+            lastLivePose_.surge = w.surge + e.surge;  lastLivePose_.sway  = w.sway  + e.sway;
+            lastLivePose_.heave = w.heave + e.heave;  lastLivePose_.roll  = w.roll  + e.roll;
+            lastLivePose_.pitch = w.pitch + e.pitch;  lastLivePose_.yaw   = w.yaw   + e.yaw;
+        }
+        rawLive = lastLivePose_;
     }
 
     // Watchdog + runaway/NaN monitor (before the envelope clamp masks divergence).
@@ -316,6 +323,13 @@ void MotionProvider::onAircraftLoaded() {
     if (dataRefs_) {
         dataRefs_->onAircraftLoaded();
     }
+    // A new/reloaded aircraft starts a fresh flight-model history. Without this, stale
+    // washout/effects state from the previous flight (e.g. built up during a landing or
+    // a hard turn) would bleed into the new one and take ~15-20s of its own decay time
+    // constants to wash out - large, sim-unrelated jerking right after the flight starts.
+    if (washout_) washout_->reset();
+    if (effects_) effects_->reset();
+    lastLivePose_ = Pose{};   // don't hold the previous flight's pose if the sim loads paused
 }
 
 void MotionProvider::recomputeParkPose() {

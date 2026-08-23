@@ -30,4 +30,9 @@ private:
     // Rotational state
     double rollRateLp_ = 0.0, pitchRateLp_ = 0.0, yawRateLp_ = 0.0;
     double rollAngle_ = 0.0, pitchAngle_ = 0.0, yawAngle_ = 0.0;
+
+    // Output smoothing state (two cascaded one-pole LPs per DOF; heave, roll,
+    // pitch, yaw - surge/sway are always 0 here). Active when cfg_.smoothTau > 0.
+    double sm1_[4] = {0, 0, 0, 0};
+    double sm2_[4] = {0, 0, 0, 0};
 };

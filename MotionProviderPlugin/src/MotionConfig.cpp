@@ -115,6 +115,7 @@ WashoutConfig MotionConfig::loadWashout(const std::string& path) {
         getDouble(*t, "rot_hp_tau", w.rotHpTau);
         getDouble(*t, "rot_washout_tau", w.rotWashoutTau);
         getDouble(*t, "rot_limit_deg", w.rotLimitDeg);
+        getDouble(*t, "smooth_tau", w.smoothTau);
     }
     return w;
 }
@@ -221,6 +222,7 @@ bool MotionConfig::writeDefaults(const std::string& path) {
     f << "rot_hp_tau = "            << w.rotHpTau           << "\n";
     f << "rot_washout_tau = "       << w.rotWashoutTau      << "\n";
     f << "rot_limit_deg = "         << w.rotLimitDeg        << "\n";
+    f << "smooth_tau = "            << w.smoothTau          << "\n";
 
     f << "\n[effects]\n";
     f << "touchdown_gain = "       << e.touchdownGain     << "\n";

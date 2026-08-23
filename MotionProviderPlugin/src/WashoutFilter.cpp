@@ -25,6 +25,7 @@ void WashoutFilter::reset() {
     surgeLp_ = swayLp_ = tiltPitch_ = tiltRoll_ = 0.0;
     rollRateLp_ = pitchRateLp_ = yawRateLp_ = 0.0;
     rollAngle_ = pitchAngle_ = yawAngle_ = 0.0;
+    for (int i = 0; i < 4; ++i) { sm1_[i] = 0.0; sm2_[i] = 0.0; }
 }
 
 Pose WashoutFilter::update(const MotionCues& c, double dt) {
@@ -62,12 +63,32 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     rotChan(cfg_.rotPitchGain, c.pitchRate, pitchRateLp_, pitchAngle_);
     rotChan(cfg_.rotYawGain,   c.yawRate,   yawRateLp_,   yawAngle_);
 
+    // --- Output smoothing: 2nd-order LP removes high-frequency grain the HP
+    // channels pass through (turbulence/engine jitter in g/PQR). The actuators
+    // then track a jerk-limited trajectory instead of a jittery one.
+    double out[4] = { heavePos_,
+                      tiltRoll_  + rollAngle_,
+                      tiltPitch_ + pitchAngle_,
+                      yawAngle_ };
+    if (cfg_.smoothTau > 0.0) {
+        const double a = lpAlpha(dt, cfg_.smoothTau);
+        for (int i = 0; i < 4; ++i) {
+            sm1_[i] += a * (out[i] - sm1_[i]);
+            sm2_[i] += a * (sm1_[i] - sm2_[i]);
+            out[i] = sm2_[i];
+        }
+    } else {
+        // Keep state tracking the raw output so enabling smoothing via a config
+        // reload doesn't start from zero (= a pose jump).
+        for (int i = 0; i < 4; ++i) { sm1_[i] = out[i]; sm2_[i] = out[i]; }
+    }
+
     Pose p;
     p.surge = 0.0f;
     p.sway  = 0.0f;
-    p.heave = static_cast<float>(heavePos_);
-    p.roll  = static_cast<float>(tiltRoll_  + rollAngle_);
-    p.pitch = static_cast<float>(tiltPitch_ + pitchAngle_);
-    p.yaw   = static_cast<float>(yawAngle_);
+    p.heave = static_cast<float>(out[0]);
+    p.roll  = static_cast<float>(out[1]);
+    p.pitch = static_cast<float>(out[2]);
+    p.yaw   = static_cast<float>(out[3]);
     return p;
 }

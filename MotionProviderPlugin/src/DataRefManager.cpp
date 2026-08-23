@@ -20,6 +20,7 @@ void DataRefManager::onAircraftLoaded() {
     dr_groundspeed_ = XPLMFindDataRef("sim/flightmodel/position/groundspeed");
     dr_engineRpm_   = XPLMFindDataRef("sim/cockpit2/engine/indicators/engine_speed_rpm");
     dr_alpha_       = XPLMFindDataRef("sim/flightmodel/position/alpha");
+    dr_paused_      = XPLMFindDataRef("sim/time/paused");
 }
 
 MotionCues DataRefManager::sample() const {
@@ -36,6 +37,7 @@ MotionCues DataRefManager::sample() const {
     c.groundspeed = readFloat(dr_groundspeed_);
     c.engineRpm   = readFloatArrayElem(dr_engineRpm_, 0);
     c.alphaDeg    = readFloat(dr_alpha_);
+    c.simPaused   = readInt(dr_paused_) != 0;
     return c;
 }
 

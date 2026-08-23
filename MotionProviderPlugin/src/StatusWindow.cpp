@@ -179,7 +179,7 @@ void StatusWindow::draw() {
     char buf[160];
     static const char* kAxis[6] = { "surge","sway","heave","roll","pitch","yaw" };
 
-    drawString(x, y, "Motion Provider v0.7 (Phase 5)", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "Motion Provider v0.10 (Phase 5)", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
     // ---- Mode toggle (SIM/MANUAL, disarmed only) + DISARM e-stop ----
@@ -275,8 +275,12 @@ void StatusWindow::draw() {
     y -= 16;
 
     for (int i = 0; i < 6; ++i) {
-        std::snprintf(buf, sizeof(buf), "P%d  %+7.2f deg  ->  %5u%s",
+        // "target" is the raw IK setpoint (pre-SafetyLimiter); "sent" is what's actually
+        // on the wire. A gap between them that doesn't close means the limiter is lagging
+        // behind (e.g. too little accel/vel budget) - otherwise-invisible in this window.
+        std::snprintf(buf, sizeof(buf), "P%d  %+7.2f deg  target %5u  sent %5u%s",
                       i + 1, data_.solve.legs[i].angleDeg, data_.solve.setpoints[i],
+                      data_.sentSetpoints[i],
                       data_.solve.legs[i].reachable ? "" : "  (unreachable)");
         drawString(x, y, buf, 0.85f, 0.85f, 0.9f);
         y -= 16;
