@@ -1,0 +1,60 @@
+# MotionProviderPlugin configuration (auto-generated with default values).
+# Edit values and click "Reload config" in the status window to apply.
+
+[geometry]
+base_radius_mm = 425
+platform_radius_mm = 480
+horn_length_mm = 100
+rod_length_mm = 466
+base_angle_deg = [60, 0, 300, 240, 180, 120]
+anchor_angle_deg = [83.75, 336.25, 323.75, 216.25, 203.75, 96.25]
+horn_azimuth_deg = [150, 270, 30, 150, 270, 30]
+bff_actuator = [5, 6, 1, 2, 3, 4]
+
+[servo]
+angle_at_full_scale_deg = 45
+demand_home = 32640
+demand_max = 65280
+
+[washout]
+heave_gain = 0.375 # restored - softness comes from fixing the delivery chain, not from gain
+heave_hp_tau = 1
+heave_vel_washout_tau = 2
+heave_pos_washout_tau = 2
+heave_limit_mm = 30
+tilt_surge_gain = 0.6 # was 0.75 (80% - pitch/roll trim)
+tilt_sway_gain = 0.6 # was 0.75 (80% - pitch/roll trim)
+tilt_lp_tau = 1.5
+tilt_limit_deg = 3
+tilt_rate_limit_dps = 3 # was 5 - next lever: slows how fast tilt is allowed to ramp, not just how big
+rot_roll_gain = 0.42 # was 0.525 (80% - pitch/roll trim)
+rot_pitch_gain = 0.42 # was 0.525 (80% - pitch/roll trim)
+rot_yaw_gain = 0.525 # restored
+rot_hp_tau = 1
+rot_washout_tau = 3
+rot_limit_deg = 3
+
+[effects]
+touchdown_gain = 2 # restored
+touchdown_freq_hz = 5 # was 6
+touchdown_decay_tau = 0.35 # was 0.25
+rumble_gain = 0.75 # restored
+rumble_freq_hz = 12
+rumble_speed_ref_mps = 40
+engine_gain = 0
+buffet_gain = 0
+
+[serial]
+baud = 115200
+output_rate_hz = 60
+
+[safety]
+max_velocity_cps = 30000 # reverted from 15000 - limiter saturation makes motion feel mechanical, same failure mode as the accel cap
+max_acceleration_cps2 = 42000 # reverted from 12600 - was lagging behind target (see "sent" vs "target")
+park_heave_mm = -500
+arm_ramp_sec = 3
+disarm_ramp_sec = 2
+runaway_tilt_deg = 45
+runaway_trans_mm = 500
+runaway_hold_sec = 1
+max_dt_sec = 0.1
