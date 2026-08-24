@@ -60,6 +60,7 @@ class MotionActor {
         unsigned long lastDemandTimestampMs = 0;
 
         KangarooChannel* channelForIndex(uint8_t channel);
+        void setStreaming(bool enabled);
         bool readCurrentPosition(uint8_t channel, int32_t& position);
         bool loadLogicalLimitsFromEeprom();
         void saveLogicalLimitsToEeprom();

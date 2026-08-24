@@ -26,11 +26,28 @@ MotionActor::~MotionActor()
     DEBUGLOG_PRINTLN(F("MotionActor destructor"));
 }
 
+void MotionActor::setStreaming(bool enabled)
+{
+    // Streaming makes p() a fire-and-forget write (~0.4 ms) instead of a
+    // confirmed round-trip (~20 ms/channel, measured) - the only way the two
+    // channels can follow a 60 Hz demand stream. A lost command is corrected
+    // by the next frame 17 ms later. Anything that needs confirmation or a
+    // waitable monitor (home, start, waitAll) must run with streaming off.
+    for (uint8_t i = 0; i < kActorCount; ++i)
+    {
+        if (actors[i] != nullptr)
+        {
+            actors[i]->streaming(enabled);
+        }
+    }
+}
+
 void MotionActor::home()
 {
     DEBUGLOG_PRINTLN(F("Homing started"));
     state = MotionActorState::homing;
     haveLastCommanded = false;   // next demand glides gently (see setDemands)
+    setStreaming(false);         // home/start/waitAll need confirmed commands
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         if (actors[i] == nullptr)
@@ -135,6 +152,7 @@ void MotionActor::home()
             return;
         }
 
+        setStreaming(true); // demand streaming needs fire-and-forget moves
         state = MotionActorState::active;
     }
     else
@@ -149,6 +167,7 @@ void MotionActor::powerDown()
     DEBUGLOG_PRINTLN(F("Shutdown"));
     state = MotionActorState::stopped;
     haveLastCommanded = false;   // next demand glides gently (see setDemands)
+    setStreaming(false);         // power-down must be delivered reliably
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         if (actors[i] != nullptr)
@@ -198,12 +217,19 @@ void MotionActor::setDemands(uint16_t demand1, uint16_t demand2)
                 // holding it) - no need to resend.
                 continue;
             }
-            // Speed to cover delta in ~dt with 20% headroom...
-            int32_t speed = (delta * 1200L) / static_cast<int32_t>(dtMs);
-            // ...but never slower than range/5 per second, or an actuator that
-            // lags behind the commanded trajectory could never catch up.
-            const int32_t minSpeed = max(range / 5, 1L);
-            if (speed < minSpeed) speed = minSpeed;
+            // Speed to cover delta in ~dt with 10% headroom, so consecutive
+            // moves chain into one continuous glide instead of a stop-start
+            // staircase. (The old range/5 floor made every micro-step finish
+            // early and dwell - measured as the arm-ramp jerkiness.)
+            int32_t speed = (delta * 1100L) / static_cast<int32_t>(dtMs);
+            // Cap: a large delta right after a demand gap (dt clamped to
+            // 100 ms) would otherwise command a violent snap - measured at up
+            // to 12x range/s. Half a stroke per second still sits above the
+            // plugin's SafetyLimiter maximum (30000 counts/s on the 65280
+            // scale = 0.46 range/s), so no legitimate motion cue is clipped.
+            const int32_t maxSpeed = max(range / 2, 1L);
+            if (speed > maxSpeed) speed = maxSpeed;
+            if (speed < 1) speed = 1;
             actors[i]->p(pos, speed);
         }
         lastCommandedPosition[i] = pos;
