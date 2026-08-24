@@ -19,6 +19,7 @@ struct CanIdError {
     uint16_t canId;
     bool hasError;
     CanErrorType errorType;
+    uint32_t setAtMs; // for TX_ERROR auto-expiry
 };
 
 class CAN : public BaseCAN {
@@ -34,6 +35,9 @@ class CAN : public BaseCAN {
 
         // Check if system is in active state (for conditional message sending)
         bool isSystemActive() const;
+
+        // Number of failed CAN transmissions since boot (for GatewayStats)
+        uint16_t txFailureCount() const { return txFailures; }
 
     private:
         uint32_t lastGatewayHeartbeatSendMs = 0;
@@ -64,6 +68,10 @@ class CAN : public BaseCAN {
         void checkActorHeartbeats();
         void clearCanIdError(uint16_t canId, CanErrorType errorType = CanErrorType::NONE);
         void setCanIdError(uint16_t canId, CanErrorType errorType);
+        void clearAllTxErrors();
+        void expireStaleTxErrors();
+
+        uint16_t txFailures = 0;
 
         // System state and status LED management
         SystemState calculateSystemState();

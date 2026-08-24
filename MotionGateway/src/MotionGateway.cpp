@@ -94,6 +94,12 @@ void MotionGateway::loop()
         break;
       }
 
+      // The parser state machine is shared between the modes - without a reset
+      // the first frame after a mode change is parsed from a mid-frame offset.
+      state = RxState::SyncB;
+      idx = 0;
+      pendingDemandValid = false;
+
       mode = newMode;
     }
   }
@@ -108,6 +114,25 @@ void MotionGateway::loop()
   }
 
   handleSerialInput();
+
+  // Apply the newest complete frame AFTER the serial drain: the blocking CAN
+  // sends (up to ~5 ms each on TX contention) must not stall the RX loop, or
+  // the serial buffer overflows and frames corrupt silently.
+  if (pendingDemandValid)
+  {
+    pendingDemandValid = false;
+    processDemands(pendingDemand);
+  }
+
+  if ((now - lastStatsPrintMs) >= 5000)
+  {
+    lastStatsPrintMs = now;
+    if (mode != MotionMode::mode0)
+    {
+      stats.print(canBus->txFailureCount());
+      stats.reset();
+    }
+  }
 }
 
 void MotionGateway::handleSerialInput()
@@ -146,6 +171,10 @@ void MotionGateway::handleSerialInput()
       switch (state)
       {
       case RxState::SyncB:
+        if (b != 'B')
+        {
+          stats.resyncBytes++;
+        }
         state = (b == 'B') ? RxState::SyncC : RxState::SyncB;
         break;
       case RxState::SyncC:
@@ -174,6 +203,10 @@ void MotionGateway::handleSerialInput()
             handleBFFFrame(data);
           }
           state = RxState::SyncB;
+        }
+        else
+        {
+          stats.crMissBytes++;
         }
         break;
       default:
@@ -215,6 +248,10 @@ void MotionGateway::handleSerialInput()
           }
           state = RxState::SyncB;
         }
+        else
+        {
+          stats.crMissBytes++;
+        }
         break;
       default:
         state = RxState::SyncB;
@@ -222,33 +259,39 @@ void MotionGateway::handleSerialInput()
       }
     }
   }
+  else
+  {
+    // mode0: nobody parses, but the plugin may still stream - drain and drop,
+    // or the 64/256-byte RX buffer overflows and the first frame after a mode
+    // switch is corrupt.
+    while (Serial.available() > 0 && (millis() - startMs) < kSerialProcessingBudgetMs)
+    {
+      Serial.read();
+      stats.discardedBytes++;
+    }
+  }
 }
 
+// Both frame handlers only coalesce into pendingDemand ("latest wins") - the
+// CAN forwarding runs once per loop() after the serial drain.
 void MotionGateway::handleBFFFrame(const uint8_t *data)
 {
-  // DEBUGLOG_PRINTLN(F("Received BFF frame"));
-
-  // Extract the 6 individual actor demands from the serial data
-  uint16_t demand[kMaxDataSize / 2] = {0};
   for (uint8_t i = 0; i < kMaxDataSize / 2; ++i)
   {
-    demand[i] = ((uint16_t)data[i] << 8) | data[i + kMaxDataSize / 2];
-    // DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
+    pendingDemand[i] = ((uint16_t)data[i] << 8) | data[i + kMaxDataSize / 2];
   }
-
-  processDemands(demand);
+  pendingDemandValid = true;
+  stats.noteFrame(millis());
 }
 
 void MotionGateway::handleSimToolsFrame(const uint8_t *data)
 {
-  // Extract the 6 individual actor demands from the serial data
-  uint16_t demand[kMaxDataSize / 2] = {0};
   for (uint8_t i = 0; i < kMaxDataSize / 2; ++i)
   {
-    demand[i] = ((uint16_t)data[i * 2] << 8) | data[i * 2 + 1];
-    //DEBUGLOG_PRINTLN(String(F("Actuator ")) + (i + 1) + String(F(": ")) + demand[i]);
+    pendingDemand[i] = ((uint16_t)data[i * 2] << 8) | data[i * 2 + 1];
   }
-  processDemands(demand);
+  pendingDemandValid = true;
+  stats.noteFrame(millis());
 }
 
 void MotionGateway::processDemands(const uint16_t demand[6])
@@ -315,7 +358,9 @@ void MotionGateway::sendActorPairDemand(MotionNodeId nodeId, uint16_t act1Demand
   data[4] = act2Demand & 0xFF;        // Act2 LSB
   // Remaining bytes can be used for additional data if needed, currently set to 0
 
+  const uint32_t sendStartUs = micros();
   canBus->sendMessage(MotionMessageId::actorPairDemand, 8, data);
+  stats.noteSend(micros() - sendStartUs);
 
   // Update last send timestamp for maxAge resync
   actorDemandMeta[static_cast<uint8_t>(nodeId) - 1].lastSendTimestamp = millis();

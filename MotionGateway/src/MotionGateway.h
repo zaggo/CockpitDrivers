@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "Configuration.h"
 #include "CAN.h"
+#include "GatewayStats.h"
 #include <SerialMessageId.h>
 
 // Message metadata for maxAge resync
@@ -51,6 +52,15 @@ class MotionGateway {
         unsigned long lastModeCheckTimestampMs = 0;
         unsigned long lastDemandBatchSendTimestampMs = 0;
         unsigned long lastUsbHeartbeatTimestampMs = 0;
+        unsigned long lastStatsPrintMs = 0;
+
+        // Newest complete frame from the serial drain, applied once per loop()
+        // AFTER the drain - the blocking CAN sends must not run inside the RX
+        // loop (they stall it long enough to overflow the serial buffer).
+        uint16_t pendingDemand[6] = {0};
+        bool pendingDemandValid = false;
+
+        GatewayStats stats;
         int8_t lastArmedState = -1; // -1 = unknown; logs a DEBUGLOG line on each change
 
         // Actor mappings for different modes (6 actors)

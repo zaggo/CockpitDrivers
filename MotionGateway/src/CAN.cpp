@@ -208,15 +208,51 @@ void CAN::sendMessage(MotionMessageId id, uint8_t len, byte *data)
     bool success = BaseCAN::sendMessage(canId, len, data);
     if (success)
     {
-        // DEBUGLOG_PRINTLN(String(F("Message Sent Successfully to id 0x"))+String(static_cast<unsigned long>(id), HEX));
-        //  Clear error status for this CAN ID on successful send
-        clearCanIdError(canId, CanErrorType::TX_ERROR);
+        // A TX error is a bus-level condition, not a per-ID one - any successful
+        // send proves the bus works again, so clear them all. (Clearing only the
+        // sent ID deadlocked: a failed 0x110 send latched canError, which gated
+        // all further 0x110 sends, so its own error could never clear.)
+        clearAllTxErrors();
     }
     else
     {
         DEBUGLOG_PRINTLN(String(F("Error Sending Message to id 0x")) + String(static_cast<unsigned long>(canId), HEX));
+        if (txFailures < 0xFFFF)
+        {
+            ++txFailures;
+        }
         // Set error status for this CAN ID
         setCanIdError(canId, CanErrorType::TX_ERROR);
+    }
+}
+
+void CAN::clearAllTxErrors()
+{
+    for (uint8_t i = 0; i < canIdErrorCount; ++i)
+    {
+        if (canIdErrors[i].hasError && canIdErrors[i].errorType == CanErrorType::TX_ERROR)
+        {
+            canIdErrors[i].hasError = false;
+            canIdErrors[i].errorType = CanErrorType::NONE;
+        }
+    }
+}
+
+void CAN::expireStaleTxErrors()
+{
+    // Belt and braces against the TX-error latch: even without a successful
+    // send (nothing to transmit while inactive), a TX error self-expires so a
+    // transient bus glitch can never require a power cycle.
+    const uint32_t kTxErrorExpiryMs = 1000;
+    const uint32_t now = millis();
+    for (uint8_t i = 0; i < canIdErrorCount; ++i)
+    {
+        if (canIdErrors[i].hasError && canIdErrors[i].errorType == CanErrorType::TX_ERROR &&
+            (now - canIdErrors[i].setAtMs) >= kTxErrorExpiryMs)
+        {
+            canIdErrors[i].hasError = false;
+            canIdErrors[i].errorType = CanErrorType::NONE;
+        }
     }
 }
 
@@ -312,6 +348,7 @@ void CAN::setCanIdError(uint16_t canId, CanErrorType errorType)
                 canIdErrors[i].hasError = true;
                 canIdErrors[i].errorType = errorType;
             }
+            canIdErrors[i].setAtMs = millis();
             return;
         }
     }
@@ -326,6 +363,7 @@ void CAN::setCanIdError(uint16_t canId, CanErrorType errorType)
         canIdErrors[canIdErrorCount].canId = canId;
         canIdErrors[canIdErrorCount].hasError = true;
         canIdErrors[canIdErrorCount].errorType = errorType;
+        canIdErrors[canIdErrorCount].setAtMs = millis();
         canIdErrorCount++;
         DEBUGLOG_PRINTLN(String(F("CAN ID 0x")) + String(canId, HEX) + F(" ") + errorTypeStr + F(" ERROR set"));
     }
@@ -362,6 +400,8 @@ SystemState CAN::calculateSystemState()
     {
         return SystemState::canError;
     }
+
+    expireStaleTxErrors();
 
     // Check if any CAN ID has an error
     for (uint8_t i = 0; i < canIdErrorCount; ++i)
