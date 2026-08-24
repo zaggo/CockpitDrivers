@@ -59,7 +59,6 @@ bool CAN::begin()
 
     // Filters: receive Actor Heartbeat (0x301) in RXB0.
     canBus->init_Mask(0, 0, MASK_EXACT); // RXB0 exact match
-    canBus->init_Mask(1, 0, MASK_EXACT); // RXB1 exact match
 
     uint32_t actorHeartbeat = CAN_STD_ID(MotionMessageId::actorHeartbeat);
 
@@ -67,11 +66,13 @@ bool CAN::begin()
     canBus->init_Filt(0, 0, actorHeartbeat);
     canBus->init_Filt(1, 0, actorHeartbeat);
 
-    // RXB1: (reserved for future inputs)
-    canBus->init_Filt(2, 0, actorHeartbeat);
-    canBus->init_Filt(3, 0, actorHeartbeat);
-    canBus->init_Filt(4, 0, actorHeartbeat);
-    canBus->init_Filt(5, 0, actorHeartbeat);
+    // RXB1: actor test telemetry block 0x3A0-0x3AF (dump header/data/status).
+    // Actors don't accept these IDs, so this stays a gateway-only input.
+    canBus->init_Mask(1, 0, (0x07F0UL << 16));
+    canBus->init_Filt(2, 0, (0x03A0UL << 16));
+    canBus->init_Filt(3, 0, (0x03A0UL << 16));
+    canBus->init_Filt(4, 0, (0x03A0UL << 16));
+    canBus->init_Filt(5, 0, (0x03A0UL << 16));
 
     canBus->setMode(MCP_NORMAL);
     isStarted = true;
@@ -152,6 +153,50 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     case MotionMessageId::actorHeartbeat:
         updateActorHeartbeat(len, data);
         break;
+#if BENCHDEBUG
+    // Test telemetry from the actor test bench, printed as CSV for the host
+    // analyzer (MotionGateway/tools/analyze_smoothness.py).
+    case MotionMessageId::testDumpHeader:
+        if (len >= 8)
+        {
+            const uint16_t count = ((uint16_t)data[3] << 8) | data[4];
+            Serial.print(F("TH,"));
+            Serial.print(data[0]); Serial.print(',');
+            Serial.print(data[1]); Serial.print(',');
+            Serial.print(data[2]); Serial.print(',');
+            Serial.print(count); Serial.print(',');
+            Serial.print(data[5]); Serial.print(',');
+            Serial.print(data[6]); Serial.print(',');
+            Serial.println(data[7]);
+        }
+        break;
+    case MotionMessageId::testDumpData:
+        if (len >= 6)
+        {
+            const uint16_t t = ((uint16_t)data[2] << 8) | data[3];
+            const uint16_t v = ((uint16_t)data[4] << 8) | data[5];
+            Serial.print(F("TD,"));
+            Serial.print(data[0]); Serial.print(',');
+            Serial.print(data[1]); Serial.print(',');
+            Serial.print(t); Serial.print(',');
+            Serial.println(v);
+        }
+        break;
+    case MotionMessageId::testStatus:
+        if (len >= 8)
+        {
+            const uint16_t cycles = ((uint16_t)data[2] << 8) | data[3];
+            const uint16_t maxDur = ((uint16_t)data[4] << 8) | data[5];
+            const uint16_t missed = ((uint16_t)data[6] << 8) | data[7];
+            Serial.print(F("TS,"));
+            Serial.print(data[0]); Serial.print(',');
+            Serial.print(data[1]); Serial.print(',');
+            Serial.print(cycles); Serial.print(',');
+            Serial.print(maxDur); Serial.print(',');
+            Serial.println(missed);
+        }
+        break;
+#endif
     default:
         break;
     }

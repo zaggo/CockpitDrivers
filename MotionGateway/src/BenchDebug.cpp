@@ -192,6 +192,14 @@ bool BenchDebug::handleBenchInput(String command)
         Serial.println((isMin ? "Save Logical Min" : "Save Logical Max") + String(" command sent to actor node ") + String(nodeId) + " Channel " + String(channelNumber)); 
         return true;
     }
+    else if (command.startsWith("tr") || command.startsWith("ta") || command.startsWith("td"))
+    {
+        return handleTestCommand(command);
+    }
+    else if (command.startsWith("gs"))
+    {
+        return handleStreamCommand(command);
+    }
     else if (command.startsWith("?"))
     {
         Serial.println(F("Bench Commands:"));
@@ -201,9 +209,199 @@ bool BenchDebug::handleBenchInput(String command)
         Serial.println("  c<node><ch><0-100> - Calibration Move (node 1-3, ch 1-2), e.g. c11100 / c2250");
         Serial.println("  mi<node><ch> - Save current position as logical min (node 1-3, ch 1-2), e.g. mi11");
         Serial.println("  ma<node><ch> - Save current position as logical max (node 1-3, ch 1-2), e.g. ma32");
+        Serial.println(F("Test bench (actor testbench firmware required):"));
+        Serial.println("  tr <node> <strat> <rate> <amp%> <chmask> <smode> <durS> [param] - start test run");
+        Serial.println("     strat: 0 single-move 1 current-algo 2 exact-speed 3 stream+current 4 stream+exact 9 passthrough");
+        Serial.println("     smode: 0 none 1 getP-series 2 timing-series 3 getP every param-th cycle");
+        Serial.println("  ta <node> - abort test run");
+        Serial.println("  td <node> - dump samples (prints TH/TD/TS CSV lines)");
+        Serial.println("  gs <node> <wave:0 tri|1 sine> <rateHz> <amp%> <durS> - 0x110 demand stream, gs 0 stops");
         return true;
     }
     return false;
+}
+
+// Parses up to maxCount whitespace-separated integers following the two-letter
+// command. Returns the number of values parsed.
+static uint8_t parseArgs(const String &command, long *values, uint8_t maxCount)
+{
+    uint8_t count = 0;
+    int idx = 2; // skip the two-letter command
+    const int len = command.length();
+    while (count < maxCount)
+    {
+        while (idx < len && command.charAt(idx) == ' ')
+        {
+            ++idx;
+        }
+        if (idx >= len)
+        {
+            break;
+        }
+        int end = idx;
+        while (end < len && command.charAt(end) != ' ')
+        {
+            ++end;
+        }
+        values[count++] = command.substring(idx, end).toInt();
+        idx = end;
+    }
+    return count;
+}
+
+bool BenchDebug::handleTestCommand(const String &command)
+{
+    long args[8] = {0};
+    const uint8_t argCount = parseArgs(command, args, 8);
+    if (argCount < 1 || args[0] < 1 || args[0] > 3)
+    {
+        Serial.println(F("Invalid node. Use tr/ta/td <node 1-3> ..."));
+        return true;
+    }
+    const uint8_t nodeId = (uint8_t)args[0];
+    byte data[8] = {0};
+    data[0] = nodeId;
+
+    if (command.startsWith("ta"))
+    {
+        canBus->sendMessage(MotionMessageId::actorTestAbort, 8, data);
+        Serial.println("Test abort sent to actor node " + String(nodeId) + ".");
+        return true;
+    }
+    if (command.startsWith("td"))
+    {
+        canBus->sendMessage(MotionMessageId::actorTestDumpRequest, 8, data);
+        Serial.println("Dump request sent to actor node " + String(nodeId) + ".");
+        return true;
+    }
+
+    // tr <node> <strat> <rate> <amp%> <chmask> <smode> <durS> [param]
+    if (argCount < 7)
+    {
+        Serial.println(F("Use: tr <node> <strat> <rate> <amp%> <chmask> <smode> <durS> [param]"));
+        return true;
+    }
+    data[1] = (uint8_t)args[1]; // strategy
+    data[2] = (uint8_t)args[2]; // rateHz
+    data[3] = (uint8_t)args[3]; // amplitudePct
+    data[4] = (uint8_t)args[4]; // channelMask
+    data[5] = (uint8_t)args[5]; // sampleMode
+    data[6] = (uint8_t)args[6]; // durationSec
+    data[7] = (uint8_t)(argCount >= 8 ? args[7] : 1);
+    canBus->sendMessage(MotionMessageId::actorTestStart, 8, data);
+    Serial.println("Test start sent to actor node " + String(nodeId) +
+                   " strat=" + String(data[1]) + " rate=" + String(data[2]) +
+                   " amp=" + String(data[3]) + "% chmask=" + String(data[4]) +
+                   " smode=" + String(data[5]) + " dur=" + String(data[6]) +
+                   "s param=" + String(data[7]));
+    return true;
+}
+
+bool BenchDebug::handleStreamCommand(const String &command)
+{
+    long args[5] = {0};
+    const uint8_t argCount = parseArgs(command, args, 5);
+    if (argCount >= 1 && args[0] == 0)
+    {
+        streamActive = false;
+        Serial.println(F("Stream stopped."));
+        return true;
+    }
+    if (argCount < 5 || args[0] < 1 || args[0] > 3 || args[2] < 1 || args[2] > 100 ||
+        args[3] < 1 || args[3] > 100 || args[4] < 1)
+    {
+        Serial.println(F("Use: gs <node 1-3> <wave:0 tri|1 sine> <rateHz 1-100> <amp% 1-100> <durS>, gs 0 stops"));
+        return true;
+    }
+
+    streamNodeId = (uint8_t)args[0];
+    streamWave = (uint8_t)(args[1] != 0);
+    streamAmpPct = (uint8_t)args[3];
+    streamPeriodUs = 1000000UL / (uint32_t)args[2];
+    streamStartMs = millis();
+    streamEndMs = streamStartMs + (uint32_t)args[4] * 1000UL;
+    streamNextTickUs = micros();
+    streamFramesSent = 0;
+    streamMissedTicks = 0;
+    streamActive = true;
+    Serial.println("Stream started: node " + String(streamNodeId) +
+                   (streamWave ? " sine" : " triangle") + " @" + String(args[2]) +
+                   "Hz amp=" + String(streamAmpPct) + "% dur=" + String(args[4]) + "s");
+    return true;
+}
+
+void BenchDebug::sendPairDemand(uint8_t nodeId, uint16_t demand)
+{
+    actorDemand[nodeId * 2 - 2] = demand;
+    actorDemand[nodeId * 2 - 1] = demand;
+    byte data[8] = {0};
+    data[0] = nodeId;
+    data[1] = (demand >> 8) & 0xFF;
+    data[2] = demand & 0xFF;
+    data[3] = (demand >> 8) & 0xFF;
+    data[4] = demand & 0xFF;
+    canBus->sendMessage(MotionMessageId::actorPairDemand, 8, data);
+}
+
+void BenchDebug::tickStreamGenerator()
+{
+    if (!streamActive)
+    {
+        return;
+    }
+
+    const uint32_t nowMs = millis();
+    if ((int32_t)(nowMs - streamEndMs) >= 0)
+    {
+        streamActive = false;
+        Serial.println("Stream done: " + String(streamFramesSent) + " frames, " +
+                       String(streamMissedTicks) + " missed ticks.");
+        return;
+    }
+
+    const uint32_t nowUs = micros();
+    if ((int32_t)(nowUs - streamNextTickUs) < 0)
+    {
+        return;
+    }
+    streamNextTickUs += streamPeriodUs;
+    if ((int32_t)(nowUs - streamNextTickUs) >= 0)
+    {
+        streamMissedTicks += (nowUs - streamNextTickUs) / streamPeriodUs + 1;
+        streamNextTickUs = nowUs + streamPeriodUs;
+    }
+
+    // Same shape as the actor bench: full peak-to-peak traversal in 3 s per leg
+    // (6 s wave period), amplitude centered at mid-scale.
+    const uint32_t kWavePeriodMs = 6000;
+    const uint32_t phaseMs = (nowMs - streamStartMs) % kWavePeriodMs;
+    const int32_t halfAmp = (int32_t)(((uint32_t)65535 * streamAmpPct) / 200);
+
+    int32_t offset;
+    if (streamWave == 0)
+    {
+        // Triangle: -half .. +half .. -half
+        if (phaseMs < kWavePeriodMs / 2)
+        {
+            offset = -halfAmp + (int32_t)(((int64_t)2 * halfAmp * phaseMs) / (kWavePeriodMs / 2));
+        }
+        else
+        {
+            const uint32_t p2 = phaseMs - kWavePeriodMs / 2;
+            offset = halfAmp - (int32_t)(((int64_t)2 * halfAmp * p2) / (kWavePeriodMs / 2));
+        }
+    }
+    else
+    {
+        const float phase = (2.0f * PI * (float)phaseMs) / (float)kWavePeriodMs;
+        offset = (int32_t)((float)halfAmp * sinf(phase));
+    }
+
+    int32_t demand = 32768L + offset;
+    if (demand < 0) demand = 0;
+    if (demand > 65535L) demand = 65535L;
+    sendPairDemand(streamNodeId, (uint16_t)demand);
+    ++streamFramesSent;
 }
 
 void BenchDebug::handleUserInput()
@@ -244,5 +442,6 @@ void BenchDebug::loop()
         heartbeatLedOn = !heartbeatLedOn;
     }
 
+    tickStreamGenerator();
     handleUserInput();
 }

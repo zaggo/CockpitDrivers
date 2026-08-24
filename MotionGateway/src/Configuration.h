@@ -3,8 +3,12 @@
 
 #include <Arduino.h>
 
-#define BENCHDEBUG 0          
+#ifndef BENCHDEBUG
+#define BENCHDEBUG 0          // set via build_flags in env:megaatmega2560_bench
+#endif
+#ifndef DEBUGLOG_ENABLE
 #define DEBUGLOG_ENABLE 1     // Set to 1 to enable debug logging, 0 to disable
+#endif
 
 const uint32_t kHeartbeatInterval = 1000L; // 1 second
 static const unsigned long kSerialProcessingBudgetMs = 100;

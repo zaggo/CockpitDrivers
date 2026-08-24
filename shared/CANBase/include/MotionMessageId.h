@@ -18,8 +18,19 @@ enum class MotionMessageId : uint16_t
     actorPairHome = 0x380,
     actorPairStop = 0x381,
     actorCalibrationMove = 0x385,
+    // Test orchestration (gateway -> actor). Deliberately inside the 0x380-0x38F
+    // command block so the actors' existing RXB1 range filter passes them.
+    actorTestStart = 0x386,
+    actorTestAbort = 0x387,
+    actorTestDumpRequest = 0x388,
     actorSaveLogicMin = 0x38a,
     actorSaveLogicMax = 0x38b,
+
+    // Test telemetry (actor -> gateway), own 0x3A0-0x3AF block: the gateway's RXB1
+    // uses mask 0x7F0 + filter 0x3A0 to accept it, actors' filters ignore it.
+    testDumpHeader = 0x3A0,
+    testDumpData = 0x3A1,
+    testStatus = 0x3A2,
 };
 
 // Filtering

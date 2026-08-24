@@ -1,6 +1,9 @@
 #include "CAN.h"
 #include "Configuration.h"
 #include "DebugLog.h"
+#if MOTION_TESTBENCH
+#include "TestBench.h"
+#endif
 
 CAN::CAN(MotionActor *motionActor)
     : BaseCAN(kCanCSPin, kCanIntPin, {static_cast<uint16_t>(kNodeId), 1, 0}),
@@ -125,8 +128,32 @@ void CAN::loop()
     if (demandPending)
     {
         demandPending = false;
+#if MOTION_TESTBENCH
+        // During a generated test run the bench owns the motors - incoming 0x110
+        // demands must not fight the strategy under test. Passthrough (strategy 9)
+        // instruments this very path instead.
+        const bool benchOwnsMotors =
+            testBench != nullptr && testBench->isRunning() && !testBench->isPassthroughActive();
+        if (!benchOwnsMotors)
+        {
+            const uint32_t cmdStartUs = micros();
+            motionActor->setDemands(pendingDemand1, pendingDemand2);
+            if (testBench != nullptr)
+            {
+                testBench->noteDemandApplied(micros() - cmdStartUs);
+            }
+        }
+#else
         motionActor->setDemands(pendingDemand1, pendingDemand2);
+#endif
     }
+
+#if MOTION_TESTBENCH
+    if (testBench != nullptr)
+    {
+        testBench->loop();
+    }
+#endif
 }
 
 void CAN::resetHeartbeatClocks()
@@ -258,6 +285,27 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
             motionActor->calibrationMove(channel, targetPercent);
         }
         break;
+#if MOTION_TESTBENCH
+    case MotionMessageId::actorTestStart:
+        if (len >= 8 && data[0] == static_cast<uint8_t>(kNodeId) && testBench != nullptr)
+        {
+            demandPending = false; // the bench owns the motors during a generated run
+            testBench->startTest(len, data);
+        }
+        break;
+    case MotionMessageId::actorTestAbort:
+        if (len >= 1 && data[0] == static_cast<uint8_t>(kNodeId) && testBench != nullptr)
+        {
+            testBench->abortTest();
+        }
+        break;
+    case MotionMessageId::actorTestDumpRequest:
+        if (len >= 1 && data[0] == static_cast<uint8_t>(kNodeId) && testBench != nullptr)
+        {
+            testBench->requestDump();
+        }
+        break;
+#endif
     case MotionMessageId::actorSaveLogicMin:
         if (len >= 2 && data[0] == static_cast<uint8_t>(kNodeId))
         {

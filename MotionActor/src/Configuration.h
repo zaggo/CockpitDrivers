@@ -4,8 +4,15 @@
 #include <Arduino.h>
 #include <MotionNodeId.h>
 
-#define BENCHDEBUG 0                                           
+#ifndef BENCHDEBUG
+#define BENCHDEBUG 0
+#endif
+#ifndef MOTION_TESTBENCH
+#define MOTION_TESTBENCH 0 // set via build_flags in env:nanoatmega328new_testbench
+#endif
+#ifndef DEBUGLOG_ENABLE
 #define DEBUGLOG_ENABLE 0
+#endif
 
 const MotionNodeId kNodeId = MotionNodeId::actorNodeId1; // Set the node ID for this actor pair. Adjust as needed for different pairs.
 const byte kActorAddress = 127 + static_cast<byte>(kNodeId); 

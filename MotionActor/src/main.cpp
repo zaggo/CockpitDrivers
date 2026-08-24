@@ -2,15 +2,14 @@
 #include "Configuration.h"
 #include "DebugLog.h"
 #include "MotionActor.h"
-
-#if BENCHDEBUG
-#include "BenchDebug.h"
-BenchDebug* benchDebug;
-#else
 #include "CAN.h"
-CAN *canBus;
+
+#if MOTION_TESTBENCH
+#include "TestBench.h"
+TestBench *testBench;
 #endif
 
+CAN *canBus;
 MotionActor *motionActor;
 
 void setup() {
@@ -20,20 +19,16 @@ void setup() {
 
   motionActor = new MotionActor();
 
-  #if BENCHDEBUG
-  benchDebug = new BenchDebug(motionActor);
-  #else
   canBus = new CAN(motionActor);
+  #if MOTION_TESTBENCH
+  testBench = new TestBench(motionActor, canBus);
+  canBus->setTestBench(testBench);
+  #endif
   if (canBus->begin()) {
     DEBUGLOG_PRINTLN(F("MotionActor started up"));
   }
-  #endif
 }
 
 void loop() {
-  #if BENCHDEBUG
-  benchDebug->loop();
-  #else
   canBus->loop();
-  #endif
 }

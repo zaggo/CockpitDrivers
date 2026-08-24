@@ -7,6 +7,10 @@
 #include <MotionNodeId.h>
 #include "MotionActor.h"
 
+#if MOTION_TESTBENCH
+class TestBench;
+#endif
+
 class CAN : public BaseCAN
 {
 public:
@@ -17,7 +21,14 @@ public:
 
     void loop();
 
+#if MOTION_TESTBENCH
+    void setTestBench(TestBench *bench) { testBench = bench; }
+#endif
+
 private:
+#if MOTION_TESTBENCH
+    TestBench *testBench = nullptr;
+#endif
     bool gatewayAlive = false;
     bool gatewayHeartbeatSeen = false;
 

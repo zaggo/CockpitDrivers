@@ -18,6 +18,14 @@ class MotionActor {
         void powerDown();
 
         MotionActorState state;
+
+#if MOTION_TESTBENCH
+        // Test-bench access to the raw Kangaroo channels and calibrated limits;
+        // the bench issues its own speed-limited moves to compare strategies.
+        KangarooChannel* testChannel(uint8_t channel) { return channelForIndex(channel); }
+        int32_t testLogicalMin(uint8_t channel) const { return logicalMinPosition[channel]; }
+        int32_t testLogicalMax(uint8_t channel) const { return logicalMaxPosition[channel]; }
+#endif
     private:
         static constexpr uint8_t kActorCount = 2;
 
