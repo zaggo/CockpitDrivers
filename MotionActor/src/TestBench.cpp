@@ -163,11 +163,10 @@ void TestBench::tickPreposition()
         return; // still traveling
     }
 
-    // Arrived at the window start - begin the measured run.
-    if (strategy == 3 || strategy == 4)
-    {
-        setStreaming(true);
-    }
+    // Arrived at the window start - begin the measured run. Production keeps
+    // streaming on while active, so the confirmed strategies must switch it
+    // off explicitly for their measurement.
+    setStreaming(strategy == 3 || strategy == 4);
 
     runStartMs = millis();
     legStartMs = runStartMs;
@@ -442,9 +441,9 @@ void TestBench::setStreaming(bool enabled)
 
 void TestBench::finishRun(uint8_t result)
 {
-    if (strategy == 3 || strategy == 4)
+    if (strategy != 9)
     {
-        setStreaming(false);
+        setStreaming(true); // restore the production default for the active state
     }
     resultState = result;
     state = State::done;

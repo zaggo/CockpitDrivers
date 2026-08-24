@@ -72,9 +72,9 @@ private:
         uint16_t value;
     };
 
-    // 240 * 4 bytes = 960 B. The ATmega328 has 2 KB total; verify the build
-    // reports enough headroom before raising this.
-    static constexpr uint16_t kMaxSamples = 240;
+    // 160 * 4 bytes = 640 B. The ATmega328 has 2 KB total: 240 samples left only
+    // ~380 B of stack after heap and crashed the board - keep generous headroom.
+    static constexpr uint16_t kMaxSamples = 160;
     static constexpr uint16_t kPositionSampleIntervalMs = 20; // ~50 Hz for strategy 0
     static constexpr uint32_t kLegDurationMs = 3000;          // window traversal time per leg
     static constexpr uint32_t kDumpFrameIntervalMs = 5;

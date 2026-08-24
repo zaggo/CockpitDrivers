@@ -93,6 +93,16 @@ void CAN::loop()
 
     updateStatusLeds();
 
+#if MOTION_TESTBENCH
+    // Must tick every pass: the fast-path return below fires on every loop
+    // without CAN traffic, which would throttle the bench to the 2 Hz gateway
+    // heartbeat cadence.
+    if (testBench != nullptr)
+    {
+        testBench->loop();
+    }
+#endif
+
     // Fast path: no interrupt seen and line is high -> nothing to do.
     if (!canIrq && digitalRead(intPin) == HIGH)
     {
@@ -147,13 +157,6 @@ void CAN::loop()
         motionActor->setDemands(pendingDemand1, pendingDemand2);
 #endif
     }
-
-#if MOTION_TESTBENCH
-    if (testBench != nullptr)
-    {
-        testBench->loop();
-    }
-#endif
 }
 
 void CAN::resetHeartbeatClocks()
