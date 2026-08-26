@@ -1,5 +1,10 @@
 # MotionProviderPlugin configuration (auto-generated with default values).
 # Edit values and click "Reload config" in the status window to apply.
+#
+# Baseline 2026-08-26: all jitter-masking tuning reverted to code defaults
+# (smooth_tau, tilt_rate_limit_dps, effect freqs/taus, accel cap) now that the
+# transport chain is clean (stages 0-3). Only the amplitudes (washout gains +
+# effect gains) are set to 45% of default (60% felt too strong at the rig).
 
 [geometry]
 base_radius_mm = 425
@@ -17,29 +22,29 @@ demand_home = 32640
 demand_max = 65280
 
 [washout]
-heave_gain = 0.3 # was 0.375 (80%)
+heave_gain = 0.15 # 30% of default 0.5
 heave_hp_tau = 1
 heave_vel_washout_tau = 2
 heave_pos_washout_tau = 2
 heave_limit_mm = 30
-tilt_surge_gain = 0.5 # was 0.6 (80%)
-tilt_sway_gain = 0.5 # was 0.6 (80%)
+tilt_surge_gain = 0.3 # 30% of default 1.0
+tilt_sway_gain = 0.3 # 30% of default 1.0
 tilt_lp_tau = 1.5
 tilt_limit_deg = 3
-tilt_rate_limit_dps = 3 # was 5 - next lever: slows how fast tilt is allowed to ramp, not just how big
-rot_roll_gain = 0.34 # was 0.42 (80%)
-rot_pitch_gain = 0.34 # was 0.42 (80%)
-rot_yaw_gain = 0.42 # was 0.525 (80%)
+tilt_rate_limit_dps = 5 # back to default (was 3, jitter-masking)
+rot_roll_gain = 0.42 # 60% of default 0.7
+rot_pitch_gain = 0.42 # 60% of default 0.7
+rot_yaw_gain = 0.42 # 60% of default 0.7
 rot_hp_tau = 1
 rot_washout_tau = 3
 rot_limit_deg = 3
-smooth_tau = 0.08 # 0.12 was smooth but too laggy; 0.08 = ~160ms group delay. Try 0.06-0.10.
+smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, maneuver cues untouched. Next step 0.02; 0.08 was the old laggy tuning.
 
 [effects]
-touchdown_gain = 1.5 # was 2 (trim)
-touchdown_freq_hz = 5 # was 6
-touchdown_decay_tau = 0.35 # was 0.25
-rumble_gain = 0.6 # was 0.75 (trim)
+touchdown_gain = 3.6 # 45% of default 8.0
+touchdown_freq_hz = 6 # back to default (was 5)
+touchdown_decay_tau = 0.25 # back to default (was 0.35)
+rumble_gain = 0.9 # 45% of default 2.0
 rumble_freq_hz = 12
 rumble_speed_ref_mps = 40
 engine_gain = 0
@@ -50,11 +55,11 @@ baud = 115200
 output_rate_hz = 60
 
 [safety]
-max_velocity_cps = 30000 # reverted from 15000 - limiter saturation makes motion feel mechanical, same failure mode as the accel cap
-max_acceleration_cps2 = 42000 # reverted from 12600 - was lagging behind target (see "sent" vs "target")
+max_velocity_cps = 30000 # keep < ~32000: actor-side speed cap is 0.5*stroke/s ~= 32640 counts/s
+max_acceleration_cps2 = 120000 # back to default. Jerk-shaping lever if reversals get harsh again: lower stepwise (80000/60000; 42000 tracked fine, 12600 lagged).
 park_heave_mm = -500
-arm_ramp_sec = 3
-disarm_ramp_sec = 2
+arm_ramp_sec = 6 # doubled from default 3: half-speed park<->live movement
+disarm_ramp_sec = 4 # doubled from default 2
 runaway_tilt_deg = 45
 runaway_trans_mm = 500
 runaway_hold_sec = 1
