@@ -26,7 +26,18 @@ BaseCAN::~BaseCAN()
 
 bool BaseCAN::begin()
 {
-    return canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK;
+    // The MCP2515 SPI init can fail transiently right after power-up (seen on
+    // the MotionGateway: one failed attempt left the board dead until a power
+    // cycle). Retry a few times before giving up.
+    for (uint8_t attempt = 0; attempt < 3; ++attempt)
+    {
+        if (canBus->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK)
+        {
+            return true;
+        }
+        delay(100);
+    }
+    return false;
 }
 
 void BaseCAN::onCanInterrupt()
