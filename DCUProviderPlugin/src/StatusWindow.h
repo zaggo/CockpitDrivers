@@ -15,6 +15,12 @@ struct StatusLine {
     float r = 0.7f, g = 0.7f, b = 0.7f;
 };
 
+// UI button actions, dispatched to the owner via the command callback.
+enum {
+    UI_RESCAN_PORTS = 1,  // re-enumerate serial ports
+    UI_DISCONNECT         // close the current serial connection
+};
+
 struct StatusData {
     // Connection
     bool isConnected = false;
@@ -32,6 +38,9 @@ struct StatusData {
     // Flags
     bool lastWriteOk = false;
     bool lastOpenOk = false;
+
+    // Show transient "Ports rescanned" confirmation next to the Rescan button
+    bool rescanFlash = false;
 };
 
 class StatusWindow {
@@ -54,6 +63,9 @@ public:
     // Set callback invoked whenever the window transitions from hidden to visible,
     // so the caller can rescan for serial ports that appeared in the meantime.
     void setWindowShownCallback(std::function<void()> cb);
+
+    // Set callback for UI button actions (UI_RESCAN_PORTS, UI_DISCONNECT).
+    void setCommandCallback(std::function<void(int)> cb);
 
     /// Initialize window and menu item.
     /// Must be called during plugin startup.
@@ -83,10 +95,25 @@ private:
                               XPLMMouseStatus inMouse, void* inRefcon);
     static void menuCallback(void* inMenuRef, void* inItemRef);
 
+    // Clickable region, rebuilt every draw() frame. A non-empty port means
+    // "select this port"; otherwise action is dispatched via commandCallback_.
+    struct Button {
+        int left, top, right, bottom;
+        int action;
+        std::string port;
+    };
+
     // Internal drawing
     void draw();
     void drawText(int x, int y);
     void drawString(int x, int y, const std::string& text, float r, float g, float b);
+
+    // Draw a clickable label and register its hitbox. Returns the label width
+    // in pixels so callers can lay out buttons side by side.
+    int button(int x, int y, const std::string& label, int action,
+               float r, float g, float b);
+    int portButton(int x, int y, const std::string& label, const std::string& port,
+                   float r, float g, float b);
 
     // Rebuild cachedLines_ from statusData_. Called from update() (~1 Hz),
     // NOT from draw() (every render frame) - formatting is comparatively
@@ -95,8 +122,10 @@ private:
 
     // Member variables
     std::vector<std::string> availablePorts_;
+    std::vector<Button> buttons_;
     std::function<void(const std::string&)> portChangedCallback_;
     std::function<void()> windowShownCallback_;
+    std::function<void(int)> commandCallback_;
     XPLMWindowID windowId_;
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;

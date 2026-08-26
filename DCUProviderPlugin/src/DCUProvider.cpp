@@ -56,6 +56,8 @@ bool DCUProvider::initialize()
                                        { changePort(port); });
     statusWin_->setWindowShownCallback([this]()
                                        { refreshPorts(); });
+    statusWin_->setCommandCallback([this](int action)
+                                   { onUiAction(action); });
 
     char msg[256];
     std::snprintf(msg, sizeof(msg),
@@ -126,6 +128,53 @@ void DCUProvider::changePort(const std::string &newPort)
     updateStatusWindow();
 }
 
+void DCUProvider::disconnectPort()
+{
+    XPLMDebugString("DCUProvider: Manual disconnect\n");
+    if (connMgr_)
+    {
+        connMgr_->disconnect();
+        connMgr_.reset();
+    }
+    // Release the axes here too: with no connMgr_, the rudder watchdog's
+    // isConnected() is false anyway, but hand them back immediately rather
+    // than waiting for the next tick.
+    rudderSilenceAccumulator_ = RUDDER_SIGNAL_TIMEOUT;
+    if (dataRefMgr_)
+    {
+        dataRefMgr_->setRudderOverrideEnabled(false);
+    }
+    if (msgQueue_)
+    {
+        msgQueue_->resetStats();
+        msgQueue_->clearTxQueue();
+        while (msgQueue_->hasRxPending())
+            msgQueue_->dequeueRx();
+    }
+    // Clear currentPort_ so re-selecting the same port passes changePort()'s
+    // same-port early-return and actually reconnects. The saved last-used
+    // port stays untouched - disconnect is session-local.
+    currentPort_.clear();
+}
+
+void DCUProvider::onUiAction(int action)
+{
+    switch (action)
+    {
+    case UI_RESCAN_PORTS:
+        refreshPorts();
+        rescanFlashRemaining_ = 2.0f;
+        break;
+    case UI_DISCONNECT:
+        disconnectPort();
+        break;
+    default:
+        break;
+    }
+    // Refresh immediately so the click has instant visual feedback.
+    updateStatusWindow();
+}
+
 void DCUProvider::shutdown()
 {
     XPLMDebugString("DCUProvider: Shutting down\n");
@@ -162,13 +211,18 @@ void DCUProvider::onAircraftLoaded()
 
 void DCUProvider::onFlightLoopTick(float elapsedTime)
 {
-    if (!connMgr_ || !msgQueue_ || !dataRefMgr_)
+    if (!msgQueue_ || !dataRefMgr_)
     {
         return;
     }
 
     // ============ Connection Management ============
-    connMgr_->update(elapsedTime);
+    // connMgr_ is null before the first port selection and after a manual
+    // disconnect - the status window (below) must keep updating regardless.
+    if (connMgr_)
+    {
+        connMgr_->update(elapsedTime);
+    }
 
     // ============ I/O Processing ============
     // Handled continuously by ConnectionManager's own I/O thread now - not
@@ -184,6 +238,14 @@ void DCUProvider::onFlightLoopTick(float elapsedTime)
 
     // ============ Rudder Override Watchdog ============
     updateRudderOverride(elapsedTime);
+
+    // ============ Rescan Confirmation Flash ============
+    if (rescanFlashRemaining_ > 0.0f)
+    {
+        rescanFlashRemaining_ -= elapsedTime;
+        if (rescanFlashRemaining_ < 0.0f)
+            rescanFlashRemaining_ = 0.0f;
+    }
 
     // ============ Status Window Update (1Hz) ============
     static float statusUpdateAccum = 0.0f;
@@ -445,6 +507,7 @@ void DCUProvider::updateStatusWindow()
     data.lastRxTime = connMgr_ ? connMgr_->getLastRxTime() : 0.0f;
     data.lastWriteOk = connMgr_ ? connMgr_->getLastWriteOk() : false;
     data.lastOpenOk = connMgr_ ? connMgr_->getLastOpenOk() : false;
+    data.rescanFlash = rescanFlashRemaining_ > 0.0f;
 
     statusWin_->update(data);
 }

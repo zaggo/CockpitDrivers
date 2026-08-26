@@ -52,8 +52,14 @@ private:
     // Helper to change port and reconnect
     void changePort(const std::string& newPort);
     // Rescan available serial ports and refresh the status window's list.
-    // Called whenever the status window is (re-)shown.
+    // Called whenever the status window is (re-)shown or Rescan is clicked.
     void refreshPorts();
+    // Deliberate manual disconnect from the status window: tears down the
+    // connection and clears currentPort_, so clicking any port (including the
+    // same one) reconnects. The saved last-used port is left untouched.
+    void disconnectPort();
+    // Dispatch a status-window button action (UI_RESCAN_PORTS / UI_DISCONNECT).
+    void onUiAction(int action);
     // ============ Internal Updates ============
     
     /// Downlink: Read data from X-Plane datarefs and queue messages for gateway.
@@ -104,4 +110,7 @@ private:
 
     // Starts timed out, so the override is only ever claimed after real data arrives.
     float rudderSilenceAccumulator_ = RUDDER_SIGNAL_TIMEOUT;
+
+    // Seconds left to show the "Ports rescanned" confirmation in the status window.
+    float rescanFlashRemaining_ = 0.0f;
 };

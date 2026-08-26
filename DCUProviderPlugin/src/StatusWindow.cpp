@@ -29,6 +29,10 @@ void StatusWindow::setWindowShownCallback(std::function<void()> cb) {
     windowShownCallback_ = std::move(cb);
 }
 
+void StatusWindow::setCommandCallback(std::function<void(int)> cb) {
+    commandCallback_ = std::move(cb);
+}
+
 StatusWindow::~StatusWindow() {
     destroy();
 }
@@ -234,29 +238,28 @@ void StatusWindow::keyCallback(XPLMWindowID inWindowID, char inKey, XPLMKeyFlags
 void StatusWindow::mouseCallback(XPLMWindowID inWindowID, int x, int y,
                                   XPLMMouseStatus inMouse, void* inRefcon) {
     (void)inWindowID;
-    (void)x;
 
     StatusWindow* self = static_cast<StatusWindow*>(inRefcon);
     if (!self) return;
     if (inMouse != xplm_MouseDown) return;
 
-    // Get window geometry
-    int left, top, right, bottom;
-    XPLMGetWindowGeometry(self->windowId_, &left, &top, &right, &bottom);
-
-    // Port-Liste beginnt bei drawText: y = top - 20 - 20 (Titel und Status) - 16 ("Device:")
-    int yStart = top - 20 - 20 - 16;
-    int lineHeight = 16;
-
-    // Prüfe, ob Klick im Bereich der Port-Liste
-    for (size_t i = 0; i < self->availablePorts_.size(); ++i) {
-        int yLine = yStart - (int)i * lineHeight;
-        // Einfache Hitbox: voller Fensterbereich in X, Zeile in Y
-        if (y <= yLine && y > yLine - lineHeight) {
-            self->selectedPortIdx_ = (int)i;
-            if (self->portChangedCallback_)
-                self->portChangedCallback_(self->availablePorts_[self->selectedPortIdx_]);
-            break;
+    // Hitboxes are registered by draw() for exactly what is on screen, so
+    // layout changes can't silently desync the click handling.
+    for (const Button& b : self->buttons_) {
+        if (x >= b.left && x <= b.right && y >= b.bottom && y <= b.top) {
+            if (!b.port.empty()) {
+                for (size_t i = 0; i < self->availablePorts_.size(); ++i) {
+                    if (self->availablePorts_[i] == b.port) {
+                        self->selectedPortIdx_ = (int)i;
+                        break;
+                    }
+                }
+                if (self->portChangedCallback_)
+                    self->portChangedCallback_(b.port);
+            } else if (self->commandCallback_) {
+                self->commandCallback_(b.action);
+            }
+            return;
         }
     }
 }
@@ -269,9 +272,36 @@ void StatusWindow::menuCallback(void* inMenuRef, void* inItemRef) {
     }
 }
 
+int StatusWindow::button(int x, int y, const std::string& label, int action,
+                         float r, float g, float b) {
+    int cw = 0, ch = 0;
+    XPLMGetFontDimensions(xplmFont_Basic, &cw, &ch, nullptr);
+    if (cw <= 0) cw = 7;
+    if (ch <= 0) ch = 12;
+    const int w = static_cast<int>(label.size()) * cw;
+    buttons_.push_back({ x, y + ch, x + w, y - 3, action, "" });
+    drawString(x, y, label, r, g, b);
+    return w;
+}
+
+int StatusWindow::portButton(int x, int y, const std::string& label, const std::string& port,
+                             float r, float g, float b) {
+    int cw = 0, ch = 0;
+    XPLMGetFontDimensions(xplmFont_Basic, &cw, &ch, nullptr);
+    if (cw <= 0) cw = 7;
+    if (ch <= 0) ch = 12;
+    const int w = static_cast<int>(label.size()) * cw;
+    // action is unused for port buttons: mouseCallback routes on non-empty port
+    // before ever reading action.
+    buttons_.push_back({ x, y + ch, x + w, y - 3, 0, port });
+    drawString(x, y, label, r, g, b);
+    return w;
+}
+
 void StatusWindow::draw() {
     if (!windowId_) return;
-    
+    buttons_.clear();
+
     int left, top, right, bottom;
     XPLMGetWindowGeometry(windowId_, &left, &top, &right, &bottom);
     // Draw background using XPLMDrawTranslucentDarkBox
@@ -282,12 +312,22 @@ void StatusWindow::draw() {
 }
 
 void StatusWindow::drawText(int x, int y) {
+    int cw = 0, ch = 0;
+    XPLMGetFontDimensions(xplmFont_Basic, &cw, &ch, nullptr);
+    (void)ch;
+    if (cw <= 0) cw = 7;
+    const int gap = cw * 2;
+
     // Title
     drawString(x, y, "DCU Provider Status v0.3", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
-    // Connection status (cached in rebuildCachedLines(), ~1 Hz)
+    // Connection status (cached in rebuildCachedLines(), ~1 Hz) + disconnect.
     drawString(x, y, connStatusLine_.text, connStatusLine_.r, connStatusLine_.g, connStatusLine_.b);
+    if (statusData_.isConnected) {
+        int dx = x + static_cast<int>(connStatusLine_.text.size()) * cw + gap;
+        button(dx, y, "[ DISCONNECT ]", UI_DISCONNECT, 1.0f, 0.7f, 0.6f);
+    }
     y -= 16;
 
     // Serial port selection UI (kept dynamic - selection can change every frame)
@@ -296,7 +336,7 @@ void StatusWindow::drawText(int x, int y) {
     if (!availablePorts_.empty()) {
         for (size_t i = 0; i < availablePorts_.size(); ++i) {
             std::string prefix = (i == (size_t)selectedPortIdx_) ? "> " : "  ";
-            drawString(x + 10, y, prefix + availablePorts_[i],
+            portButton(x + 10, y, prefix + availablePorts_[i], availablePorts_[i],
                 (i == (size_t)selectedPortIdx_) ? 1.0f : 0.7f,
                 (i == (size_t)selectedPortIdx_) ? 1.0f : 0.7f,
                 (i == (size_t)selectedPortIdx_) ? 0.2f : 0.7f);
@@ -306,6 +346,9 @@ void StatusWindow::drawText(int x, int y) {
         drawString(x + 10, y, "(No serial ports found)", 0.7f, 0.7f, 0.7f);
         y -= 16;
     }
+    int sx = x + button(x, y, "[ Rescan ]", UI_RESCAN_PORTS, 0.7f, 0.8f, 0.9f) + gap;
+    if (statusData_.rescanFlash) drawString(sx, y, "Ports rescanned", 0.4f, 1.0f, 0.5f);
+    y -= 16;
 
     // Remaining lines (baud, TX/RX stats, last TX/RX times, write/open status)
     // are pre-formatted in rebuildCachedLines() - draw() just replays them.
