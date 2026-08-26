@@ -40,6 +40,7 @@ void SerialLink::startIoThread() {
 void SerialLink::stopIoThread() {
     if (ioThread_.joinable()) {
         running_.store(false);
+        frameCv_.notify_all();  // wake the TX thread out of its wait
         ioThread_.join();
     }
     if (rxThread_.joinable()) {
@@ -55,23 +56,45 @@ void SerialLink::ioThreadLoop() {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    const auto period = std::chrono::microseconds(
+    // Event-driven TX: send on setFrame() notification (rate-capped at rateHz_),
+    // re-send the last frame as keepalive when the flight loop goes quiet.
+    const auto minGap = std::chrono::microseconds(
         static_cast<long long>(1'000'000.0 / (rateHz_ > 0.0 ? rateHz_ : 60.0)));
+    const auto keepalive = std::chrono::milliseconds(kKeepaliveMs);
+
+    auto lastSend = std::chrono::steady_clock::now() - minGap;
+    std::unique_lock<std::mutex> lk(frameMutex_);
     while (running_.load(std::memory_order_relaxed) && serial_.isOpen()) {
+        frameCv_.wait_until(lk, lastSend + keepalive, [&] {
+            return frameDirty_ || !running_.load(std::memory_order_relaxed);
+        });
+        if (!running_.load(std::memory_order_relaxed)) break;
+        if (!haveFrame_) { lastSend = std::chrono::steady_clock::now(); continue; }
+
+        // Rate cap: a fresh frame earlier than minGap after the last write
+        // waits out the remainder (latest-wins - the frame under the lock may
+        // be replaced meanwhile, which is exactly what we want).
+        auto now = std::chrono::steady_clock::now();
+        if (frameDirty_ && now < lastSend + minGap) {
+            frameCv_.wait_until(lk, lastSend + minGap, [&] {
+                return !running_.load(std::memory_order_relaxed);
+            });
+            if (!running_.load(std::memory_order_relaxed)) break;
+            now = std::chrono::steady_clock::now();
+        }
+
         uint8_t local[BffEncoder::kFrameSize];
-        bool send = false;
-        {
-            std::lock_guard<std::mutex> lk(frameMutex_);
-            if (haveFrame_) { std::memcpy(local, frame_, sizeof(local)); send = true; }
+        std::memcpy(local, frame_, sizeof(local));
+        frameDirty_ = false;
+        lk.unlock();  // never hold the mutex across the write syscall
+        if (serial_.writeBestEffort(local, sizeof(local))) {
+            frames_.fetch_add(1, std::memory_order_relaxed);
         }
-        if (send) {
-            if (serial_.writeBestEffort(local, sizeof(local))) {
-                frames_.fetch_add(1, std::memory_order_relaxed);
-            }
-            // writeBestEffort closes the port on hard error; loop guard exits.
-        }
-        std::this_thread::sleep_for(period);
+        // writeBestEffort closes the port on hard error; loop guard exits.
+        lk.lock();
+        lastSend = now;
     }
+    lk.unlock();
     connected_.store(false);  // port dropped or stopped; update() will reconnect
 }
 
@@ -115,7 +138,11 @@ void SerialLink::update(float dt) {
 
 void SerialLink::setFrame(const uint8_t* data, std::size_t len) {
     if (len != BffEncoder::kFrameSize) return;
-    std::lock_guard<std::mutex> lk(frameMutex_);
-    std::memcpy(frame_, data, len);
-    haveFrame_ = true;
+    {
+        std::lock_guard<std::mutex> lk(frameMutex_);
+        std::memcpy(frame_, data, len);
+        haveFrame_ = true;
+        frameDirty_ = true;
+    }
+    frameCv_.notify_one();  // TX thread writes it immediately (rate-capped)
 }

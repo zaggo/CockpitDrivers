@@ -5,14 +5,21 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <cstdint>
 #include "HeartbeatDecoder.h"
 
-// TX-only serial streamer. A dedicated I/O thread writes the latest frame at a
-// fixed rate and never touches the flight-loop thread. update(dt) (called from
-// the flight loop) reconnects if the port dropped. Models DCUProviderPlugin's
-// ConnectionManager thread lifecycle but streams a single latest frame instead
-// of a FIFO (setpoints are realtime: latest wins, no backlog).
+// TX-only serial streamer. A dedicated I/O thread writes each new frame as soon
+// as the flight loop hands it over (setFrame notifies), so the TX cadence IS
+// the flight-loop cadence - one clock, no beat pattern. The old design slept a
+// fixed period between writes; its free-running ~60 Hz clock beat against the
+// flight loop's, duplicating some frames and dropping others. When no new
+// frame arrives, the last one is re-sent as a ~10 Hz keepalive (feeds the
+// gateway's maxAge resync; its change-dedup drops the duplicates). rateHz
+// bounds the maximum send rate. update(dt) (called from the flight loop)
+// reconnects if the port dropped. Models DCUProviderPlugin's ConnectionManager
+// thread lifecycle but streams a single latest frame instead of a FIFO
+// (setpoints are realtime: latest wins, no backlog).
 class SerialLink {
 public:
     SerialLink() = default;
@@ -57,8 +64,12 @@ private:
     std::atomic<long long> hbLastMicros_{0};     // steady_clock micros of last valid frame; 0 = never
 
     std::mutex frameMutex_;
+    std::condition_variable frameCv_;
     uint8_t frame_[BffEncoder::kFrameSize] = {0};
     bool haveFrame_ = false;
+    bool frameDirty_ = false;   // new frame since the last write
+
+    static constexpr int kKeepaliveMs = 100;  // idle re-send rate (~10 Hz)
 
     float reconnectAccum_ = 0.0f;
     static constexpr float kReconnectInterval = 2.0f;  // s
