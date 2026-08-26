@@ -61,16 +61,21 @@ def main():
     ap.add_argument("--baud", type=int, default=115200)
     args = ap.parse_args()
 
-    port = serial.Serial(args.port, args.baud, timeout=0.05)
+    # timeout=0 + in_waiting poll at ~1 ms: a blocking read would batch several
+    # frames into one chunk and stamp them with a single timestamp, faking 0 ms
+    # bursts and 50 ms gaps that the sender never produced.
+    port = serial.Serial(args.port, args.baud, timeout=0)
     print(f"listening on {args.port} for {args.duration:.0f} s ...")
 
     buf = bytearray()
     frames = []  # (t_monotonic, payload_bytes)
     start = time.monotonic()
     while time.monotonic() - start < args.duration:
-        chunk = port.read(256)
-        if not chunk:
+        waiting = port.in_waiting
+        if not waiting:
+            time.sleep(0.001)
             continue
+        chunk = port.read(waiting)
         now = time.monotonic()
         buf.extend(chunk)
         # Hunt for complete frames: 'B' 'C' <13 bytes> 0x0D
