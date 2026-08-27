@@ -196,6 +196,36 @@ bool BenchDebug::handleBenchInput(String command)
     {
         return handleTestCommand(command);
     }
+    else if (command.startsWith("gt"))
+    {
+        // gt <node 1-3|0=all> <act1 %> <act2 %> <duration ms> - profiled goto move
+        int node = 0, p1 = 0, p2 = 0, dur = 0;
+        if (sscanf(command.c_str() + 2, "%d %d %d %d", &node, &p1, &p2, &dur) != 4 ||
+            node < 0 || node > 3 || p1 < 0 || p1 > 100 || p2 < 0 || p2 > 100 ||
+            dur < 100 || dur > 30000)
+        {
+            Serial.println("Usage: gt <node 1-3|0=all> <act1 0-100> <act2 0-100> <duration 100-30000 ms>");
+            return true;
+        }
+        const uint16_t d1 = static_cast<uint16_t>((p1 / 100.0) * 65280);
+        const uint16_t d2 = static_cast<uint16_t>((p2 / 100.0) * 65280);
+        byte data[8] = {0};
+        data[1] = (d1 >> 8) & 0xFF;
+        data[2] = d1 & 0xFF;
+        data[3] = (d2 >> 8) & 0xFF;
+        data[4] = d2 & 0xFF;
+        data[5] = (static_cast<uint16_t>(dur) >> 8) & 0xFF;
+        data[6] = static_cast<uint16_t>(dur) & 0xFF;
+        for (uint8_t n = 1; n <= 3; ++n)
+        {
+            if (node != 0 && node != n) continue;
+            data[0] = n;
+            canBus->sendMessage(MotionMessageId::actorPairGoto, 8, data);
+            Serial.println("Goto sent to node " + String(n) + ": " + String(p1) + "%/" +
+                           String(p2) + "% in " + String(dur) + " ms");
+        }
+        return true;
+    }
     else if (command.startsWith("gs"))
     {
         return handleStreamCommand(command);
@@ -209,6 +239,7 @@ bool BenchDebug::handleBenchInput(String command)
         Serial.println("  c<node><ch><0-100> - Calibration Move (node 1-3, ch 1-2), e.g. c11100 / c2250");
         Serial.println("  mi<node><ch> - Save current position as logical min (node 1-3, ch 1-2), e.g. mi11");
         Serial.println("  ma<node><ch> - Save current position as logical max (node 1-3, ch 1-2), e.g. ma32");
+        Serial.println("  gt <node|0> <a1%> <a2%> <ms> - profiled goto move (arm/disarm path)");
         Serial.println(F("Test bench (actor testbench firmware required):"));
         Serial.println("  tr <node> <strat> <rate> <amp%> <chmask> <smode> <durS> [param] - start test run");
         Serial.println("     strat: 0 single-move 1 current-algo 2 exact-speed 3 stream+current 4 stream+exact 9 passthrough");

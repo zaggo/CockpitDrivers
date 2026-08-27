@@ -29,12 +29,15 @@ enum class RxState : uint8_t
   SyncC,
   Reserved,
   Data,
-  CR
+  CR,
+  GotoData,
+  GotoCR
 };
 
 static const size_t kMaxDataSize = 12;
+static const size_t kGotoDataSize = 14;   // 12 target bytes + duration_ms (u16 BE)
 static RxState state = RxState::SyncB;
-static uint8_t data[kMaxDataSize];
+static uint8_t data[kGotoDataSize];
 static uint8_t idx = 0;
 
 MotionGateway::MotionGateway(CAN *canBus) : canBus(canBus)
@@ -99,6 +102,7 @@ void MotionGateway::loop()
       state = RxState::SyncB;
       idx = 0;
       pendingDemandValid = false;
+      pendingGotoValid = false;
 
       mode = newMode;
     }
@@ -118,6 +122,12 @@ void MotionGateway::loop()
   // Apply the newest complete frame AFTER the serial drain: the blocking CAN
   // sends (up to ~5 ms each on TX contention) must not stall the RX loop, or
   // the serial buffer overflows and frames corrupt silently.
+  if (pendingGotoValid)
+  {
+    pendingGotoValid = false;
+    processGoto();
+  }
+
   if (pendingDemandValid)
   {
     pendingDemandValid = false;
@@ -178,7 +188,9 @@ void MotionGateway::handleSerialInput()
         state = (b == 'B') ? RxState::SyncC : RxState::SyncB;
         break;
       case RxState::SyncC:
-        state = (b == 'C') ? RxState::Reserved : RxState::SyncB;
+        if (b == 'C')      { state = RxState::Reserved; }
+        else if (b == 'G') { state = RxState::GotoData; idx = 0; }
+        else               { state = RxState::SyncB; }
         break;
 
       case RxState::Reserved:
@@ -209,6 +221,30 @@ void MotionGateway::handleSerialInput()
           stats.crMissBytes++;
         }
         break;
+
+      case RxState::GotoData:
+        data[idx++] = b;
+        if (idx >= kGotoDataSize)
+        {
+          state = RxState::GotoCR;
+        }
+        break;
+
+      case RxState::GotoCR:
+        if (b == 0x0D)
+        {
+          if (idx == kGotoDataSize)
+          {
+            handleGotoFrame(data);
+          }
+          state = RxState::SyncB;
+        }
+        else
+        {
+          stats.crMissBytes++;   // same wait-for-CR resync as the BFF CR state
+        }
+        break;
+
       default:
         state = RxState::SyncB;
         break;
@@ -292,6 +328,71 @@ void MotionGateway::handleSimToolsFrame(const uint8_t *data)
   }
   pendingDemandValid = true;
   stats.noteFrame(millis());
+}
+
+void MotionGateway::handleGotoFrame(const uint8_t *data)
+{
+  for (uint8_t i = 0; i < 6; ++i)
+  {
+    pendingGoto[i] = ((uint16_t)data[i] << 8) | data[i + 6];
+  }
+  pendingGotoDurationMs = ((uint16_t)data[12] << 8) | data[13];
+  pendingGotoValid = true;
+  pendingDemandValid = false;   // the goto supersedes any demand from this drain
+  stats.noteFrame(millis());
+}
+
+void MotionGateway::processGoto()
+{
+  if (mode != MotionMode::mode1)
+  {
+    return;
+  }
+
+  uint16_t pairTargets[kActorNodeCount][2] = {0};
+  for (uint8_t actorIdx = 0; actorIdx < 6; ++actorIdx)
+  {
+    const ActorMapping &map = actorMappingMode1[actorIdx];
+    uint8_t pairIdx = static_cast<uint8_t>(map.nodeId) - 1;
+    pairTargets[pairIdx][map.motorIndex] = pendingGoto[actorIdx];
+  }
+
+  for (uint8_t pairIdx = 0; pairIdx < kActorNodeCount; ++pairIdx)
+  {
+    if (!canBus->isSystemActive())
+    {
+      continue;
+    }
+    // MaxAge-resync consistency: the goto target IS the platform's demand now.
+    // A resync during the move resends it as a plain demand -> actor sees
+    // delta 0 and skips; the change-dedup swallows identical frames when the
+    // plugin resumes streaming.
+    actorDemand[pairIdx] = (static_cast<uint32_t>(pairTargets[pairIdx][0]) << 16) |
+                           pairTargets[pairIdx][1];
+    sendActorPairGoto(static_cast<MotionNodeId>(pairIdx + 1),
+                      pairTargets[pairIdx][0], pairTargets[pairIdx][1],
+                      pendingGotoDurationMs);
+  }
+}
+
+void MotionGateway::sendActorPairGoto(MotionNodeId nodeId, uint16_t act1Target,
+                                      uint16_t act2Target, uint16_t durationMs)
+{
+  byte data[8] = {0};
+
+  data[0] = static_cast<uint8_t>(nodeId);
+  data[1] = (act1Target >> 8) & 0xFF;
+  data[2] = act1Target & 0xFF;
+  data[3] = (act2Target >> 8) & 0xFF;
+  data[4] = act2Target & 0xFF;
+  data[5] = (durationMs >> 8) & 0xFF;
+  data[6] = durationMs & 0xFF;
+
+  const uint32_t sendStartUs = micros();
+  canBus->sendMessage(MotionMessageId::actorPairGoto, 8, data);
+  stats.noteSend(micros() - sendStartUs);
+
+  actorDemandMeta[static_cast<uint8_t>(nodeId) - 1].lastSendTimestamp = millis();
 }
 
 void MotionGateway::processDemands(const uint16_t demand[6])

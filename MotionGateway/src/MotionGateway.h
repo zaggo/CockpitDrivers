@@ -31,10 +31,14 @@ class MotionGateway {
 
         void loop();
 
-    private:        
+    private:
         void handleSerialInput();
         void handleBFFFrame(const uint8_t *data);
         void handleSimToolsFrame(const uint8_t *data);
+        void handleGotoFrame(const uint8_t *data);
+        void processGoto();
+        void sendActorPairGoto(MotionNodeId nodeId, uint16_t act1Target,
+                               uint16_t act2Target, uint16_t durationMs);
 
         void processDemands(const uint16_t demand[6]);
 
@@ -59,6 +63,13 @@ class MotionGateway {
         // loop (they stall it long enough to overflow the serial buffer).
         uint16_t pendingDemand[6] = {0};
         bool pendingDemandValid = false;
+
+        // Newest complete goto frame, applied once per loop() after the drain
+        // (same rule as pendingDemand). A goto supersedes a demand parsed in
+        // the same drain pass.
+        uint16_t pendingGoto[6] = {0};
+        uint16_t pendingGotoDurationMs = 0;
+        bool pendingGotoValid = false;
 
         GatewayStats stats;
         int8_t lastArmedState = -1; // -1 = unknown; logs a DEBUGLOG line on each change
