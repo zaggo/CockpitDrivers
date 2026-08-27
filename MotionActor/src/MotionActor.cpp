@@ -282,6 +282,11 @@ void MotionActor::gotoDemands(uint16_t demand1, uint16_t demand2, uint16_t durat
             // post-homing demand (5 s over the full logical range).
             speed = range / 5;
         }
+        // Same ceiling as setDemands: half a stroke per second. Protects the
+        // hardware from a malformed frame (e.g. full-range delta with the
+        // minimum 100 ms duration would otherwise command ~10x range/s).
+        const int32_t maxSpeed = max(range / 2, 1L);
+        if (speed > maxSpeed) speed = maxSpeed;
         if (speed < 1) speed = 1;
 
         actors[i]->p(pos, speed);

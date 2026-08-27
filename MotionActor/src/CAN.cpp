@@ -286,6 +286,7 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
         {
             DEBUGLOG_PRINTLN(F("Received home command"));
             demandPending = false; // drop any demand queued before homing
+            gotoPending = false;   // drop any goto queued before homing
             motionActor->home();
             resetHeartbeatClocks();
         }
@@ -323,6 +324,7 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
         if (len >= 8 && data[0] == static_cast<uint8_t>(kNodeId) && testBench != nullptr)
         {
             demandPending = false; // the bench owns the motors during a generated run
+            gotoPending = false;   // the bench owns the motors during a run, a stale goto must not fire either
             testBench->startTest(len, data);
         }
         break;
