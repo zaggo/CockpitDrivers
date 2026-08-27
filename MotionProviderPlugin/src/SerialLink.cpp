@@ -89,6 +89,9 @@ void SerialLink::ioThreadLoop() {
         }
 
         if (holdStream_) {
+            frameDirty_ = false;   // a frame set during the hold would otherwise keep the
+                                   // predicate true and busy-spin this thread; release
+                                   // re-arms frameDirty_ from haveFrame_, so nothing is lost
             lastSend = std::chrono::steady_clock::now();  // suppress keepalive while held
             continue;
         }
