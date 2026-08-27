@@ -7,4 +7,10 @@
 namespace BffEncoder {
     constexpr std::size_t kFrameSize = 16;
     void encode(const uint16_t setpoints[6], uint8_t out[kFrameSize]);
+
+    // Goto command frame (profiled arm/disarm move): "BG" MSB[6] LSB[6]
+    // duration_ms(BE u16) CR. No reserved byte (unlike BFF).
+    constexpr std::size_t kGotoFrameSize = 17;
+    void encodeGoto(const uint16_t targets[6], uint16_t durationMs,
+                    uint8_t out[kGotoFrameSize]);
 }

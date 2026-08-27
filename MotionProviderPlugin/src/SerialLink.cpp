@@ -29,6 +29,11 @@ void SerialLink::stop() {
 
 void SerialLink::startIoThread() {
     if (ioThread_.joinable()) ioThread_.join();  // reap a self-exited thread
+    {
+        std::lock_guard<std::mutex> lk(frameMutex_);
+        holdStream_ = false;
+        oneShotPending_ = false;
+    }
     running_.store(true);
     connected_.store(true);
     ioThread_ = std::thread(&SerialLink::ioThreadLoop, this);
@@ -66,9 +71,28 @@ void SerialLink::ioThreadLoop() {
     std::unique_lock<std::mutex> lk(frameMutex_);
     while (running_.load(std::memory_order_relaxed) && serial_.isOpen()) {
         frameCv_.wait_until(lk, lastSend + keepalive, [&] {
-            return frameDirty_ || !running_.load(std::memory_order_relaxed);
+            return oneShotPending_ || frameDirty_ || !running_.load(std::memory_order_relaxed);
         });
         if (!running_.load(std::memory_order_relaxed)) break;
+
+        if (oneShotPending_) {
+            uint8_t cmd[sizeof(oneShot_)];
+            const std::size_t n = oneShotLen_;
+            std::memcpy(cmd, oneShot_, n);
+            oneShotPending_ = false;
+            lk.unlock();
+            if (serial_.writeBestEffort(cmd, n)) {
+                frames_.fetch_add(1, std::memory_order_relaxed);
+            }
+            lk.lock();
+            continue;   // deliberately does NOT touch lastSend (rate cap is for demand frames)
+        }
+
+        if (holdStream_) {
+            lastSend = std::chrono::steady_clock::now();  // suppress keepalive while held
+            continue;
+        }
+
         if (!haveFrame_) { lastSend = std::chrono::steady_clock::now(); continue; }
 
         // Rate cap: a fresh frame earlier than minGap after the last write
@@ -145,4 +169,24 @@ void SerialLink::setFrame(const uint8_t* data, std::size_t len) {
         frameDirty_ = true;
     }
     frameCv_.notify_one();  // TX thread writes it immediately (rate-capped)
+}
+
+void SerialLink::sendOneShot(const uint8_t* data, std::size_t len) {
+    if (len == 0 || len > sizeof(oneShot_)) return;
+    {
+        std::lock_guard<std::mutex> lk(frameMutex_);
+        std::memcpy(oneShot_, data, len);
+        oneShotLen_ = len;
+        oneShotPending_ = true;
+    }
+    frameCv_.notify_one();
+}
+
+void SerialLink::holdStream(bool hold) {
+    {
+        std::lock_guard<std::mutex> lk(frameMutex_);
+        holdStream_ = hold;
+        if (!hold) frameDirty_ = haveFrame_;   // resume immediately with the current frame
+    }
+    frameCv_.notify_one();
 }

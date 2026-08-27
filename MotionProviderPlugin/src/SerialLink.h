@@ -35,6 +35,16 @@ public:
 
     void setFrame(const uint8_t* data, std::size_t len);  // thread-safe latest frame
 
+    // One-shot command frame (e.g. a BG goto). Written once by the I/O thread,
+    // with priority over demand frames. Thread-safe.
+    void sendOneShot(const uint8_t* data, std::size_t len);
+
+    // While held, the I/O thread writes neither demand frames nor the keepalive
+    // (a keepalive would resend the pre-goto pose and fight the profiled move).
+    // One-shots still go out. Releasing marks the current frame dirty so
+    // streaming resumes immediately.
+    void holdStream(bool hold);
+
     bool isConnected() const { return connected_.load(); }
     uint64_t framesSent() const { return frames_.load(); }
     std::string port() const { return port_; }
@@ -68,6 +78,11 @@ private:
     uint8_t frame_[BffEncoder::kFrameSize] = {0};
     bool haveFrame_ = false;
     bool frameDirty_ = false;   // new frame since the last write
+
+    uint8_t oneShot_[32];
+    std::size_t oneShotLen_ = 0;
+    bool oneShotPending_ = false;
+    bool holdStream_ = false;
 
     static constexpr int kKeepaliveMs = 100;  // idle re-send rate (~10 Hz)
 
