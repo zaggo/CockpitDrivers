@@ -79,4 +79,15 @@ private:
     uint16_t sentSetpoints_[6] = {32640,32640,32640,32640,32640,32640};
     SafetyMonitor monitor_;
     bool serialWasConnected_ = false;   // latches true once a link comes up
+
+    // Profiled arm/disarm transition (goto-based; see
+    // docs/superpowers/specs/2026-08-27-goto-arm-disarm-design.md). While a
+    // goto move runs, the demand stream is held; on expiry the SafetyLimiter
+    // is snapped to the arrived targets and streaming resumes.
+    bool gotoActive_ = false;
+    double gotoRemainingSec_ = 0.0;
+    uint16_t gotoTargets_[6] = {32640,32640,32640,32640,32640,32640};
+    ArmState prevArmState_ = ArmState::Disarmed;
+    static constexpr double kGotoMarginSec = 0.3;
+    void startGotoTransition(bool arming, const Pose& rawLive);
 };

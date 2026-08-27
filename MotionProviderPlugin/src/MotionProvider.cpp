@@ -284,6 +284,27 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
 
     // Arm ramp + pose-space blend -> IK.
     armRamp_.update(dt, safetyCfg_.armRampSec, safetyCfg_.disarmRampSec);
+
+    // Entering Arming/Disarming (from any source: switch, e-stop button, port
+    // change) starts one profiled goto move instead of streaming the blend.
+    // A mid-move reversal simply starts a new goto with the full duration -
+    // the Kangaroo re-profiles from its current position.
+    const ArmState armStateNow = armRamp_.state();
+    if (armStateNow != prevArmState_) {
+        if (armStateNow == ArmState::Arming)         startGotoTransition(true, rawLive);
+        else if (armStateNow == ArmState::Disarming) startGotoTransition(false, rawLive);
+        prevArmState_ = armStateNow;
+    }
+
+    if (gotoActive_) {
+        gotoRemainingSec_ -= dt;   // dt is maxDtSec-clamped: a sim stall can't skip the move
+        if (gotoRemainingSec_ <= 0.0) {
+            gotoActive_ = false;
+            if (safety_) safety_->reset(gotoTargets_);   // continue from the arrived pose
+            if (serial_) serial_->holdStream(false);
+        }
+    }
+
     latestPose_ = blendedCommand(rawLive);
     if (kin_) latestSolve_ = kin_->solve(latestPose_);
 
@@ -309,9 +330,11 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
     else for (int i=0;i<6;i++) sentSetpoints_[i] = target[i];
 
     if (serial_) {
-        uint8_t frame[BffEncoder::kFrameSize];
-        BffEncoder::encode(sentSetpoints_, frame);
-        serial_->setFrame(frame, sizeof(frame));
+        if (!gotoActive_) {
+            uint8_t frame[BffEncoder::kFrameSize];
+            BffEncoder::encode(sentSetpoints_, frame);
+            serial_->setFrame(frame, sizeof(frame));
+        }
         serial_->update(elapsedSec);   // real dt for reconnect timing
     }
 
@@ -352,4 +375,25 @@ Pose MotionProvider::blendedCommand(const Pose& rawLive) const {
     eff.pitch = static_cast<float>(parkPose_.pitch * p + live.pitch * b);
     eff.yaw   = static_cast<float>(parkPose_.yaw   * p + live.yaw   * b);
     return kin_->clampToReachable(eff);           // guard the blended pose too
+}
+
+void MotionProvider::startGotoTransition(bool arming, const Pose& rawLive) {
+    if (!kin_ || !serial_) return;
+    const Pose target = arming ? kin_->clampToReachable(rawLive) : parkPose_;
+    const SolveResult s = kin_->solve(target);
+    if (!s.allReachable) return;   // fall back to the streamed blend (stream not held)
+
+    for (int i = 0; i < 6; ++i) gotoTargets_[i] = s.setpoints[i];
+
+    double durSec = arming ? safetyCfg_.armRampSec : safetyCfg_.disarmRampSec;
+    if (durSec < 0.1)  durSec = 0.1;
+    if (durSec > 30.0) durSec = 30.0;
+    const uint16_t durMs = static_cast<uint16_t>(std::lround(durSec * 1000.0));
+
+    uint8_t frame[BffEncoder::kGotoFrameSize];
+    BffEncoder::encodeGoto(gotoTargets_, durMs, frame);
+    serial_->holdStream(true);                    // ALWAYS before the one-shot (race rule)
+    serial_->sendOneShot(frame, sizeof(frame));
+    gotoActive_ = true;
+    gotoRemainingSec_ = durSec + kGotoMarginSec;
 }
