@@ -163,6 +163,12 @@ SafetyConfig MotionConfig::loadSafety(const std::string& path) {
         getDouble(*t, "runaway_hold_sec", s.runawayHoldSec);
         getDouble(*t, "max_dt_sec", s.maxDtSec);
     }
+    // The actor firmware clamps a goto move to 30 s; keep the ramp times in
+    // the same range so the ArmRamp blend and the goto timer stay in sync.
+    if (s.armRampSec < 0.1)     s.armRampSec = 0.1;
+    if (s.armRampSec > 30.0)    s.armRampSec = 30.0;
+    if (s.disarmRampSec < 0.1)  s.disarmRampSec = 0.1;
+    if (s.disarmRampSec > 30.0) s.disarmRampSec = 30.0;
     return s;
 }
 

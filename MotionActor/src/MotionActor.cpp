@@ -273,7 +273,9 @@ void MotionActor::gotoDemands(uint16_t demand1, uint16_t demand2, uint16_t durat
             int32_t delta = pos - current;
             if (delta < 0) delta = -delta;
             // Cover delta in exactly durationMs -> speed in Kangaroo units/s.
-            // delta <= ~65000, *1000 fits int32.
+            // delta is bounded by the logical range (Kangaroo units); *1000
+            // fits int32 for any range < ~2.1M units (same assumption
+            // setDemands' *1100 makes).
             speed = (delta * 1000L) / static_cast<int32_t>(durationMs);
         }
         else

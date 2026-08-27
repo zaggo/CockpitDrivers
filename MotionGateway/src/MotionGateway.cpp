@@ -241,7 +241,9 @@ void MotionGateway::handleSerialInput()
         }
         else
         {
-          stats.crMissBytes++;   // same wait-for-CR resync as the BFF CR state
+          stats.crMissBytes++;   // same wait-for-CR resync as the BFF CR state...
+          idx = 0;               // ...but poison the frame: a goto is a one-shot
+                                 // command, never execute one whose CR check failed
         }
         break;
 
@@ -363,6 +365,7 @@ void MotionGateway::processGoto()
   {
     if (!canBus->isSystemActive())
     {
+      DEBUGLOG_PRINTLN(String(F("Goto dropped (system not active) for node ")) + (pairIdx + 1));
       continue;
     }
     // MaxAge-resync consistency: the goto target IS the platform's demand now.

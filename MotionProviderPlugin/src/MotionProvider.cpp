@@ -296,12 +296,16 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         prevArmState_ = armStateNow;
     }
 
+    bool releaseHold = false;
     if (gotoActive_) {
         gotoRemainingSec_ -= dt;   // dt is maxDtSec-clamped: a sim stall can't skip the move
         if (gotoRemainingSec_ <= 0.0) {
             gotoActive_ = false;
             if (safety_) safety_->reset(gotoTargets_);   // continue from the arrived pose
-            if (serial_) serial_->holdStream(false);
+            // Release the hold only AFTER this tick's fresh frame is set below -
+            // releasing here would mark the stale pre-goto frame dirty and the
+            // I/O thread could write it before setFrame() lands (end-of-move jerk).
+            releaseHold = true;
         }
     }
 
@@ -335,6 +339,7 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
             BffEncoder::encode(sentSetpoints_, frame);
             serial_->setFrame(frame, sizeof(frame));
         }
+        if (releaseHold) serial_->holdStream(false);   // fresh frame is in place now
         serial_->update(elapsedSec);   // real dt for reconnect timing
     }
 
