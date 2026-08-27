@@ -17,6 +17,12 @@ enum class MotionMessageId : uint16_t
 
     actorPairHome = 0x380,
     actorPairStop = 0x381,
+    // Profiled arm/disarm move (gateway -> actor): run one internal Kangaroo
+    // profile per channel to a target, speed derived from a shared duration.
+    // Payload: [0]=nodeId [1..2]=act1 target BE [3..4]=act2 target BE
+    //          [5..6]=duration_ms BE [7]=reserved.
+    // Must stay in 0x380-0x38F (actors' RXB1 range filter).
+    actorPairGoto = 0x382,
     actorCalibrationMove = 0x385,
     // Test orchestration (gateway -> actor). Deliberately inside the 0x380-0x38F
     // command block so the actors' existing RXB1 range filter passes them.
