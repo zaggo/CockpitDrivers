@@ -317,6 +317,8 @@ void MotionGateway::handleBFFFrame(const uint8_t *data)
     pendingDemand[i] = ((uint16_t)data[i] << 8) | data[i + kMaxDataSize / 2];
   }
   pendingDemandValid = true;
+  pendingGotoValid = false;   // latest wins in both directions: a demand parsed
+                              // after a goto in the same drain supersedes it
   stats.noteFrame(millis());
 }
 
