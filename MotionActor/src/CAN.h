@@ -45,6 +45,13 @@ private:
     uint16_t pendingDemand1 = 0;
     uint16_t pendingDemand2 = 0;
 
+    // Latest goto seen while draining RX frames; applied outside the drain loop
+    // (same rule as demands: Kangaroo serial writes never inside the drain).
+    bool gotoPending = false;
+    uint16_t pendingGoto1 = 0;
+    uint16_t pendingGoto2 = 0;
+    uint16_t pendingGotoDurationMs = 0;
+
     // Heartbeat monitoring
     uint32_t lastGatewayHeartbeat = 0;
     uint32_t lastActorHeartbeat = 0;

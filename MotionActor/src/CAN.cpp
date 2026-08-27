@@ -133,6 +133,24 @@ void CAN::loop()
         handleFrame(static_cast<MotionMessageId>(rxId), ext, len, buf);
     }
 
+    // Apply the newest coalesced goto outside the drain loop; gotoDemands() blocks on
+    // the Kangaroo serial round-trip. Apply goto before demand so goto can set the last
+    // commanded position (then a stale demand won't override it).
+    if (gotoPending)
+    {
+        gotoPending = false;
+#if MOTION_TESTBENCH
+        const bool benchOwnsMotors =
+            testBench != nullptr && testBench->isRunning() && !testBench->isPassthroughActive();
+        if (!benchOwnsMotors)
+        {
+            motionActor->gotoDemands(pendingGoto1, pendingGoto2, pendingGotoDurationMs);
+        }
+#else
+        motionActor->gotoDemands(pendingGoto1, pendingGoto2, pendingGotoDurationMs);
+#endif
+    }
+
     // Apply the newest coalesced demand outside the drain loop; setDemands() blocks on
     // the Kangaroo serial round-trip.
     if (demandPending)
@@ -277,6 +295,18 @@ void CAN::handleFrame(MotionMessageId id, uint8_t ext, uint8_t len, const uint8_
         {
             DEBUGLOG_PRINTLN(F("Received stop command"));
             motionActor->powerDown();
+        }
+        break;
+    case MotionMessageId::actorPairGoto:
+        if (len >= 7 && data[0] == static_cast<uint8_t>(kNodeId))
+        {
+            pendingGoto1 = (static_cast<uint16_t>(data[1]) << 8) | static_cast<uint16_t>(data[2]);
+            pendingGoto2 = (static_cast<uint16_t>(data[3]) << 8) | static_cast<uint16_t>(data[4]);
+            pendingGotoDurationMs = (static_cast<uint16_t>(data[5]) << 8) | static_cast<uint16_t>(data[6]);
+            gotoPending = true;
+            demandPending = false;   // a stale demand must not fire after the profiled move
+            DEBUGLOG_PRINTLN(String(F("Received goto: ")) + pendingGoto1 + ", " + pendingGoto2 +
+                             String(F(" in ")) + pendingGotoDurationMs + F(" ms"));
         }
         break;
     case MotionMessageId::actorCalibrationMove:

@@ -238,6 +238,59 @@ void MotionActor::setDemands(uint16_t demand1, uint16_t demand2)
     haveLastCommanded = true;
 }
 
+void MotionActor::gotoDemands(uint16_t demand1, uint16_t demand2, uint16_t durationMs)
+{
+    if (state != MotionActorState::active)
+    {
+        DEBUGLOG_PRINTLN(F("Cannot goto: not active"));
+        return;
+    }
+    if (durationMs < 100)   durationMs = 100;    // no snap moves
+    if (durationMs > 30000) durationMs = 30000;
+
+    const uint16_t demands[kActorCount] = {demand1, demand2};
+
+    for (uint8_t i = 0; i < kActorCount; ++i)
+    {
+        const int32_t pos = map(demands[i], 0, 0xffff, logicalMinPosition[i], logicalMaxPosition[i]);
+        const int32_t range = logicalMaxPosition[i] - logicalMinPosition[i];
+
+        int32_t current = 0;
+        bool haveCurrent = false;
+        if (haveLastCommanded)
+        {
+            current = lastCommandedPosition[i];
+            haveCurrent = true;
+        }
+        else
+        {
+            haveCurrent = readCurrentPosition(i, current);
+        }
+
+        int32_t speed;
+        if (haveCurrent)
+        {
+            int32_t delta = pos - current;
+            if (delta < 0) delta = -delta;
+            // Cover delta in exactly durationMs -> speed in Kangaroo units/s.
+            // delta <= ~65000, *1000 fits int32.
+            speed = (delta * 1000L) / static_cast<int32_t>(durationMs);
+        }
+        else
+        {
+            // Unknown position (getP failed): same gentle glide as the first
+            // post-homing demand (5 s over the full logical range).
+            speed = range / 5;
+        }
+        if (speed < 1) speed = 1;
+
+        actors[i]->p(pos, speed);
+        lastCommandedPosition[i] = pos;
+    }
+    lastDemandTimestampMs = millis();
+    haveLastCommanded = true;   // next streamed demand computes delta from the goto target
+}
+
 void MotionActor::calibrationMove(uint8_t channel, uint16_t positionPercent)
 {
     if (state != MotionActorState::active)
