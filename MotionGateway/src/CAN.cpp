@@ -32,9 +32,6 @@ CAN::CAN()
         digitalWrite(kStatusLedRedPin, LOW);
         digitalWrite(kStatusLedGreenPin, HIGH);
         delay(500);
-        digitalWrite(kStatusLedRedPin, HIGH);
-        digitalWrite(kStatusLedGreenPin, HIGH);
-        delay(500);
     }
 
     digitalWrite(kStatusLedRedPin, HIGH);
@@ -448,6 +445,13 @@ SystemState CAN::calculateSystemState()
     // Priority based logic (lower number = higher priority)
     // canError = 0, motionError = 1, homing = 2, stopping = 3, stopped = 4, active = 5
 
+    // Priority 0: no actor alive on the bus. An empty bus must not look like a
+    // benign "everything stopped" (disarmed) state, so it counts as a fault.
+    if (aliveCount == 0)
+    {
+        return SystemState::canError;
+    }
+
     // Priority 1: Motion Error - at least one actor failed
     if (homingFailedCount > 0)
     {
@@ -466,34 +470,40 @@ SystemState CAN::calculateSystemState()
         return SystemState::stopping;
     }
 
-    // Priority 4: Stopped - all actors stopped
-    if (aliveCount > 0 && stoppedCount == aliveCount)
+    // Priority 4: Stopped - all actors stopped (disarmed, otherwise healthy)
+    if (stoppedCount == aliveCount)
     {
         return SystemState::stopped;
     }
 
     // Priority 5: Active - all actors active
-    if (aliveCount > 0 && activeCount == aliveCount)
+    if (activeCount == aliveCount)
     {
         return SystemState::active;
     }
 
-    // Default: stopped (e.g., no actors alive yet)
-    return SystemState::stopped;
+    // Mixed states with none stopped (aliveCount > 0 guaranteed here)
+    return SystemState::stopping;
 }
 
 void CAN::updateStatusLED()
 {
-    // LED behavior based on system state:
-    // - canError -> red blink
-    // - motionError -> red
-    // - stopped -> yellow (red + green)
-    // - stopping -> yellow blink
-    // - homing -> green blink
-    // - active -> green
-
+    // LED behavior based on system state. Red and green are never lit together:
+    // the resulting "yellow" was indistinguishable from plain red or green on
+    // the rig, so the distinct states use blink rate and colour alternation.
+    // - canError    -> red blink, slow (500/500 ms)
+    // - motionError -> red solid
+    // - homing      -> red blink, fast (250/250 ms)
+    // - stopping    -> red/green alternating (250/250 ms)
+    // - stopped     -> green blink, slow (500/500 ms)
+    // - active      -> green solid
+    //
+    // Blink phase is derived from millis() rather than a toggle flag, so a state
+    // change cannot leave a stale toggle timestamp behind and both blink rates
+    // need no separate timers.
     const uint32_t now = millis();
-    const uint32_t blinkPeriodMs = 500; // 500ms on, 500ms off
+    const bool slowPhase = ((now / 500UL) & 1UL) != 0UL;
+    const bool fastPhase = ((now / 250UL) & 1UL) != 0UL;
 
     bool redOn = false;
     bool greenOn = false;
@@ -501,52 +511,37 @@ void CAN::updateStatusLED()
     switch (currentSystemState)
     {
     case SystemState::canError:
-        // Red blink
-        if (now - lastStatusLedToggleMs >= blinkPeriodMs)
-        {
-            statusLedBlinkState = !statusLedBlinkState;
-            lastStatusLedToggleMs = now;
-        }
-        redOn = statusLedBlinkState;
+        // Red blink, slow
+        redOn = slowPhase;
         greenOn = false;
         break;
 
     case SystemState::motionError:
-        // Red
+        // Red solid
         redOn = true;
         greenOn = false;
         break;
 
-    case SystemState::stopped:
-        // Yellow (red + green)
-        redOn = true;
-        greenOn = true;
+    case SystemState::homing:
+        // Red blink, fast
+        redOn = fastPhase;
+        greenOn = false;
         break;
 
     case SystemState::stopping:
-        // Yellow blink
-        if (now - lastStatusLedToggleMs >= blinkPeriodMs)
-        {
-            statusLedBlinkState = !statusLedBlinkState;
-            lastStatusLedToggleMs = now;
-        }
-        redOn = statusLedBlinkState;
-        greenOn = statusLedBlinkState;
+        // Red/green alternating - exactly one colour on at any time
+        redOn = fastPhase;
+        greenOn = !fastPhase;
         break;
 
-    case SystemState::homing:
-        // Green blink
-        if (now - lastStatusLedToggleMs >= blinkPeriodMs)
-        {
-            statusLedBlinkState = !statusLedBlinkState;
-            lastStatusLedToggleMs = now;
-        }
+    case SystemState::stopped:
+        // Green blink, slow
         redOn = false;
-        greenOn = statusLedBlinkState;
+        greenOn = slowPhase;
         break;
 
     case SystemState::active:
-        // Green
+        // Green solid
         redOn = false;
         greenOn = true;
         break;

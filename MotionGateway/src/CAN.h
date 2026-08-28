@@ -51,10 +51,6 @@ class CAN : public BaseCAN {
         // System state tracking
         SystemState currentSystemState = SystemState::stopped;
 
-        // Status LED control (for system state visualization)
-        uint32_t lastStatusLedToggleMs = 0;
-        bool statusLedBlinkState = false;
-
         // CAN ID error tracking: tracks TX/RX error status per CAN ID
         static constexpr uint8_t kMaxCanIdErrors = 8;
         CanIdError canIdErrors[kMaxCanIdErrors];
