@@ -47,6 +47,49 @@ int main() {
         check(sMax < 1e-6, "stationary -> no rumble");
     }
 
+    // state()/setState() round-trip: a layer seeded from another's captured
+    // state must produce IDENTICAL output from then on. This is the exact
+    // mechanism washout_replay's --cues loader relies on to seed a replay
+    // from a recording's eff_* columns (Change 2) -- if this drifts, seeding
+    // silently reproduces the wrong thing instead of failing loudly.
+    {
+        EffectsLayer source(EffectsConfig::defaults());
+        MotionCues roll; roll.onGround = true; roll.groundspeed = 45.0f;
+        // Advance the source through a touchdown edge and partway through a
+        // rumble so all four state members end up non-default before capture.
+        MotionCues air; air.onGround = false;
+        source.update(air, dt);
+        for (int i = 0; i < 37; ++i) source.update(roll, dt);   // mid-rumble, non-trivial phase
+
+        const EffectsLayer::State captured = source.state();
+        check(captured.prevOnGround, "captured state has prevOnGround true (sanity)");
+        check(captured.rumblePhase > 1e-6, "captured state has a non-zero rumble phase (sanity)");
+
+        EffectsLayer seeded(EffectsConfig::defaults());
+        seeded.setState(captured);
+
+        bool identical = true;
+        for (int i = 0; i < 60; ++i) {
+            const Pose ps = source.update(roll, dt);
+            const Pose pd = seeded.update(roll, dt);
+            if (ps.heave != pd.heave || ps.pitch != pd.pitch) { identical = false; break; }
+        }
+        check(identical, "a layer seeded via setState(state()) tracks the source exactly");
+
+        // A layer that ISN'T seeded (starts from a fresh/zero state) must
+        // diverge from the same point -- otherwise the round-trip check
+        // above would pass for a trivial reason (e.g. rumble output being
+        // phase-insensitive by accident).
+        EffectsLayer unseeded(EffectsConfig::defaults());
+        bool diverged = false;
+        for (int i = 0; i < 60; ++i) {
+            const Pose ps = source.update(roll, dt);
+            const Pose pu = unseeded.update(roll, dt);
+            if (ps.heave != pu.heave) { diverged = true; break; }
+        }
+        check(diverged, "an unseeded layer does NOT track the source -- the seed matters");
+    }
+
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

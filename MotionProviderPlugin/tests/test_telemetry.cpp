@@ -37,6 +37,10 @@ int main() {
         r.reachScale = 0.75;
         for (int i = 0; i < 6; ++i) { r.setpoints[i] = 1000 + i; r.sent[i] = 2000 + i; }
         r.velClips = 3; r.accClips = 1; r.armState = 2;
+        r.effState.prevOnGround = true;
+        r.effState.tdActive     = true;
+        r.effState.tdT          = 0.5;
+        r.effState.rumblePhase  = 2.345;
         t.write(r);
         t.write(r);
         check(t.rows() == 2, "rows() counts written rows");
@@ -51,8 +55,56 @@ int main() {
         const size_t hc = split(headerLine).size();
         const size_t dc = split(dataLine).size();
         check(hc == dc, "header and data column counts agree");
-        check(hc > 40, "header has the full column set");
+        // Exact, not a loose lower bound: this is the one place the schema's
+        // full column count is asserted, and Change 2 added four columns
+        // (eff_prev_onground, eff_td_active, eff_td_t, eff_rumble_phase) on
+        // top of the 57 that came before -- a bound loose enough to survive
+        // that addition silently would also survive one of them going
+        // missing.
+        check(hc == 61, "header has exactly the documented 61-column schema");
         check(headerLine.rfind("t_sec,", 0) == 0, "header starts with t_sec");
+        check(headerLine.find(",eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase")
+                  != std::string::npos,
+              "the Change-2 effects-state columns are present, in order, at the end");
+    }
+
+    // Change 2's effects-state columns round-trip exactly, booleans as 0/1
+    // and doubles at full precision -- washout_replay's seeding depends on
+    // reading back exactly what was recorded, particularly rumblePhase
+    // (unlike a filter's decaying state, a phase mismatch never washes out).
+    {
+        Telemetry t;
+        t.start(path);
+        TelemetryRow r;
+        r.effState.prevOnGround = true;
+        r.effState.tdActive     = false;
+        r.effState.tdT          = 1.0 / 3.0;
+        r.effState.rumblePhase  = 4.71238898038469;  // 3*pi/2, an awkward double
+        t.write(r);
+        t.stop();
+        std::ifstream in(path);
+        std::string headerLine, dataLine;
+        std::getline(in, headerLine);
+        std::getline(in, dataLine);
+        const std::vector<std::string> h = split(headerLine);
+        const std::vector<std::string> d = split(dataLine);
+        size_t pogIdx = h.size(), tdaIdx = h.size(), tdtIdx = h.size(), phIdx = h.size();
+        for (size_t i = 0; i < h.size(); ++i) {
+            if (h[i] == "eff_prev_onground") pogIdx = i;
+            if (h[i] == "eff_td_active")     tdaIdx = i;
+            if (h[i] == "eff_td_t")          tdtIdx = i;
+            if (h[i] == "eff_rumble_phase")  phIdx  = i;
+        }
+        check(pogIdx < h.size() && tdaIdx < h.size() && tdtIdx < h.size() && phIdx < h.size(),
+              "all four effects-state columns exist");
+        check(pogIdx < d.size() && std::atoi(d[pogIdx].c_str()) == 1,
+              "eff_prev_onground round-trips as 1 (true)");
+        check(tdaIdx < d.size() && std::atoi(d[tdaIdx].c_str()) == 0,
+              "eff_td_active round-trips as 0 (false)");
+        check(tdtIdx < d.size() && std::atof(d[tdtIdx].c_str()) == r.effState.tdT,
+              "eff_td_t round-trips exactly");
+        check(phIdx < d.size() && std::atof(d[phIdx].c_str()) == r.effState.rumblePhase,
+              "eff_rumble_phase round-trips exactly");
     }
 
     // Floats round-trip exactly at the documented precision -- the bit-exact

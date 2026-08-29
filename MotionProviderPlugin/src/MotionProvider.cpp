@@ -240,6 +240,16 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
     double dt = static_cast<double>(elapsedSec);
     if (dt > safetyCfg_.maxDtSec) dt = safetyCfg_.maxDtSec;
 
+    // Snapshot the effects layer's state BEFORE this tick's update() call
+    // below (if it runs at all -- manual mode and a paused sim never call
+    // it, in which case the state genuinely hasn't changed since the last
+    // real tick, so "before" and "now" coincide). This is the state a replay
+    // must seed to reproduce this row's live_* columns starting from this
+    // row; see Telemetry's eff_* state columns and washout_replay's
+    // loadCues/runChain.
+    const EffectsLayer::State effStateThisTick =
+        effects_ ? effects_->state() : EffectsLayer::State{};
+
     Pose rawLive;
     if (manualMode_) {
         // Identify mode (axis 6) commands the home pose as base; a per-actuator
@@ -375,6 +385,7 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         row.velClips = safety_ ? safety_->velClipCount() : 0;
         row.accClips = safety_ ? safety_->accClipCount() : 0;
         row.armState = static_cast<int>(armRamp_.state());
+        row.effState  = effStateThisTick;
         telemetry_->write(row);
     }
 

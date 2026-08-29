@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <fstream>
 #include <string>
+#include "EffectsLayer.h"    // EffectsLayer::State
 #include "MotionCues.h"
 #include "Pose.h"
 #include "WashoutFilter.h"   // WashoutTrace
@@ -23,6 +24,13 @@ struct TelemetryRow {
     int          velClips  = 0;
     int          accClips  = 0;
     int          armState  = 0;
+    // EffectsLayer's internal state as it stood BEFORE this tick's update()
+    // ran (or, on a paused/manual tick where update() didn't run at all, its
+    // unchanged current state -- the two coincide exactly because nothing
+    // else can move this state). This is the state a replay must seed to
+    // reproduce this row's live_* columns from row 0 onward; see
+    // washout_replay's loadCues/runChain.
+    EffectsLayer::State effState;
 };
 
 // Buffered CSV writer. XPLM-free by design: the tests and the offline replay

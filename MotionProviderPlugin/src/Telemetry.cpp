@@ -47,7 +47,8 @@ const char* Telemetry::header() {
            "reach_scale,"
            "sp0,sp1,sp2,sp3,sp4,sp5,"
            "sent0,sent1,sent2,sent3,sent4,sent5,"
-           "sl_vel_clip,sl_acc_clip,arm_state";
+           "sl_vel_clip,sl_acc_clip,arm_state,"
+           "eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase";
 }
 
 bool Telemetry::start(const std::string& path) {
@@ -106,6 +107,11 @@ void Telemetry::write(const TelemetryRow& r) {
     for (int i = 0; i < 6; ++i) putI(out_, r.setpoints[i]);
     for (int i = 0; i < 6; ++i) putI(out_, r.sent[i]);
     putI(out_, r.velClips); putI(out_, r.accClips); putI(out_, r.armState);
+
+    putI(out_, r.effState.prevOnGround ? 1 : 0);
+    putI(out_, r.effState.tdActive ? 1 : 0);
+    putD(out_, r.effState.tdT);
+    putD(out_, r.effState.rumblePhase);
 
     out_ << '\n';
     ++rows_;
