@@ -67,10 +67,22 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
     }
     const bool haveRec = idx.find("live_heave") != idx.end();
 
+    const size_t numCols = splitLine(headerLine).size();
+    bool warnedRagged = false;
+    size_t rowNum = 0;
+
     std::string line;
     while (std::getline(in, line)) {
         if (line.empty()) continue;
+        ++rowNum;
         const std::vector<std::string> f = splitLine(line);
+        if (!warnedRagged && f.size() < numCols) {
+            std::fprintf(stderr,
+                "warning: ragged row %zu has %zu fields, header has %zu -- "
+                "recording may be truncated (further ragged rows not reported)\n",
+                rowNum, f.size(), numCols);
+            warnedRagged = true;
+        }
         CueSample s;
         s.dt                = col(f, idx, "dt_real", 1.0 / 60.0);
         s.cues.heaveG       = static_cast<float>(col(f, idx, "g_nrml", 1.0));
@@ -197,10 +209,17 @@ int main(int argc, char** argv) {
     SafetyLimiter      safety(scfg);
 
     // Replay is always "armed and live": the arm blend is a transition, not part
-    // of the cueing chain under test.
-    uint16_t home[6];
-    { const SolveResult s = kin.solve(Pose{}); for (int i = 0; i < 6; ++i) home[i] = s.setpoints[i]; }
-    safety.reset(home);
+    // of the cueing chain under test. Still seed the limiter from the park pose
+    // (as MotionProvider::initialize does), not home -- the limiter is stateful,
+    // so a different seed diverges the first ticks' sent[]/clip counts from a
+    // real recording.
+    Pose park;
+    park.heave = static_cast<float>(scfg.parkHeaveMm);
+    const Pose parkClamped = kin.clampToReachable(park);
+    const SolveResult parkSolve = kin.solve(parkClamped);
+    uint16_t parkSetpoints[6];
+    for (int i = 0; i < 6; ++i) parkSetpoints[i] = parkSolve.setpoints[i];
+    safety.reset(parkSetpoints);
 
     Telemetry out;
     if (!outPath.empty() && !out.start(outPath)) {
@@ -208,37 +227,46 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Persists across paused ticks, mirroring MotionProvider::lastLivePose_: the
+    // flight loop keeps ticking with wall-clock dt while the sim is paused, but
+    // the filters must not see that time, so the last live pose is held instead
+    // of integrated.
+    Pose live;
     double t = 0.0;
     for (const CueSample& s : samples) {
         double dt = s.dt;
         if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
 
-        Pose live;
+        // This tick's effects contribution only, for the telemetry row -- zero
+        // on a paused tick (the held `live` pose above already carries the
+        // combined value forward, matching clampToReachable/solve/limit/write
+        // running unconditionally every tick just like MotionProvider does).
+        Pose e;
         if (!s.cues.simPaused) {
             const Pose w = washout.update(s.cues, dt);
-            const Pose e = effects.update(s.cues, dt);
+            e = effects.update(s.cues, dt);
             live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
             live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
+        }
 
-            double scale = 1.0;
-            const Pose cmd = kin.clampToReachable(live, &scale);
-            const SolveResult sol = kin.solve(cmd);
-            uint16_t target[6], sent[6];
-            for (int i = 0; i < 6; ++i) target[i] = sol.setpoints[i];
-            safety.limit(target, dt, sent);
+        double scale = 1.0;
+        const Pose cmd = kin.clampToReachable(live, &scale);
+        const SolveResult sol = kin.solve(cmd);
+        uint16_t target[6], sent[6];
+        for (int i = 0; i < 6; ++i) target[i] = sol.setpoints[i];
+        safety.limit(target, dt, sent);
 
-            if (out.recording()) {
-                TelemetryRow r;
-                r.t = t; r.dtReal = s.dt; r.dtClamped = dt;
-                r.cues = s.cues; r.trace = washout.trace();
-                r.effects = e; r.live = live; r.commanded = cmd;
-                r.reachScale = scale;
-                for (int i = 0; i < 6; ++i) { r.setpoints[i] = target[i]; r.sent[i] = sent[i]; }
-                r.velClips = safety.velClipCount();
-                r.accClips = safety.accClipCount();
-                r.armState = 2;   // Armed
-                out.write(r);
-            }
+        if (out.recording()) {
+            TelemetryRow r;
+            r.t = t; r.dtReal = s.dt; r.dtClamped = dt;
+            r.cues = s.cues; r.trace = washout.trace();
+            r.effects = e; r.live = live; r.commanded = cmd;
+            r.reachScale = scale;
+            for (int i = 0; i < 6; ++i) { r.setpoints[i] = target[i]; r.sent[i] = sent[i]; }
+            r.velClips = safety.velClipCount();
+            r.accClips = safety.accClipCount();
+            r.armState = 2;   // Armed
+            out.write(r);
         }
         t += s.dt;
     }
