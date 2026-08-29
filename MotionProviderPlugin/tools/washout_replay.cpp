@@ -36,7 +36,7 @@ namespace {
 // the DOMINANT source of divergence -- an initial condition the recording
 // never captured -- but that source decays asymptotically, never landing on
 // literal IEEE bit-for-bit equality within a finite recording: measured on
-// the campaign's two real recordings, the rotational channels (whose washout
+// the campaign's real recordings, the rotational channels (whose washout
 // carries the config's slowest time constant, rot_washout_tau) still show
 // isolated ~1e-12 mm/deg blips deep into the file, well past any reasonable
 // warm-up -- residual float32-rounding noise from two independently
@@ -60,6 +60,15 @@ struct CueSample {
     // for older/cue-only files, which then simply carry no edges.
     int  armState     = 0;
     bool haveArmState = false;
+    // EffectsLayer's recorded internal state for this row (Change 2 -- see
+    // Telemetry's eff_* state columns). Only row 0's is ever actually used
+    // (to seed the layer before processing anything -- see runChain), but
+    // every row is parsed the same way for consistency. Absent for every
+    // recording that predates these columns, which is every one of this
+    // campaign's seven real recordings -- absent means "seed from zero",
+    // i.e. today's behaviour, unchanged.
+    EffectsLayer::State effState;
+    bool haveEffState = false;
 };
 
 std::vector<std::string> splitLine(const std::string& s) {
@@ -105,6 +114,15 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
     }
     const bool haveRec = idx.find("live_heave") != idx.end();
     const bool haveArm = idx.find("arm_state") != idx.end();
+    // Change 2's effects-state columns are optional and travel as a group --
+    // partial presence (an edited/hand-built file missing one) is treated the
+    // same as none, so seeding never runs off a half-populated state. Every
+    // one of this campaign's seven real recordings predates these columns, so
+    // this is false for all of them and effState stays at its zero default,
+    // which is exactly today's (pre-Change-2) seeding behaviour.
+    const bool haveEffState =
+        idx.find("eff_prev_onground") != idx.end() && idx.find("eff_td_active") != idx.end() &&
+        idx.find("eff_td_t") != idx.end() && idx.find("eff_rumble_phase") != idx.end();
 
     const size_t numCols = splitLine(headerLine).size();
     bool warnedRagged = false;
@@ -153,6 +171,13 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
         if (haveArm) {
             s.armState     = static_cast<int>(col(f, idx, "arm_state"));
             s.haveArmState = true;
+        }
+        if (haveEffState) {
+            s.effState.prevOnGround = col(f, idx, "eff_prev_onground") != 0.0;
+            s.effState.tdActive     = col(f, idx, "eff_td_active") != 0.0;
+            s.effState.tdT          = col(f, idx, "eff_td_t");
+            s.effState.rumblePhase  = col(f, idx, "eff_rumble_phase");
+            s.haveEffState          = true;
         }
         out.push_back(s);
     }
@@ -240,6 +265,38 @@ struct RunResult {
     size_t verifySkippedSamples  = 0;
     double verifySkippedSec      = 0.0;
     size_t verifyComparedSamples = 0;
+
+    // Change 1 -- discriminating a decaying initial condition from a real
+    // divergence. See the PASS/FAIL logic in main().
+    //
+    // Residual over the back half of the COMPARED window (i.e. still after
+    // the warm-up skip above). An unrecorded initial condition must decay to
+    // (and stay within) the noise floor well before EOF; a real difference
+    // does not.
+    double finalHalfMaxErr  = 0.0;
+    bool   finalHalfIsNaN   = false;
+    size_t finalHalfSamples = 0;
+    // Smallest warm-up, measured from t=0 (independent of whatever
+    // --verify-warmup was actually requested), that would have made the OLD
+    // criterion -- "residual under the floor for every sample from the
+    // warm-up to EOF" -- pass outright. 0 if the residual never exceeds the
+    // floor at all. Reported alongside a PASS so a decayed-transient result
+    // never hides how much of the file the naive criterion would have had to
+    // discard.
+    double effectiveWarmupSec = 0.0;
+    // Guard against the hazard a pure two-halves check can't see by
+    // construction: a difference that isn't actually decaying, but merely
+    // stops being EXCITED for a while (measured concretely on the ground
+    // segments -- EffectsLayer's onGround-gated rumble oscillator diverges
+    // hard while on the ground, then reads as an exact 0.0 the instant the
+    // aircraft leaves the ground, for the rest of the file). That looks
+    // identical to "already decayed" if only the back half is inspected. A
+    // genuine homogeneous decay (the filters' own linear response to a wrong
+    // initial STATE) can only ever get smaller over time; regrowth above the
+    // floor anywhere in the compared window, after having been smaller, is
+    // proof it is not one. See the bucket scan in runChain.
+    bool   monotonicViolation      = false;
+    double monotonicViolationAtSec = 0.0;
 };
 
 RunResult runChain(const std::vector<CueSample>& samples,
@@ -251,6 +308,19 @@ RunResult runChain(const std::vector<CueSample>& samples,
     EffectsLayer      effects(ecfg);
     StewartKinematics kin(geo);
     SafetyLimiter     safety(scfg);
+
+    // Change 2: seed the effects layer's state from the recording's own first
+    // row, when it carries the eff_* state columns. rumblePhase_ is a
+    // free-running oscillator with no decay of its own -- a warm-up window
+    // can't wash out an unrecorded phase the way it washes out a filter's
+    // initial condition, so unlike the washout/limiter seeds above, this one
+    // has to come from the recording verbatim. Every one of this campaign's
+    // seven real recordings predates these columns, so haveEffState is false
+    // for all of them and effects starts from its all-zero default -- exactly
+    // today's (pre-Change-2) behaviour.
+    if (!samples.empty() && samples.front().haveEffState) {
+        effects.setState(samples.front().effState);
+    }
 
     // Seed the limiter the way MotionProvider::initialize does — from the PARK
     // pose, not from home. The limiter is stateful, so a different seed diverges
@@ -267,6 +337,14 @@ RunResult runChain(const std::vector<CueSample>& samples,
     RunResult res;
     double t = 0.0;
     size_t clamped = 0, counted = 0, activeTicks = 0;
+    // Per-recorded-sample error series, from t=0 -- i.e. NOT limited to the
+    // post-warm-up "compared" window -- so the Change-1 discrimination below
+    // (effectiveWarmupSec, the final-half split, the monotonicity guard) has
+    // the whole file to work with. Index i here always corresponds to the i-th
+    // sample with s.haveRecorded true, same order the skip/compare counters
+    // below walk in, which is what lets cmpStart below be
+    // res.verifySkippedSamples without re-deriving it.
+    std::vector<double> allTs, allErrs;
     // Both are held across paused ticks, mirroring MotionProvider's
     // lastLivePose_ and lastEffectsPose_ — the plugin holds them rather than
     // zeroing them, and a zero-dip in the middle of a recording would read as a
@@ -299,6 +377,11 @@ RunResult runChain(const std::vector<CueSample>& samples,
         const double dtRaw = (resampleDt > 0.0) ? resampleDt : s.dt;
         double dt = dtRaw;
         if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
+
+        // Snapshot BEFORE this tick's effects.update() (if it runs at all --
+        // see MotionProvider::onFlightLoopTick's matching snapshot, which
+        // this mirrors exactly, including the pendingReset ordering above).
+        const EffectsLayer::State effStateThisTick = effects.state();
 
         // The plugin gates ONLY the filter update on pause: the IK solve, the
         // limiter and the telemetry write all run every tick against the held
@@ -334,6 +417,25 @@ RunResult runChain(const std::vector<CueSample>& samples,
         if (raw > res.peakHeaveRawMm) res.peakHeaveRawMm = raw;
 
         if (s.haveRecorded) {
+            const double d[4] = {
+                std::fabs(static_cast<double>(live.heave) - s.recLiveHeave),
+                std::fabs(static_cast<double>(live.roll)  - s.recLiveRoll),
+                std::fabs(static_cast<double>(live.pitch) - s.recLivePitch),
+                std::fabs(static_cast<double>(live.yaw)   - s.recLiveYaw)};
+            // fabs(NaN) is NaN, and "NaN > sampleErr" is false by IEEE-754, so
+            // a naive max-tracking comparison silently drops a NaN divergence
+            // instead of ever seeing it. Latch a sentinel (+inf) instead --
+            // it also sorts as an unambiguous violation everywhere a
+            // threshold or a bucket-to-bucket comparison looks at this value
+            // below, with no separate NaN case needed there.
+            double sampleErr = 0.0;
+            for (double v : d) {
+                if (std::isnan(v)) sampleErr = std::numeric_limits<double>::infinity();
+                else if (v > sampleErr) sampleErr = v;
+            }
+            allTs.push_back(t);
+            allErrs.push_back(sampleErr);
+
             // Skip a warm-up window before comparing: the recording may have
             // started with the plugin's filters already settled (Record
             // pressed after the platform had been running for a while), while
@@ -348,23 +450,8 @@ RunResult runChain(const std::vector<CueSample>& samples,
                 res.verifySkippedSec += dtRaw;
             } else {
                 ++res.verifyComparedSamples;
-                const double d[4] = {
-                    std::fabs(static_cast<double>(live.heave) - s.recLiveHeave),
-                    std::fabs(static_cast<double>(live.roll)  - s.recLiveRoll),
-                    std::fabs(static_cast<double>(live.pitch) - s.recLivePitch),
-                    std::fabs(static_cast<double>(live.yaw)   - s.recLiveYaw)};
-                for (double v : d) {
-                    // fabs(NaN) is NaN, and "NaN > maxLiveErr" is false by
-                    // IEEE-754, so a naive max-tracking comparison silently
-                    // drops a NaN divergence instead of ever seeing it. Latch
-                    // a sentinel instead.
-                    if (std::isnan(v)) {
-                        res.maxLiveErr   = std::numeric_limits<double>::infinity();
-                        res.liveErrIsNaN = true;
-                    } else if (v > res.maxLiveErr) {
-                        res.maxLiveErr = v;
-                    }
-                }
+                if (std::isinf(sampleErr)) res.liveErrIsNaN = true;
+                if (sampleErr > res.maxLiveErr) res.maxLiveErr = sampleErr;
             }
         }
 
@@ -378,6 +465,7 @@ RunResult runChain(const std::vector<CueSample>& samples,
             r.velClips = safety.velClipCount();
             r.accClips = safety.accClipCount();
             r.armState = 2;
+            r.effState = effStateThisTick;
             out->write(r);
         }
         t += dtRaw;
@@ -406,6 +494,85 @@ RunResult runChain(const std::vector<CueSample>& samples,
         std::fprintf(stderr,
             "warning: no unpaused ticks in this run (%zu rows, all paused or empty) -- "
             "heave saturation is undefined (nan), not 0%%\n", counted);
+    }
+
+    // Change 1's discrimination, computed once over allTs/allErrs (see their
+    // declaration above). Only meaningful with at least one recorded sample;
+    // an all-synthetic/bare-cue run leaves everything at its zero default,
+    // which main()'s "no sample carried recorded live_* columns" refusal
+    // catches before any of this is read.
+    if (!allErrs.empty()) {
+        // effectiveWarmupSec: the smallest warm-up, from t=0, that would put
+        // every remaining sample under the floor -- i.e. what the OLD
+        // criterion (skip N seconds, then require the rest to be under the
+        // floor) would have needed to pass this file outright. Found by
+        // scanning backward for the LAST sample that still violates the
+        // floor; everything after it has been under the floor ever since.
+        size_t lastViolation = allErrs.size();  // sentinel: no violation found
+        for (size_t i = allErrs.size(); i-- > 0; ) {
+            if (allErrs[i] > kVerifyToleranceMmDeg) { lastViolation = i; break; }
+        }
+        if (lastViolation == allErrs.size()) {
+            res.effectiveWarmupSec = 0.0;  // never exceeds the floor at all
+        } else if (lastViolation + 1 < allErrs.size()) {
+            res.effectiveWarmupSec = allTs[lastViolation + 1];
+        } else {
+            res.effectiveWarmupSec = allTs[lastViolation];  // violates through EOF
+        }
+
+        // The final-half split and the monotonicity guard both work over the
+        // COMPARED window only (i.e. still after the configured/default
+        // warm-up skip) -- allTs/allErrs are pushed in the same order and
+        // under the same s.haveRecorded condition as verifySkippedSamples/
+        // verifyComparedSamples above, so that suffix starts exactly at index
+        // res.verifySkippedSamples.
+        const size_t cmpStart = res.verifySkippedSamples;
+        const size_t cmpCount = res.verifyComparedSamples;
+        if (cmpCount > 0) {
+            const size_t half = cmpCount / 2;
+            double fhMax = 0.0;
+            for (size_t i = cmpStart + half; i < cmpStart + cmpCount; ++i) {
+                if (allErrs[i] > fhMax) fhMax = allErrs[i];
+            }
+            res.finalHalfMaxErr  = fhMax;
+            res.finalHalfIsNaN   = std::isinf(fhMax);
+            res.finalHalfSamples = cmpCount - half;
+
+            // Guard: partition the SAME compared window into finer buckets
+            // and require the per-bucket max to be non-increasing. A genuine
+            // initial-condition transient is the filters' own homogeneous
+            // response to a wrong starting STATE -- a real, single/multi-pole
+            // linear decay -- which can only get smaller with time. Anything
+            // that gets bigger again partway through (even if the back half
+            // this particular file happens to land on is quiet) is proof the
+            // divergence is still being driven by something in the cues, not
+            // fading state -- measured concretely on ground_takeoff, where
+            // the rumble-phase mismatch (Change 2) is large throughout the
+            // ground roll and then reads as an exact 0.0 for the rest of the
+            // file simply because onGround went false, not because anything
+            // decayed. 20 buckets is fine enough to catch that: it isolates
+            // the ground roll (a fraction of the compared window) from the
+            // quiet tail that follows, while coarse enough that ordinary
+            // float noise near the floor doesn't false-trigger it -- checked
+            // against all three of this campaign's real divergent recordings
+            // and its one real decaying-transient recording before landing on
+            // it (see docs/motion-tuning/README.md's --verify section).
+            constexpr int kMonotonicBuckets = 20;
+            double prevBucketMax = -1.0;
+            for (int k = 0; k < kMonotonicBuckets && !res.monotonicViolation; ++k) {
+                const size_t lo = cmpStart + (static_cast<size_t>(k) * cmpCount) / kMonotonicBuckets;
+                const size_t hi = cmpStart + (static_cast<size_t>(k + 1) * cmpCount) / kMonotonicBuckets;
+                if (lo >= hi) continue;
+                double bucketMax = 0.0;
+                for (size_t i = lo; i < hi; ++i) if (allErrs[i] > bucketMax) bucketMax = allErrs[i];
+                if (prevBucketMax >= 0.0 && bucketMax > prevBucketMax &&
+                    bucketMax > kVerifyToleranceMmDeg) {
+                    res.monotonicViolation      = true;
+                    res.monotonicViolationAtSec = allTs[lo];
+                }
+                prevBucketMax = bucketMax;
+            }
+        }
     }
     return res;
 }
@@ -700,14 +867,58 @@ int main(int argc, char** argv) {
             return 1;
         }
         if (r.maxLiveErr > kVerifyToleranceMmDeg) {
-            std::fprintf(stderr,
-                "VERIFY FAILED: replay does not reproduce the recording (%.9g mm/deg exceeds "
-                "the %.0e mm/deg noise-floor tolerance)\n",
-                r.maxLiveErr, kVerifyToleranceMmDeg);
-            return 1;
+            // The overall residual exceeds the floor. That is not
+            // automatically a reproduction failure -- an unrecorded initial
+            // condition (Record pressed after the filters had already
+            // settled) also starts above the floor, then decays; see the
+            // design note on kVerifyToleranceMmDeg. Distinguish the two on a
+            // property that actually differs between them: an
+            // initial-condition mismatch decays and STAYS decayed; a real
+            // difference does not (measured: changing heave_gain by 0.1%
+            // holds a sustained 0.0455 mm/deg residual to EOF).
+            std::printf(
+                "verify: final-half residual (last %zu of %zu compared samples) = %.9g mm/deg\n",
+                r.finalHalfSamples, r.verifyComparedSamples, r.finalHalfMaxErr);
+            if (r.finalHalfIsNaN || r.finalHalfMaxErr > kVerifyToleranceMmDeg) {
+                std::fprintf(stderr,
+                    "VERIFY FAILED: replay does not reproduce the recording -- the residual is "
+                    "still %.9g mm/deg in the final half of the compared window, above the "
+                    "%.0e mm/deg noise-floor tolerance, so this is not a decaying initial "
+                    "condition\n",
+                    r.finalHalfMaxErr, kVerifyToleranceMmDeg);
+                return 1;
+            }
+            // Final-half check alone isn't sufficient -- see runChain's
+            // monotonicity guard and the comment on RunResult::
+            // monotonicViolation. Caught concretely on this campaign's
+            // ground-segment recordings: the effects-layer rumble-phase
+            // mismatch (Change 2) diverges hard while on the ground and
+            // reads as an exact 0.0 for the rest of the file the instant the
+            // aircraft leaves the ground -- not because anything decayed,
+            // but because the divergence stopped being excited. A back half
+            // that happens to be quiet is not proof of decay by itself.
+            if (r.monotonicViolation) {
+                std::fprintf(stderr,
+                    "VERIFY FAILED: the final-half residual (%.9g mm/deg) is under the noise "
+                    "floor, but the residual is not a decaying transient -- it grew back above "
+                    "the floor at t=%.1f s after having been smaller earlier in the compared "
+                    "window. A genuine initial-condition mismatch can only get smaller over "
+                    "time; regrowth means something is still driving the divergence, even if "
+                    "this file's tail doesn't happen to excite it\n",
+                    r.finalHalfMaxErr, r.monotonicViolationAtSec);
+                return 1;
+            }
+            std::printf(
+                "verify: PASS -- residual decays to the noise floor and stays there (an "
+                "unrecorded initial condition, not a reproduction defect). Overall residual "
+                "%.9g mm/deg; final-half residual %.9g mm/deg (both against the %.0e mm/deg "
+                "floor); the old warm-up-only criterion would have needed --verify-warmup "
+                "%.1f to pass this file.\n",
+                r.maxLiveErr, r.finalHalfMaxErr, kVerifyToleranceMmDeg, r.effectiveWarmupSec);
+        } else {
+            std::printf("verify: PASS (within %.0e mm/deg floating-point noise floor)\n",
+                        kVerifyToleranceMmDeg);
         }
-        std::printf("verify: PASS (within %.0e mm/deg floating-point noise floor)\n",
-                    kVerifyToleranceMmDeg);
     }
     return 0;
 }
