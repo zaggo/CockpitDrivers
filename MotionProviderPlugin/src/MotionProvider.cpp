@@ -11,6 +11,7 @@
 #include "XPLMUtilities.h"
 #include "XPLMPlugin.h"
 #include <cmath>
+#include <ctime>
 #include <fstream>
 #include <string>
 
@@ -86,6 +87,10 @@ bool MotionProvider::initialize() {
         serial_->connect();   // opens DISARMED - streams home until armed
     }
 
+    telemetryCfg_ = MotionConfig::loadTelemetry(configPath_);
+    telemetry_ = std::make_unique<Telemetry>();
+    if (telemetryCfg_.enabled) toggleRecording();
+
     XPLMDebugString("MotionProvider: initialized\n");
     return true;
 }
@@ -95,6 +100,8 @@ void MotionProvider::shutdown() {
         statusWindow_->destroy();
         statusWindow_.reset();
     }
+    if (telemetry_) telemetry_->stop();
+    telemetry_.reset();
     if (serial_) { serial_->stop(); }
     serial_.reset();
     safety_.reset();
@@ -113,6 +120,7 @@ void MotionProvider::reloadConfig() {
     safetyCfg_ = MotionConfig::loadSafety(path);
     if (safety_) safety_->setConfig(safetyCfg_);
     monitor_.setConfig(safetyCfg_);
+    telemetryCfg_ = MotionConfig::loadTelemetry(path);
     recomputeParkPose();   // geometry and/or park heave may have changed
     // serial rate/baud change needs a reconnect to take effect:
     if (serial_) {
@@ -174,6 +182,7 @@ void MotionProvider::onUiAction(int action) {
             if (serial_) serial_->stop();
             armRamp_.requestDisarm();
             break;
+        case UI_RECORD:      toggleRecording(); break;
         default: break;
     }
     // Re-solve and refresh immediately so the click has instant visual feedback.
@@ -208,6 +217,9 @@ void MotionProvider::pushStatus() {
     sd.serialPort = serial_ ? serial_->port() : std::string();
     sd.heartbeatPresent = serial_ && serial_->heartbeatFresh(kHeartbeatMaxAgeSec);
     sd.heartbeatArmed = serial_ && serial_->heartbeatArmed();
+    sd.recording     = telemetry_ && telemetry_->recording();
+    sd.telemetryRows = telemetry_ ? telemetry_->rows() : 0;
+    sd.telemetryPath = telemetry_ ? telemetry_->path() : std::string();
     statusWindow_->update(sd);
 }
 
@@ -241,6 +253,7 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         if (!latestCues_.simPaused) {
             Pose w = washout_->update(latestCues_, dt);
             Pose e = effects_->update(latestCues_, dt);
+            lastEffectsPose_ = e;
             lastLivePose_.surge = w.surge + e.surge;  lastLivePose_.sway  = w.sway  + e.sway;
             lastLivePose_.heave = w.heave + e.heave;  lastLivePose_.roll  = w.roll  + e.roll;
             lastLivePose_.pitch = w.pitch + e.pitch;  lastLivePose_.yaw   = w.yaw   + e.yaw;
@@ -343,6 +356,28 @@ void MotionProvider::onFlightLoopTick(float elapsedSec) {
         serial_->update(elapsedSec);   // real dt for reconnect timing
     }
 
+    if (telemetry_ && telemetry_->recording()) {
+        telemetryT_ += static_cast<double>(elapsedSec);
+        TelemetryRow row;
+        row.t         = telemetryT_;
+        row.dtReal    = static_cast<double>(elapsedSec);
+        row.dtClamped = dt;
+        row.cues      = latestCues_;
+        if (washout_) row.trace = washout_->trace();
+        row.effects    = lastEffectsPose_;
+        row.live       = lastLivePose_;
+        row.commanded  = latestPose_;
+        row.reachScale = lastReachScale_;
+        for (int i = 0; i < 6; ++i) {
+            row.setpoints[i] = latestSolve_.setpoints[i];
+            row.sent[i]      = sentSetpoints_[i];
+        }
+        row.velClips = safety_ ? safety_->velClipCount() : 0;
+        row.accClips = safety_ ? safety_->accClipCount() : 0;
+        row.armState = static_cast<int>(armRamp_.state());
+        telemetry_->write(row);
+    }
+
     statusAccumSec_ += elapsedSec;
     if (statusAccumSec_ >= 1.0f) { statusAccumSec_ = 0.0f; pushStatus(); }
 }
@@ -358,6 +393,33 @@ void MotionProvider::onAircraftLoaded() {
     if (washout_) washout_->reset();
     if (effects_) effects_->reset();
     lastLivePose_ = Pose{};   // don't hold the previous flight's pose if the sim loads paused
+}
+
+std::string MotionProvider::telemetryFilePath() const {
+    // Directory from config, else the plugin directory (same place as the TOML).
+    std::string dir = telemetryCfg_.dir;
+    if (dir.empty()) {
+        const size_t f = configPath_.find_last_of("/\\");
+        dir = (f == std::string::npos) ? "." : configPath_.substr(0, f);
+    }
+    const std::time_t now = std::time(nullptr);
+    char stamp[32] = {0};
+    std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&now));
+    return dir + "/motion-" + stamp + ".csv";
+}
+
+void MotionProvider::toggleRecording() {
+    if (!telemetry_) telemetry_ = std::make_unique<Telemetry>();
+    if (telemetry_->recording()) {
+        telemetry_->stop();
+        XPLMDebugString("MotionProvider: telemetry stopped\n");
+    } else {
+        const std::string p = telemetryFilePath();
+        telemetryT_ = 0.0;
+        const bool ok = telemetry_->start(p);
+        XPLMDebugString(("MotionProvider: telemetry " + p +
+                         (ok ? " recording\n" : " OPEN FAILED\n")).c_str());
+    }
 }
 
 void MotionProvider::recomputeParkPose() {
@@ -379,7 +441,10 @@ Pose MotionProvider::blendedCommand(const Pose& rawLive) const {
     eff.roll  = static_cast<float>(parkPose_.roll  * p + live.roll  * b);
     eff.pitch = static_cast<float>(parkPose_.pitch * p + live.pitch * b);
     eff.yaw   = static_cast<float>(parkPose_.yaw   * p + live.yaw   * b);
-    return kin_->clampToReachable(eff);           // guard the blended pose too
+    double scale = 1.0;
+    const Pose out = kin_->clampToReachable(eff, &scale);
+    lastReachScale_ = scale;
+    return out;
 }
 
 void MotionProvider::startGotoTransition(bool arming, const Pose& rawLive) {

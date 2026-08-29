@@ -60,6 +60,7 @@ set(SOURCES
     src/SerialLink.cpp
     src/SafetyLimiter.cpp
     src/SafetyMonitor.cpp
+    src/Telemetry.cpp
 )
 set(HEADERS
     src/MotionProvider.h
@@ -87,6 +88,8 @@ set(HEADERS
     src/SafetyMonitor.h
     src/ArmRamp.h
     src/ArmGate.h
+    src/TelemetryConfig.h
+    src/Telemetry.h
 )
 
 add_library(MotionProvider SHARED ${SOURCES} ${HEADERS})

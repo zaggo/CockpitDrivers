@@ -16,6 +16,7 @@ enum UiAction {
     UI_TOGGLE_MODE,   // toggle SIM <-> MANUAL (only while disarmed)
     UI_DISARM,        // manual e-stop
     UI_DISCONNECT     // close the serial connection
+    ,UI_RECORD        // toggle telemetry recording
 };
 
 // Everything the status window renders in one snapshot.
@@ -40,4 +41,7 @@ struct StatusData {
     std::string serialPort;         // empty = none selected
     bool        heartbeatPresent = false;  // fresh arm heartbeat from the gateway
     bool        heartbeatArmed = false;    // last decoded arm-switch state (valid if present)
+    bool               recording = false;
+    unsigned long long telemetryRows = 0;
+    std::string        telemetryPath;   // empty when not recording
 };

@@ -295,6 +295,18 @@ void StatusWindow::draw() {
     }
     y -= 18;
 
+    // Telemetry recording toggle + progress.
+    {
+        int x0 = x;
+        x0 += button(x0, y, data_.recording ? "Stop Rec" : "Record", UI_RECORD,
+                    data_.recording ? 1.0f : 0.7f, 0.7f, 0.7f) + 8;
+        if (data_.recording) {
+            drawString(x0, y, "REC " + std::to_string(data_.telemetryRows) + " rows -> " +
+                       data_.telemetryPath, 1.0f, 0.5f, 0.5f);
+        }
+    }
+    y -= 18;
+
     // Serial port chooser + disconnect.
     std::snprintf(buf, sizeof(buf), "port: %s",
                   data_.serialPort.empty() ? "(none - pick below)" : data_.serialPort.c_str());

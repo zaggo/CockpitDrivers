@@ -13,6 +13,8 @@
 #include "ArmGate.h"
 #include "BffEncoder.h"
 #include "SafetyMonitor.h"
+#include "Telemetry.h"
+#include "TelemetryConfig.h"
 
 class StatusWindow;
 class DataRefManager;
@@ -90,4 +92,14 @@ private:
     ArmState prevArmState_ = ArmState::Disarmed;
     static constexpr double kGotoMarginSec = 0.3;
     void startGotoTransition(bool arming, const Pose& rawLive);
+
+    std::unique_ptr<Telemetry> telemetry_;
+    TelemetryConfig            telemetryCfg_;
+    double                     telemetryT_ = 0.0;
+    Pose                       lastEffectsPose_;
+    // mutable: written by blendedCommand(), which is const.
+    mutable double             lastReachScale_ = 1.0;
+
+    std::string telemetryFilePath() const;   // dir + timestamped filename
+    void        toggleRecording();
 };
