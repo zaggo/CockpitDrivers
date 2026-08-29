@@ -36,6 +36,12 @@ struct CueSample {
     // Recorded outputs, kept for --verify.
     float recLiveHeave = 0.0f, recLiveRoll = 0.0f, recLivePitch = 0.0f, recLiveYaw = 0.0f;
     bool  haveRecorded = false;
+    // Recorded ArmState (0 Disarmed, 1 Arming, 2 Armed, 3 Disarming). Needed
+    // because MotionProvider resets the stateful filters on the rising edge
+    // into an armed state -- see runChain. Absent for synthetic streams and
+    // for older/cue-only files, which then simply carry no edges.
+    int  armState     = 0;
+    bool haveArmState = false;
 };
 
 std::vector<std::string> splitLine(const std::string& s) {
@@ -43,6 +49,14 @@ std::vector<std::string> splitLine(const std::string& s) {
     std::string field;
     std::stringstream ss(s);
     while (std::getline(ss, field, ',')) out.push_back(field);
+    // A recording made on the Sim-PC is CRLF: std::ofstream's text mode turns
+    // Telemetry's '\n' into "\r\n" on Windows, and reading that file back on
+    // macOS leaves the '\r' glued to the LAST field of every line. On the
+    // header row that renames the last column ("arm_state" -> "arm_state\r"),
+    // so its lookup silently misses and the column reads as its fallback --
+    // which would quietly disable the arm-edge reset modelled in runChain.
+    if (!out.empty() && !out.back().empty() && out.back().back() == '\r')
+        out.back().pop_back();
     return out;
 }
 
@@ -72,6 +86,7 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
         return false;
     }
     const bool haveRec = idx.find("live_heave") != idx.end();
+    const bool haveArm = idx.find("arm_state") != idx.end();
 
     const size_t numCols = splitLine(headerLine).size();
     bool warnedRagged = false;
@@ -82,10 +97,16 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
         if (line.empty()) continue;
         ++rowNum;
         const std::vector<std::string> f = splitLine(line);
-        if (!warnedRagged && f.size() < numCols) {
+        // Both directions matter. A SHORT row means a truncated recording; a
+        // LONG row means every col() lookup past the extra field reads by
+        // header index into shifted data, which is worse (it produces
+        // plausible numbers from the wrong columns) and used to pass in
+        // silence.
+        if (!warnedRagged && f.size() != numCols) {
             std::fprintf(stderr,
                 "warning: ragged row %zu has %zu fields, header has %zu -- "
-                "recording may be truncated (further ragged rows not reported)\n",
+                "columns may be misaligned or the recording truncated "
+                "(further ragged rows not reported)\n",
                 rowNum, f.size(), numCols);
             warnedRagged = true;
         }
@@ -110,6 +131,10 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
             s.recLivePitch = static_cast<float>(col(f, idx, "live_pitch"));
             s.recLiveYaw   = static_cast<float>(col(f, idx, "live_yaw"));
             s.haveRecorded = true;
+        }
+        if (haveArm) {
+            s.armState     = static_cast<int>(col(f, idx, "arm_state"));
+            s.haveArmState = true;
         }
         out.push_back(s);
     }
@@ -186,7 +211,7 @@ struct RunResult {
     double durationSec = 0.0;
     double maxLiveErr = 0.0;   // max |replayed - recorded| over the live_* columns
     bool   liveErrIsNaN = false;  // a NaN divergence was seen; maxLiveErr is a sentinel (inf), not a magnitude
-    double satHeavePct = 0.0;  // % of active (unpaused) ticks with the heave clamp engaged
+    double satHeavePct = 0.0;  // % of active (unpaused) ticks with the heave clamp engaged; NaN if there were none
     double peakHeaveRawMm = 0.0;
 };
 
@@ -221,7 +246,28 @@ RunResult runChain(const std::vector<CueSample>& samples,
     Pose live;
     Pose e;
 
+    // MotionProvider::onFlightLoopTick resets the stateful filters on the
+    // rising edge out of ArmState::Disarmed ("reset so the ramp starts from a
+    // clean pose"). runChain must mirror that, or any recording spanning a
+    // disarmed->armed transition diverges from that tick onward and --verify
+    // fails for a reason that has nothing to do with the filters.
+    //
+    // The reset is applied ONE SAMPLE LATE, deliberately. Within a plugin tick
+    // the order is: washout_->update() (top of the tick) ... washout_->reset()
+    // (the arm-intent block, ~40 lines later) ... armRamp_.update() ...
+    // telemetry write with row.armState = armRamp_.state(). So the first row
+    // whose arm_state leaves 0 was still computed from the OLD filter state,
+    // and the reset first shows in the NEXT row. Resetting before the edge
+    // sample would shift everything by one tick and break the very comparison
+    // this models.
+    //
+    // A file with no arm_state column (a synthetic stream, a cue-only export)
+    // simply carries no edges -- that is a valid input, not an error.
+    int  prevArm      = -1;   // -1 = nothing seen yet, so sample 0 is never an edge
+    bool pendingReset = false;
+
     for (const CueSample& s : samples) {
+        if (pendingReset) { washout.reset(); effects.reset(); pendingReset = false; }
         const double dtRaw = (resampleDt > 0.0) ? resampleDt : s.dt;
         double dt = dtRaw;
         if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
@@ -291,10 +337,32 @@ RunResult runChain(const std::vector<CueSample>& samples,
             out->write(r);
         }
         t += dtRaw;
+
+        // Latch the edge only after this sample is fully processed -- see the
+        // one-sample-late note above. Any 0 -> non-zero transition counts:
+        // with a very short arm_ramp_sec the ramp can reach Armed(2) within
+        // the same tick it left Disarmed, so keying on Arming(1) alone would
+        // miss that reset.
+        if (s.haveArmState) {
+            if (prevArm == 0 && s.armState != 0) pendingReset = true;
+            prevArm = s.armState;
+        }
     }
     res.samples     = counted;
     res.durationSec = t;
-    res.satHeavePct = activeTicks ? 100.0 * static_cast<double>(clamped) / static_cast<double>(activeTicks) : 0.0;
+    // No unpaused tick means the heave-saturation percentage is undefined, not
+    // zero. 0% is this campaign's TARGET outcome, so reporting it here would
+    // make an all-paused (or empty) recording read as a perfect result -- and
+    // washout_metrics.py already returns NaN for exactly this case, so a 0.0
+    // here would also put the two tools in disagreement.
+    if (activeTicks) {
+        res.satHeavePct = 100.0 * static_cast<double>(clamped) / static_cast<double>(activeTicks);
+    } else {
+        res.satHeavePct = std::numeric_limits<double>::quiet_NaN();
+        std::fprintf(stderr,
+            "warning: no unpaused ticks in this run (%zu rows, all paused or empty) -- "
+            "heave saturation is undefined (nan), not 0%%\n", counted);
+    }
     return res;
 }
 
@@ -414,6 +482,21 @@ int main(int argc, char** argv) {
             "want a different synthetic timestep\n");
         return 2;
     }
+    // Every --verify refusal that is decidable from the arguments alone is
+    // decided HERE, before anything runs and before a single line reaches
+    // stdout. The --set/--resample-dt refusal used to fire only after
+    // runChain() had already run and printed its "replayed N samples ..."
+    // summary, so an operator saw a normal-looking result line first and the
+    // refusal second.
+    if (doVerify && !sweepKey.empty()) {
+        std::fprintf(stderr, "VERIFY REFUSED: --verify does not run with --sweep\n");
+        return 2;
+    }
+    if (doVerify && (!overrides.empty() || resampleDt != 0.0)) {
+        std::fprintf(stderr,
+            "VERIFY REFUSED: --verify requires no --set and no --resample-dt\n");
+        return 2;
+    }
 
     std::vector<CueSample> samples;
     std::string err;
@@ -438,10 +521,8 @@ int main(int argc, char** argv) {
     }
 
     if (!sweepKey.empty()) {
-        if (doVerify) {
-            std::fprintf(stderr, "VERIFY REFUSED: --verify does not run with --sweep\n");
-            return 2;
-        }
+        // (--verify + --sweep is refused up in the argument checks, before
+        // anything runs.)
         // Validate the key once, before anything goes to stdout -- otherwise an
         // unknown key still fails (correctly, exit 2) but only after the table
         // header has already been printed.
@@ -461,7 +542,13 @@ int main(int argc, char** argv) {
             if (!outPath.empty()) {
                 char name[512];
                 std::snprintf(name, sizeof(name), "%s.%g.csv", outPath.c_str(), v);
-                sweepOut.start(name);
+                // Same failure handling as the plain --out path: an unwritable
+                // directory must not print a normal-looking table while
+                // silently writing no CSVs at all.
+                if (!sweepOut.start(name)) {
+                    std::fprintf(stderr, "cannot write %s\n", name);
+                    return 1;
+                }
             }
             const RunResult r = runChain(samples, geo, w, e, s, resampleDt,
                                          outPath.empty() ? nullptr : &sweepOut);
@@ -485,36 +572,33 @@ int main(int argc, char** argv) {
                 r.samples, r.durationSec, r.satHeavePct, r.peakHeaveRawMm);
 
     if (doVerify) {
-        if (overrides.empty() && resampleDt == 0.0) {
-            // A --synth (or otherwise bare) cue stream carries no recorded
-            // live_* columns at all, so maxLiveErr never accumulates and would
-            // stay 0.0 -- a false PASS on the one gate the campaign treats as
-            // blocking. Refuse instead of reporting success on nothing.
-            const bool anyRecorded = std::any_of(samples.begin(), samples.end(),
-                [](const CueSample& s) { return s.haveRecorded; });
-            if (!anyRecorded) {
-                std::fprintf(stderr,
-                    "VERIFY FAILED: no sample carried recorded live_* columns -- "
-                    "nothing to verify against (synthetic or bare cue stream?)\n");
-                return 1;
-            }
-            std::printf("verify: max |replay - recorded| over live_* = %.9g mm/deg\n", r.maxLiveErr);
-            if (r.liveErrIsNaN) {
-                std::fprintf(stderr,
-                    "VERIFY FAILED: a NaN divergence was encountered in the live_* "
-                    "comparison (the max above is an inf sentinel, not a magnitude)\n");
-                return 1;
-            }
-            if (r.maxLiveErr != 0.0) {
-                std::fprintf(stderr, "VERIFY FAILED: replay does not reproduce the recording\n");
-                return 1;
-            }
-            std::printf("verify: PASS (bit-exact)\n");
-        } else {
+        // (--set / --resample-dt / --sweep were refused during argument
+        // checking, before any of the output above was printed.)
+        //
+        // A --synth (or otherwise bare) cue stream carries no recorded
+        // live_* columns at all, so maxLiveErr never accumulates and would
+        // stay 0.0 -- a false PASS on the one gate the campaign treats as
+        // blocking. Refuse instead of reporting success on nothing.
+        const bool anyRecorded = std::any_of(samples.begin(), samples.end(),
+            [](const CueSample& s) { return s.haveRecorded; });
+        if (!anyRecorded) {
             std::fprintf(stderr,
-                "VERIFY REFUSED: --verify requires no --set and no --resample-dt\n");
-            return 2;
+                "VERIFY FAILED: no sample carried recorded live_* columns -- "
+                "nothing to verify against (synthetic or bare cue stream?)\n");
+            return 1;
         }
+        std::printf("verify: max |replay - recorded| over live_* = %.9g mm/deg\n", r.maxLiveErr);
+        if (r.liveErrIsNaN) {
+            std::fprintf(stderr,
+                "VERIFY FAILED: a NaN divergence was encountered in the live_* "
+                "comparison (the max above is an inf sentinel, not a magnitude)\n");
+            return 1;
+        }
+        if (r.maxLiveErr != 0.0) {
+            std::fprintf(stderr, "VERIFY FAILED: replay does not reproduce the recording\n");
+            return 1;
+        }
+        std::printf("verify: PASS (bit-exact)\n");
     }
     return 0;
 }
