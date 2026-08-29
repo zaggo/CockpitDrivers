@@ -61,6 +61,40 @@ so the two-step below produces them honestly. The washout-derived metrics (`sat_
 tick regardless — but they come from the same replay anyway, so the whole table is one
 consistent measurement.
 
+## `--verify` status of the reference set — a limitation this baseline cannot outrun
+
+All seven files in this baseline **predate `Telemetry`'s effects-state columns**
+(`eff_prev_onground`, `eff_td_active`, `eff_td_t`, `eff_rumble_phase`, added alongside the
+final-half `--verify` discrimination — see `docs/motion-tuning/README.md`'s `--verify` section).
+That fix lets a replay seed `EffectsLayer`'s free-running rumble oscillator from a recording
+instead of always starting it at zero, but only when the recording actually carries the new
+columns. It does not, and cannot, retroactively add those columns to a file that was written
+before they existed.
+
+**Practical consequence: `ground_takeoff`, `approach_landing` and `acceptance` cannot be
+bit-verified against this baseline, and re-recording them would not be the fix.** All three
+contain ground segments — `ground_takeoff` by design (it *is* the ground roll), the other two in
+passing (a landing, and a mixed flight touching down/taking off) — and on all three, `--verify`'s
+residual is confined entirely to on-ground ticks, tops out at `1.8 mm` (the theoretical max at the
+shipped `rumble_gain = 0.9 mm`; measured `1.744 mm` on `ground_takeoff`), and is entirely the
+effects-layer's contribution: on `ground_takeoff`, `max |live_heave| diff` in the air is `0.0000 mm`
+across 1017 ticks against `1.7442 mm` on the ground across 408 ticks, and `max |eff_heave| diff` is
+the identical `1.7442 mm` — the washout itself is bit-exact throughout, in the air *and* on the
+ground; only the unrecorded rumble phase diverges. This is a property of *when these seven files
+were recorded*, not of the aircraft or the config, so flying the same segments again on the current
+build would not change it — the fix only helps recordings made **after** it landed. **Do not
+re-fly these three** on the strength of this note; a future baseline refresh, if one happens, is
+the right time to pick up bit-verified ground segments, not an ad hoc re-recording now.
+
+**What this baseline actually decides on.** The four segments that verify cleanly —
+`cruise_calm`, `steep_turns`, `climb_descent`, `turbulence`, all airborne throughout — are the ones
+this campaign's stage gates (`sat_heave`, `wrms`, `band_ratio`, `lag_ms`, the `jerk_p95` family) are
+measured against, and all four are unaffected by this limitation: nothing in it touches airborne
+ticks. `ground_takeoff` and `approach_landing` still contribute their `sat_*`/`peak_*` figures (those
+come straight from the replay's own internal state, not from a comparison against a recording), the
+same way they did before this note — only the *verification* of `live_heave` against the recording
+on the ground is unavailable, not the metrics themselves.
+
 ## Stage 1 — sanity check against the analysis
 
 Before recording anything, Stage 1 runs a synthetic chirp and a sequence of sine-amplitude

@@ -207,14 +207,59 @@ silent gate. A recording shorter than its own warm-up is refused (`VERIFY REFUSE
 the run.
 
 Even past the warm-up, the divergence does not reach literal `0.0`: it decays asymptotically, and
-on both of the campaign's real recordings a residual on the order of `1e-12`–`1e-5` mm/deg
-persists deep into the file — traced (see the campaign log) to the rotational channels, whose
-washout carries the config's slowest time constant (`rot_washout_tau`), showing isolated
-single-ULP float32-rounding blips from two independently-converging trajectories. Demanding exact
-equality would make `--verify` fail on every real recording forever, which defeats the point of
-this check, so the pass tolerance is `1e-4` mm/deg — four orders of magnitude below the `0.415 mm`
-divergence a genuine reproduction failure showed before this fix, and comfortably above the
-measured noise floor on both real recordings (`~1e-5` mm/deg with the default warm-up window).
+on the campaign's real recordings a residual on the order of `1e-12`–`1e-5` mm/deg persists deep
+into the file — traced to the rotational channels, whose washout carries the config's slowest
+time constant (`rot_washout_tau`), showing isolated single-ULP float32-rounding blips from two
+independently-converging trajectories. Demanding exact equality would make `--verify` fail on
+every real recording forever, which defeats the point of this check, so the pass tolerance is
+`1e-4` mm/deg — four orders of magnitude below the `0.415 mm` divergence a genuine reproduction
+failure showed before this fix.
+
+**The default warm-up is a guess, and on `cruise_calm` it guessed too short — final-half
+discrimination fixes that.** Measured on the campaign's `cruise_calm` recording, the residual is
+`5.98e-4 mm/deg` over the 30–50 s window right after the default 30 s warm-up, `2e-6 mm/deg` over
+50–70 s, and `0` after 70 s: a large initial state (an unrecorded settled pose, same as the
+`0.1356 mm` example above but bigger) that takes about `12.6×` the slowest time constant to fall
+under the `1e-4` floor, not the `10×` the default computes. Raising the default factor would only
+move the guess — and a longer fixed window eats into short segments — so instead `--verify`, after
+the existing warm-up skip, additionally compares the residual over the **final half** of the
+compared samples against the same `1e-4` floor:
+
+- **Final-half residual under the floor** → the replay tracks the recording and the remaining
+  overall error is an initial condition, not a reproduction defect. Reports `verify: PASS`, and
+  states three numbers on the way there: the overall residual, the final-half residual, and the
+  warm-up the *old* (pre-this-fix) criterion would have needed to pass this file outright
+  (`--verify-warmup`'s equivalent, computed from t=0, not from whatever warm-up was actually
+  used) — nothing about the early divergence is hidden.
+- **Final-half residual over the floor** → `VERIFY FAILED`, same as before this fix.
+
+`cruise_calm` now passes with the *default* warm-up (no `--verify-warmup 50` override needed):
+final-half residual `7.45e-9 mm/deg`, and the reported "old criterion" warm-up is `34.0 s` — a
+number that will drift as the config's time constants get retuned, which is exactly why it is
+computed, not hard-coded.
+
+**The hazard this has to guard against: a difference that decays *slowly* can look exactly like
+an initial condition — even when it isn't one.** A final-half check alone would be fooled by a
+divergence that stops being *excited* rather than actually decaying. This is not hypothetical: it
+is exactly what happens on `ground_takeoff`. The recording's compared window (post-warm-up) is
+about 30% on the ground followed by 70% airborne with the platform already climbing away; the
+effects-layer rumble-phase mismatch (see Change 2 below) diverges hard (up to `1.74 mm/deg`)
+throughout the ground portion and then reads as an **exact `0.0`** for the rest of the file the
+instant `onground` goes false — not because anything decayed, but because the driving condition
+went away. Split naively into two equal halves, the entire back half of this file happens to be
+airborne: final-half residual `2.3e-10 mm/deg`, comfortably under the floor, which would have been
+a false `PASS` — and a criterion that accidentally passed a real, measured defect would itself be a
+defect. `--verify` therefore also partitions the compared window into 20 finer buckets and requires
+the per-bucket maximum to be non-increasing (allowing only fluctuation that stays under the floor):
+a genuine initial-condition transient is the filters' own linear homogeneous response to a wrong
+starting *state*, which can only get smaller over time, so any regrowth above the floor — even
+regrowth this particular file's tail doesn't happen to show — is proof the divergence is still
+being driven by something in the cues, not fading state. On `ground_takeoff` this guard fires at
+`t=31.6 s`, correctly turning the false PASS into a FAIL with an explanation distinct from a plain
+still-diverging residual. Checked against all three of this campaign's currently-divergent
+recordings (`ground_takeoff`, `approach_landing`, `acceptance` — all still FAIL, all for the Change-2
+reason below) and the one decaying-transient recording (`cruise_calm` — no bucket ever regrows) before
+landing on 20 buckets as the granularity.
 
 **What replay does *not* model, and what that costs.** Replay drives the armed live pose from
 tick 1, blend = 1, `arm_state` written as `Armed`. The plugin instead glides from the park pose
@@ -243,6 +288,32 @@ row where `arm_state` first leaves 0, because within a plugin tick `washout_->up
 the top, the reset ~40 lines later, and `row.armState` is written after `armRamp_.update()` —
 so the edge row itself is still a pre-reset row. A file with no `arm_state` column (synthetic
 streams, cue-only exports) simply carries no edges, which is a valid input, not an error.
+
+**Effects-layer state is modelled too, but only if the recording carries it (Change 2).**
+`EffectsLayer` carries four members between ticks — `prevOnGround_`, `tdActive_`, `tdT_` and
+`rumblePhase_` — and unlike the washout's filter state, `rumblePhase_` is a free-running 12 Hz
+oscillator with no decay of its own. A warm-up window washes out an unrecorded *filter* initial
+condition because it decays; it cannot wash out an unrecorded *phase*, because there is nothing
+in the system pulling two independent phases together. An unrecorded `rumblePhase_` mismatch is
+therefore not a transient — it is a standing divergence of up to `2 × rumble_gain` (`1.8 mm` at
+the shipped `rumble_gain = 0.9 mm`) for as long as the platform stays on the ground, which is
+exactly the `ground_takeoff` / `approach_landing` / `acceptance` failures above.
+
+The fix is to record this state and seed a replay from it: `Telemetry` carries four more columns
+(`eff_prev_onground`, `eff_td_active`, `eff_td_t`, `eff_rumble_phase`, in that order, appended
+after `arm_state` — every existing column keeps its position, so the `cut` invocation in §2 is
+unaffected), filled from `EffectsLayer::state()` captured **before** each tick's `update()` call
+(so seeding a replay from row 0's values and then processing row 0 reproduces the recording from
+the first row, with no off-by-one). `washout_replay`'s `loadCues` reads all four as a group — if
+even one is missing, seeding is skipped entirely, not partially — and `runChain` seeds
+`EffectsLayer` from the first sample only when all four are present.
+
+**This is a forward-looking fix, not a retroactive one.** Every one of this campaign's seven real
+recordings predates these columns, so `haveEffState` is false for all of them and they seed from
+zero exactly as they did before Change 2 — their `ground_takeoff` / `approach_landing` /
+`acceptance` failures are unchanged and are **expected to stay FAILing** until they are re-recorded
+with a build that writes the new columns. See `docs/motion-tuning/baseline-metrics.md` for what is
+and isn't decided by the current baseline as a result.
 
 **`--verify` refuses to run in five situations**, each returning a distinct error rather than
 a misleading pass. The first three are decidable from the arguments alone and are refused
