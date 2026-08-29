@@ -28,9 +28,8 @@ acceptance flight) should share one environment.
 
 ## Reference segments
 
-Recorded on the Mac's X-Plane 12 with the rig disconnected (the plugin stays disarmed; cues
-are identical either way). One file per row, cue-only and gzipped into
-`MotionProviderPlugin/reference/`:
+Recorded on the Mac's X-Plane 12 with the rig disconnected. One file per row, cue-only and
+gzipped into `MotionProviderPlugin/reference/`:
 
 | Segment | Duration target | Notes |
 |---|---|---|
@@ -41,6 +40,26 @@ are identical either way). One file per row, cue-only and gzipped into
 | `ground_takeoff` | 60–90 s | Ground roll through takeoff. |
 | `approach_landing` | 60–90 s | |
 | `acceptance` | 8–10 min | Continuous mixed flight; catches interactions and slow state buildup the short segments miss. Also the file Stage 10 replays against the final config. |
+
+**Recording with the rig disconnected leaves the plugin disarmed, and that is why every number
+in this file comes from a *replay*, never from the live recording.** The cue columns are
+identical either way — that is what makes a cue-only reference file legitimate — but the
+output columns are not. `armIntent` needs a fresh gateway heartbeat, so with no gateway the
+plugin never leaves `Disarmed`, `armRamp_.blend()` stays 0, `blendedCommand` returns the park
+pose on every tick, and `sp*`/`sent*` are therefore constant for the whole file. Read straight
+off such a recording, `jerk_p95` is ≈ 0 and `sat_sl_vel` = `sat_sl_acc` = 0 %.
+
+That is not a good result, it is *no* result — and `jerk_p95` is one of the three gated "must
+decrease" metrics, so a zero baseline would make its gate impossible for any armed candidate
+to satisfy and the gate would quietly get dropped.
+
+**`jerk_p95`, `sat_sl_vel` and `sat_sl_acc` are meaningful only when the baseline and the
+candidate are both replay outputs. Never read them off a disarmed live recording.** Replay
+always runs armed and live (`arm_state` is written as `Armed` and no park blend is applied),
+so the two-step below produces them honestly. The washout-derived metrics (`sat_heave`,
+`wrms`, `band_ratio`, `lag_ms`) are unaffected by the arm state — `live_*` is computed every
+tick regardless — but they come from the same replay anyway, so the whole table is one
+consistent measurement.
 
 ## Stage 1 — sanity check against the analysis
 
@@ -57,12 +76,28 @@ leans on it.
 
 ## Metrics table
 
-Output of, over all seven reference files:
+**Two steps, in this order.** `washout_metrics.py` measures *replay output*; the reference
+files are cue-only exports and carry none of the columns it needs (`live_heave`,
+`heave_clamped`, `sent*`, `rot_*_clamped`, `sl_*_clip`, `heave_pos_raw`, `reach_scale`).
+Pointing the script at `reference/*.csv.gz` directly is not a shortcut — it aborts naming the
+first missing column. Replay first, then measure the replay:
 
 ```bash
-MotionProviderPlugin/tools/.venv/bin/python MotionProviderPlugin/tools/washout_metrics.py \
-    MotionProviderPlugin/reference/*.csv.gz
+cd MotionProviderPlugin
+for seg in cruise_calm steep_turns climb_descent turbulence \
+           ground_takeoff approach_landing acceptance; do
+    gunzip -c "reference/$seg.csv.gz" > "/tmp/$seg.cues.csv"
+    ./tools/build/washout_replay --cues "/tmp/$seg.cues.csv" \
+        --config configuration.toml --out "/tmp/$seg.csv"
+done
+tools/.venv/bin/python tools/washout_metrics.py /tmp/*.csv
 ```
+
+(`washout_replay` reads plain CSV only, hence the `gunzip -c`; `washout_metrics.py` itself is
+gzip-transparent and takes `.csv.gz` directly, which is useful for archived *replay* output.)
+
+Pass the exact `configuration.toml` revision named above — the baseline is the shipped
+settings, so no `--set` here.
 
 (paste the table here)
 

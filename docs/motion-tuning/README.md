@@ -60,6 +60,13 @@ change up through Stage 4 (TOML-only stages); Stages 5+ add code and extend this
   plugin loads (useful for the Sim-PC, where nobody may be at the keyboard to click Record).
   `dir` in that section picks the output directory; leave it empty to write next to
   `configuration.toml`.
+  **Caveat on `enabled = true`:** a recording that starts at plugin load necessarily starts
+  *disarmed* and therefore spans the arm edge, where `MotionProvider::onFlightLoopTick` resets
+  the washout and effects filters. `washout_replay` models that reset from the `arm_state`
+  column, so such a file still passes `--verify` — but only if `arm_state` survived into the
+  file you replay. A cue-only export made with the `cut` in §2 does **not** carry it, so verify
+  against the full recording, not the export. Pressing **Record** after arming avoids the
+  question entirely and is the cleaner habit for a reference segment.
 - Files are named `motion-YYYYMMDD-HHMMSS.csv` at the moment recording starts.
 - **Record in SIM mode, not manual/bench-jog mode.** In manual mode
   (`MotionProvider::manualMode_`) the flight loop drives the pose directly from the hand
@@ -97,7 +104,10 @@ cut -d, -f2,4-16 motion-20260901-140322.csv | gzip > MotionProviderPlugin/refere
 
 Because replay is a deterministic function of `(cues, dt, config)`, full telemetry can always
 be reconstructed from a cue-only file by replaying it — so the ~70 MB full recordings never
-enter git, only the ~2 MB gzipped cue files under `MotionProviderPlugin/reference/`. If
+enter git, only the ~2 MB gzipped cue files under `MotionProviderPlugin/reference/`. Two
+things a cue-only export cannot do, precisely because it is cue-only: it is **not** valid input
+to `washout_metrics.py` (§7 — replay it first), and it drops `arm_state`, so it cannot be the
+input to `--verify` on a recording that spans an arm edge (§1, §5). If
 `Telemetry::header()` ever changes column order, regenerate this `cut` invocation from the
 new header before trusting it — it is a position-based cut, not a name-based one.
 
@@ -108,6 +118,10 @@ cd MotionProviderPlugin
 ./tools/build/washout_replay --cues reference/cruise_calm.csv --config configuration.toml \
     --set washout.heave_pos_washout_tau=0.5 --out /tmp/run.csv
 ```
+
+(The examples here and in §4 name `reference/cruise_calm.csv` for brevity. The committed file
+is `reference/cruise_calm.csv.gz`; `washout_replay` has no zlib, so expand it first with
+`gunzip -c reference/cruise_calm.csv.gz > /tmp/cruise_calm.cues.csv` and point `--cues` there.)
 
 `--set section.key=VALUE` is repeatable and overrides one config value in memory; it never
 writes back to `configuration.toml`. Valid keys are the `washout.*`, `safety.*` and
@@ -132,7 +146,28 @@ Prints one summary row per value (`sat_heave%`, `peak_raw_mm`, `samples`) and, b
 was given, writes a full telemetry CSV per value as `/tmp/sweep.<value>.csv` for
 `washout_metrics.py` to chew on afterward. `--sweep` and `--verify` are mutually exclusive
 (see below) — a sweep runs the chain once per value, so there is no single "the" replay to
-verify against.
+verify against. If a per-value CSV cannot be written (unwritable `--out` directory), the sweep
+stops with `cannot write ...` and exit code 1 rather than printing a table with nothing on disk
+behind it. `sat_heave%` prints as `nan`, not `0.00`, if the run contained no unpaused tick at
+all — 0 % is this campaign's target outcome and must never be what "no data" looks like.
+
+**`peak_raw_mm` barely moves in a τ sweep, and that is not the sweep failing.** It is one of
+only two numeric columns printed here, so it is easy to read it as "the overdrive" — it is not.
+`WashoutFilter`'s `heavePos_` is a clamped *state*: the clamp writes back to the integrator, so
+`heave_pos_raw` is "pre-clamp" only within a single tick and can exceed `heave_limit_mm` by at
+most one integration step (~42 mm measured at the shipped settings), whatever the time
+constants do. The design spec's 9.5× / 286 mm overdrive figures are *not* this column at these
+settings. To make `peak_raw_mm` measure the filter instead of the clamp, run with the limit
+made inert:
+
+```bash
+./tools/build/washout_replay --cues reference/cruise_calm.csv --config configuration.toml \
+    --set washout.heave_limit_mm=1e9 \
+    --sweep washout.heave_pos_washout_tau=2.0,1.0,0.6,0.4,0.25 --out /tmp/sweep
+```
+
+`sat_heave%` stays a valid saturation indicator either way — but not in the same run as the
+inert limit, which by construction never clamps. Run the sweep twice if you want both.
 
 Stage 3 of the campaign moves `heave_vel_washout_tau` and `heave_pos_washout_tau` together
 (the two poles of one washout) rather than sweeping them independently — run the sweep above
@@ -147,11 +182,41 @@ cd MotionProviderPlugin
 
 Compares the replay's `live_heave/roll/pitch/yaw` against the recording's, tick for tick, and
 reports `verify: PASS (bit-exact)` only on an exact match. It checks `live_*` and not `cmd_*`
-because `live_*` alone is a pure function of `(cues, dt, config)`; `cmd_*` also depends on the
-arm ramp blend, which replay deliberately does not model (replay always runs "armed and live").
+because `live_*` alone is a pure function of `(cues, dt, config, arm edges)`; `cmd_*` also
+depends on the arm ramp blend, which replay deliberately does not model (replay always runs
+"armed and live").
+
+**What replay does *not* model, and what that costs.** Replay drives the armed live pose from
+tick 1, blend = 1, `arm_state` written as `Armed`. The plugin instead glides from the park pose
+to the live pose over `arm_ramp_sec`. Three consequences, all confined to the actuator-space
+columns (`sp*`, `sent*`) and the metrics derived from them:
+
+- **A start transient.** The first `arm_ramp_sec` of replayed `sent*` is a slew-limited jump
+  from the park seed to the live pose, which inflates `sat_sl_vel`, `sat_sl_acc` and early
+  `jerk_p95`. Compare candidates over the same segment so the transient is common-mode, or
+  drop the first couple of seconds; never quote an absolute `sat_sl_*` from a short replay.
+- **`safety_->reset(gotoTargets_)` at goto completion.** When a profiled arm/disarm move
+  finishes, the plugin re-seeds the `SafetyLimiter` from the arrived pose. Replay seeds the
+  limiter once, from the park pose, and never re-seeds — so limiter state after any arm or
+  disarm differs from the recording's.
+- **During a goto the plugin records `sent*` values it never transmitted.** `serial_->setFrame`
+  is skipped while `gotoActive_`, but the telemetry row is still written. Those rows are
+  measurement artefacts in the recording itself, not just in the replay.
+
+Together these make `jerk_p95` fictional across an arm/disarm — in the recording *and* in the
+replay. Measure it over a segment that stays armed throughout.
+
+**Arm edges *are* modelled.** `MotionProvider::onFlightLoopTick` calls
+`washout_->reset(); effects_->reset();` on the rising edge out of `Disarmed`, and `runChain`
+mirrors it from the recorded `arm_state` column. The reset is applied one sample *after* the
+row where `arm_state` first leaves 0, because within a plugin tick `washout_->update()` runs at
+the top, the reset ~40 lines later, and `row.armState` is written after `armRamp_.update()` —
+so the edge row itself is still a pre-reset row. A file with no `arm_state` column (synthetic
+streams, cue-only exports) simply carries no edges, which is a valid input, not an error.
 
 **`--verify` refuses to run in four situations**, each returning a distinct error rather than
-a misleading pass:
+a misleading pass. The first three are decidable from the arguments alone and are refused
+*before* the chain runs, so nothing reaches stdout first:
 
 - **combined with `--set`** — an overridden config can't reproduce a recording made with a
   different config, so the comparison would be meaningless by construction.
@@ -167,11 +232,21 @@ a misleading pass:
 Nothing produced by this harness — no sweep result, no metric, no rig recommendation — should
 be trusted until it has passed `--verify` against a real recording of the segment in question.
 
-**If `--verify` fails, stop before doing anything else.** In order of likelihood: the
-recording was made with a different `configuration.toml` than the one passed to `--verify`;
-the recording spans a config reload (which resets the filters mid-file); the recording
-includes disarmed/manual-mode ticks whose `live_*` never came from the washout in the first
-place.
+**If `--verify` fails, stop before doing anything else.** In order of likelihood:
+
+- the recording was made with a different `configuration.toml` than the one passed to
+  `--verify`;
+- the recording spans a **config reload**, which resets the filters mid-file and leaves no
+  trace in the CSV for replay to key off;
+- the recording spans an **arm edge that replay could not see** — either the `arm_state` column
+  was stripped (a cue-only export), or the arm happened in **manual mode**, where the plugin
+  skips the reset entirely and the filters never ran at all.
+
+Note that plain *disarmed* ticks are **not** a cause: `WashoutFilter::update` runs
+unconditionally every unpaused tick regardless of arm state, so `live_*` is valid throughout a
+disarmed stretch. It is the disarmed→armed *transition* that resets, and that is modelled.
+Manual-mode ticks are a genuine cause, for the different reason given in §1: there the flight
+loop never calls `WashoutFilter::update`/`EffectsLayer::update` at all.
 
 ## 6. Synthetic cue generation
 
@@ -191,24 +266,47 @@ filter's frequency response directly (Stage 1 of the campaign). Forms:
 
 ## 7. Reading the metrics
 
+**`washout_metrics.py` measures replay output, never a cue file.** The reference segments under
+`reference/` are cue-only exports (§2's `cut`) and carry none of the columns the metrics need —
+`live_heave`, `heave_clamped`, `sent*`, `rot_*_clamped`, `sl_*_clip`, `heave_pos_raw`,
+`reach_scale`. Pointing the script at one aborts naming the first missing column. Always the
+same two steps:
+
 ```bash
 cd MotionProviderPlugin
-tools/.venv/bin/python tools/washout_metrics.py /tmp/run.csv reference/cruise_calm.csv.gz
+# The committed reference files are gzipped and washout_replay reads plain CSV
+# only, so expand the cue file first.
+gunzip -c reference/cruise_calm.csv.gz > /tmp/cruise_calm.cues.csv
+./tools/build/washout_replay --cues /tmp/cruise_calm.cues.csv --config configuration.toml \
+    --out /tmp/cruise_calm.csv
+tools/.venv/bin/python tools/washout_metrics.py /tmp/cruise_calm.csv
 ```
+
+`washout_metrics.py` itself *is* gzip-transparent (any argument ending in `.csv.gz` is opened
+through `gzip`), which is what makes archived *replay* output convenient to re-measure. That
+transparency is not permission to feed it a cue file — a `.csv.gz` used to die on the gzip
+magic byte with a `UnicodeDecodeError`, which at least made the mistake loud; now it gets as
+far as the honest "missing required column 'live_heave'".
 
 Add `--csv` to get machine-readable output instead of the aligned table. Every file argument
 is measured independently and printed as its own row.
+
+The table leads with `rows`, `sec` and `fs` and ends with `peak_raw_mm` and `peak_out_mm`. Read
+those first: the refusal warnings below go to **stderr** while the table goes to stdout, so an
+operator who redirects the table loses them — a `peak_out_mm` that is tiny, or exactly the park
+offset, is what makes a dead or never-armed run obvious in the table itself.
 
 | Metric | What it is | Gate / how to read it |
 |---|---|---|
 | `sat_heave` | % of unpaused ticks with the heave clamp engaged | **The primary diagnostic.** Target for the diagnosis stage: under 2% in calm cruise. Today's expectation there is 80–100%. |
 | `sat_rot`, `sat_tilt_rate`, `sat_sl_vel`, `sat_sl_acc` | same idea for the rotational clamp, the tilt-rate limiter, and the `SafetyLimiter`'s velocity/acceleration clips | Secondary diagnostics — same "must fall" gate as `sat_heave` unless a stage says otherwise. |
 | `sat_envelope` (from `reach_scale`) | % of unpaused ticks where the **pre-blend** envelope bisection engaged (`reach_scale < 1.0`) | See "Why `sat_envelope` only sees one of two clamps" below — it is blind to the second, post-blend clamp by design, not by omission. |
-| `wrms` | RMS of heave acceleration, band-limited to 0.1–0.63 Hz with a Hann window (RMS-corrected for the window's power loss) | A documented band emphasis, **not a conformant ISO-2631 Wk weighting**. Ranks candidates against each other only — never quote it as a comfort figure. |
-| `band_ratio` | fraction of heave-acceleration spectral power inside that same 0.1–0.63 Hz band | States directly whether motion sits in the motion-sickness band. Stage 8's inverted gate depends on this: `wrms` may rise as amplitude comes back, but `band_ratio` must not. |
-| `jerk_p95` | 95th-percentile \|third difference\| of the six streamed BFF demand channels, normalised to counts/s³ via the file's own sampling rate | Comparative only — actuator counts, no counts-to-mm conversion exists. Runs at different framerates are still comparable because of the normalisation. |
-| `lag_ms` | shift maximising the Pearson-normalised cross-correlation between the drive cue and the commanded pose, band-limited to 0.3–1 Hz | **Not a latency.** The washout is a high-pass, not a delay line; only the *delta* between a baseline and a candidate over the *same* segment means anything. Gate: candidate ≤ baseline + 15 ms. Returns `nan` (with a stderr warning) below 8 periods at the 0.3 Hz band floor, or when either signal has no energy left in the band (e.g. heave frozen against a clamp) — a stuck signal must never read as "zero added lag". |
-| `peak_raw_mm`, `peak_out_mm` | peak pre-clamp and peak post-clamp heave excursion | Context for the saturation numbers, not gated directly. |
+| `wrms` | RMS of heave acceleration, band-limited to 0.1–0.63 Hz with a Hann window (RMS-corrected for the window's power loss) | A documented band emphasis, **not a conformant ISO-2631 Wk weighting**. Ranks candidates against each other only — never quote it as a comfort figure. Returns `nan` (stderr warning) when `live_heave` has no variation at all — see below. |
+| `band_ratio` | fraction of heave-acceleration spectral power inside that same 0.1–0.63 Hz band | States directly whether motion sits in the motion-sickness band. Stage 8's inverted gate depends on this: `wrms` may rise as amplitude comes back, but `band_ratio` must not. Same `nan` refusal as `wrms`. |
+| `jerk_p95` | the **max over the six** streamed BFF demand channels of that channel's 95th-percentile \|third difference\| — a per-channel p95, then the worst channel; not a p95 pooled across channels. Normalised to counts/s³ via the file's own sampling rate | Comparative only — actuator counts, no counts-to-mm conversion exists. Runs at different framerates are still comparable because of the normalisation. **Only meaningful on replay output** (a disarmed live recording pins `sent*` and reports ≈ 0), and fictional across an arm/disarm — see §5. |
+| `lag_ms` | shift maximising the Pearson-normalised cross-correlation between the drive cue (`g_nrml`) and **`live_heave`**, band-limited to 0.3–1 Hz | **Not a latency.** The washout is a high-pass, not a delay line; only the *delta* between a baseline and a candidate over the *same* segment means anything. Gate: candidate ≤ baseline + 15 ms. It correlates the **live** pose, not the commanded one: `live_*` is the column `--verify` proves replayable, while `cmd_*` carries the arm blend replay deliberately does not model. Returns `nan` (with a stderr warning) below 8 periods at the 0.3 Hz band floor, or when either signal has no energy left in the band (e.g. heave frozen against a clamp) — a stuck signal must never read as "zero added lag". |
+| `peak_raw_mm` | `max \|heave_pos_raw\|` | **Structurally pinned near the limit — do not read it as "the overdrive".** `heavePos_` is a clamped *state*, so this can exceed `heave_limit_mm` by at most one integration step (~42 mm at the shipped settings) no matter what the time constants do. To measure the filter rather than the clamp, add `--set washout.heave_limit_mm=1e9`. See the fuller note in §4. |
+| `peak_out_mm` | `max \|live_heave\|` — post-clamp, post-smoothing, and **including the effects layer** | Not gated. Its real job is as a liveness check: a `peak_out_mm` that is tiny or flat is how a dead run shows up in the table. |
 
 **Why `lag_ms` uses such a narrow band, and why the number moves when you least expect it.**
 An earlier, broadband version of this estimator was frequency-dependent: on a synthetic tone
@@ -231,12 +329,30 @@ actually did. The second clamp stays in the code as a guard; its scale is delibe
 written to telemetry. Don't read a low `sat_envelope` as "the envelope is never a constraint
 anywhere in the chain" — it can only ever tell you about the first clamp.
 
-**Missing columns are treated as a safety issue, not a formatting one.** Only `dt_real`,
-`g_nrml` and `reach_scale` may fall back to a default when absent from a CSV. Every other
-required column — most importantly `heave_clamped` — aborts the script with a clear error
-naming the file and the column if it's missing. A silently zero-filled `heave_clamped` would
-report `sat_heave = 0%`, which happens to be exactly this campaign's target outcome and is
-therefore the single most dangerous number this script could ever report by accident.
+**Missing columns are treated as a safety issue, not a formatting one.** Only `dt_real` and
+`g_nrml` may fall back to a default when absent from a CSV. Every other column — most
+importantly `heave_clamped` — aborts the script with a clear error naming the file and the
+column if it's missing. A silently zero-filled `heave_clamped` would report `sat_heave = 0%`,
+which happens to be exactly this campaign's target outcome and is therefore the single most
+dangerous number this script could ever report by accident.
+
+The bar for an exemption is that a missing column must not be able to manufacture a
+*favourable* value on its own: a missing `dt_real` only assumes 60 Hz, and a missing `g_nrml`
+leaves the lag correlation with a dead drive channel, which `lag_ms` already refuses with an
+honest `nan`. `reach_scale` used to be exempt and no longer is — defaulting it to 1.0 printed
+`sat_envelope = 0.00 %` with no warning at all, and the campaign *skips* its envelope stage
+unless `reach_scale < 1` is common, so a silently defaulted column silently skipped a stage.
+(The exemption was never needed either: `heave_clamped`, `paused` and `reach_scale` all arrived
+in the same commit series, so no recorder emits one without the others.)
+
+**A frozen `live_heave` is refused, not scored.** Pinning `live_heave` to a constant — a heave
+locked against a clamp, or a pose that never moved — yields `wrms = 1.24e-20` and
+`band_ratio = 7.6e-08`: the *best values either metric can produce*. Stage 8's inverted gate is
+precisely "`wrms` may rise as long as `band_ratio` does not", so a dead run would read as an
+ideal candidate. `washout_metrics.py` therefore checks the standard deviation of `live_heave`
+once and returns `nan` for both metrics, with a stderr warning, when there is no variation to
+measure — the same refusal `lag_ms` already applies to the same condition. `peak_out_mm` in the
+table is the stdout-visible half of that guard.
 
 ## 8. Promoting a candidate to the rig
 

@@ -148,7 +148,7 @@ Columns, in four groups:
 | Time | `t_sec`, `dt_real`, `dt_clamped` |
 | Cues (raw) | `g_nrml, g_axil, g_side, P, Q, R, theta, phi, onground, gs, rpm, alpha, paused` |
 | Washout internals | `heave_a_hp, heave_vel, heave_pos_raw` (**pre-clamp**), `heave_clamped`, `tilt_pitch, tilt_roll, tilt_rate_active`, `rot_roll_raw, rot_pitch_raw, rot_yaw_raw`, `rot_roll_clamped, rot_pitch_clamped, rot_yaw_clamped` |
-| Output | `pose_heave, pose_roll, pose_pitch, pose_yaw`, `reach_scale`, `sp0..sp5` (post-IK), `sent0..sent5` (post-SafetyLimiter), `sl_vel_clip`, `sl_acc_clip`, `arm_state` |
+| Output | `eff_heave/roll/pitch/yaw` (effects contribution), `live_heave/roll/pitch/yaw` (washout + effects, **pre** arm blend), `cmd_heave/roll/pitch/yaw` (post blend and clamp — these two groups are what the header actually emits; there are no `pose_*` columns), `reach_scale`, `sp0..sp5` (post-IK), `sent0..sent5` (post-SafetyLimiter), `sl_vel_clip`, `sl_acc_clip`, `arm_state` |
 
 Getting the internals out requires additive accessors, no behaviour change:
 
@@ -213,9 +213,9 @@ Per DOF, per segment:
 |---|---|
 | `sat_pct` | Fraction of ticks in a clamp, reported per source (heave limit, rot limit, tilt rate, envelope scaling, SafetyLimiter vel/acc). The primary diagnostic. |
 | `wrms` | Band-weighted RMS of heave acceleration, emphasising 0.1–0.63 Hz. The discomfort measure. **Not a conformant ISO-2631 Wk implementation** — it is a documented band emphasis chosen because that is where ISO-2631 puts its vertical peak. Adequate for ranking candidates against each other, which is all it is used for; it is not a comfort figure to quote elsewhere. |
-| `band_ratio` | Share of heave power in 0.1–0.5 Hz. States directly whether we sit in the motion-sickness band. |
-| `jerk_p95` | 95th percentile of jerk per actuator. The mechanical harshness measure. |
-| `lag_ms` | Phase-alignment shift from cue to commanded pose, measured by a **Pearson-normalised** cross-correlation over a **0.3–1 Hz** band, refusing to report below 8 periods at the band's lower edge. The lag budget. Not a broadband latency — see below. |
+| `band_ratio` | Share of heave power in the same **0.1–0.63 Hz** band as `wrms` (`BAND_LO_HZ`/`BAND_HI_HZ` in `washout_metrics.py`). States directly whether we sit in the motion-sickness band. |
+| `jerk_p95` | Per actuator, the 95th percentile of \|jerk\| on that actuator's streamed demand channel; the reported figure is the **max over the six** channels, not a percentile pooled across them. The mechanical harshness measure. |
+| `lag_ms` | Phase-alignment shift from the drive cue (`g_nrml`) to the **live** pose (`live_heave`), measured by a **Pearson-normalised** cross-correlation over a **0.3–1 Hz** band, refusing to report below 8 periods at the band's lower edge. `live_*` and not `cmd_*`: `live_*` is the column `--verify` proves replayable, while `cmd_*` also carries the arm blend that replay deliberately does not model. The lag budget. Not a broadband latency — see below. |
 
 **Why `lag_ms` is defined so narrowly.** The obvious estimator — a raw cross-correlation over the
 full cue band — is biased by the finite window, and the bias is *not* common-mode between a
