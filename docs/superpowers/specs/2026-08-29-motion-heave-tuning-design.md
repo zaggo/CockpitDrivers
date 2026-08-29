@@ -79,11 +79,29 @@ The correct lever is the **washout time constants**, and counter to the "soften 
 instinct they must get *shorter*, which simultaneously de-saturates the channel and
 *reduces* phase lag:
 
-| τ_vel = τ_pos | \|G\|max | heave peak at 0.3 g |
-|---|---|---|
-| 2.0 (today) | 0.91 s² | ~400 mm → 13× over the clamp |
-| 0.5 | 0.14 s² | ~62 mm → 2× over |
-| 0.3 | 0.06 s² | ~26 mm → inside the envelope |
+| τ_vel = τ_pos | \|G\|max | sinusoidal peak at 0.3 g | sustained 0.3 g **step** |
+|---|---|---|---|
+| 2.0 (today) | 0.91 s² | ~400 mm → 13× over the clamp | ~286 mm (t ≈ 3.2 s) → 9.5× over |
+| 0.5 | 0.14 s² | ~62 mm → 2× over | — |
+| 0.3 | 0.06 s² | ~26 mm | ~46 mm (t ≈ 1.0 s) → still 1.5× over |
+
+The two right-hand columns answer different questions and must not be conflated. `|G|max` is a
+*sinusoidal* peak at the response maximum (≈0.067 Hz); a sustained step excites that band only
+partially, so its peak is lower. The step figures are the analytic solution of
+`A/((s+1/τ_hp)(s+1/τ_vel)(s+1/τ_pos))` and are what a bench measurement reproduces.
+
+**Consequence for the campaign:** shortening τ alone does *not* fully de-saturate. At τ = 0.3 a
+sustained 0.3 g step still reaches ~46 mm against a 30 mm limit. Stage 3 removes most of the
+overdrive — from ~9.5× to ~1.5× — but the residue is what Stage 5's anti-windup and Stage 8's
+amplitude choice have to absorb. Expect Stage 3 to change the character of the motion, not to
+eliminate clipping outright.
+
+**Measuring saturation is subtle:** `heavePos_` is a clamped *state*, so `heave_pos_raw` is only
+"pre-clamp" within a single tick — the value it is built from was already clipped on the previous
+tick. A raw excursion therefore never exceeds the limit by more than one integration step (~42 mm
+measured at the shipped settings). To compare filter settings rather than the clamp, run with
+`heave_limit_mm` set high enough to be inert. `heave_clamped` remains a valid saturation indicator
+either way.
 
 ### Secondary findings
 

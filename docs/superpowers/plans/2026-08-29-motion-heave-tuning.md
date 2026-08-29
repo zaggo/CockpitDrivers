@@ -109,12 +109,21 @@ Append these blocks to `tests/test_washout.cpp`, immediately before the final `s
     }
 
     // Shortening the washout constants shrinks the excursion for the same input.
-    // Ratio of |G|max is ~15x between tau 2.0 and tau 0.3; assert a safe 4x.
+    //
+    // The heave limit is disabled here on purpose. heavePos_ is a CLAMPED state:
+    // heavePosRaw is read before this tick's clamp, but the value it is built from
+    // was already clipped last tick, so with the shipped 30 mm limit the "raw"
+    // peak can never exceed the limit by more than one integration step (~42 mm
+    // measured). The comparison would then measure the clamp, not the filter.
+    // With the limit inert, the sustained-0.3g step response peaks at ~286 mm for
+    // tau 2.0 (t ~ 3.2 s) and ~46 mm for tau 0.3 (t ~ 1.0 s) — a ratio of ~0.16,
+    // so the 0.25 threshold holds with margin.
     {
         auto peakRaw = [](double tau) {
             WashoutConfig cfg = WashoutConfig::defaults();
             cfg.heaveVelWashoutTau = tau;
             cfg.heavePosWashoutTau = tau;
+            cfg.heaveLimitMm       = 1.0e9;   // clamp inert: measure the filter, not the limit
             WashoutFilter f(cfg);
             MotionCues up = level(); up.heaveG = 1.3f;
             double peak = 0.0;
@@ -126,7 +135,7 @@ Append these blocks to `tests/test_washout.cpp`, immediately before the final `s
             return peak;
         };
         check(peakRaw(0.3) < peakRaw(2.0) * 0.25,
-              "tau 2.0 -> 0.3 cuts the raw heave excursion by more than 4x");
+              "tau 2.0 -> 0.3 cuts the raw heave excursion by more than 4x (clamp disabled)");
     }
 ```
 
