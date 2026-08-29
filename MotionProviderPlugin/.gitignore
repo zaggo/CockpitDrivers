@@ -12,6 +12,7 @@ tools/__pycache__/
 # cue-only exports (see docs/motion-tuning/README.md); raw full-column captures
 # are working files and are several MB each.
 motion-*.csv
+*_motion-*.csv
 *.xpl
 *.o
 *.a
