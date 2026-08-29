@@ -318,25 +318,41 @@ bool synthCues(const std::string& spec, double dt, std::vector<CueSample>& out,
         return s;
     };
 
-    if (kind == "step" && p.size() >= 3) {
+    if (kind == "step") {
+        if (p.size() < 3) { err = "step wants step:<g>:<durSec>"; return false; }
         const double g = std::atof(p[1].c_str()), dur = std::atof(p[2].c_str());
+        if (dur <= 0.0) { err = "step needs a positive durSec"; return false; }
+        if (!std::isfinite(g) || g == 0.0) { err = "step needs a nonzero, finite g"; return false; }
         for (double t = 0.0; t < dur; t += dt) out.push_back(sample(t < 1.0 ? 0.0 : g));
         return true;
     }
-    if (kind == "sine" && p.size() >= 4) {
+    if (kind == "sine") {
+        if (p.size() < 4) { err = "sine wants sine:<hz>:<g>:<durSec>"; return false; }
         const double hz = std::atof(p[1].c_str()), g = std::atof(p[2].c_str());
         const double dur = std::atof(p[3].c_str());
+        if (dur <= 0.0) { err = "sine needs a positive durSec"; return false; }
+        if (hz <= 0.0) { err = "sine needs a positive hz"; return false; }
+        if (!std::isfinite(g) || g == 0.0) { err = "sine needs a nonzero, finite g"; return false; }
         for (double t = 0.0; t < dur; t += dt)
             out.push_back(sample(g * std::sin(2.0 * M_PI * hz * t)));
         return true;
     }
-    if (kind == "chirp" && p.size() >= 4) {
+    if (kind == "chirp") {
+        if (p.size() < 4) { err = "chirp wants chirp:<f0>-<f1>:<g>:<durSec>"; return false; }
         const size_t dash = p[1].find('-');
         if (dash == std::string::npos) { err = "chirp wants f0-f1"; return false; }
         const double f0 = std::atof(p[1].substr(0, dash).c_str());
         const double f1 = std::atof(p[1].c_str() + dash + 1);
         const double g = std::atof(p[2].c_str()), dur = std::atof(p[3].c_str());
-        if (f0 <= 0.0 || f1 <= 0.0 || dur <= 0.0) { err = "chirp needs positive f0,f1,dur"; return false; }
+        if (dur <= 0.0) { err = "chirp needs a positive durSec"; return false; }
+        if (f0 <= 0.0 || f1 <= 0.0) { err = "chirp needs positive f0,f1"; return false; }
+        if (f0 == f1) {
+            err = "chirp needs two distinct frequencies -- a logarithmic sweep divides by "
+                  "log(f1/f0), and f0 == f1 makes that zero (the resulting phase is 0/0 = NaN, "
+                  "which would silently pass through as a plausible-looking but garbage result)";
+            return false;
+        }
+        if (!std::isfinite(g) || g == 0.0) { err = "chirp needs a nonzero, finite g"; return false; }
         // Logarithmic sweep: phase is the integral of the instantaneous frequency.
         const double k = std::log(f1 / f0) / dur;
         for (double t = 0.0; t < dur; t += dt) {
@@ -391,6 +407,13 @@ int main(int argc, char** argv) {
         } else { usage(); return 2; }
     }
     if (configPath.empty() || (cuesPath.empty() && synthSpec.empty())) { usage(); return 2; }
+    if (!synthSpec.empty() && resampleDt > 0.0) {
+        std::fprintf(stderr,
+            "REFUSED: --synth and --resample-dt together decouple the filter's clock from the "
+            "frequency law baked into the synthetic samples -- pass --synth-dt instead if you "
+            "want a different synthetic timestep\n");
+        return 2;
+    }
 
     std::vector<CueSample> samples;
     std::string err;
