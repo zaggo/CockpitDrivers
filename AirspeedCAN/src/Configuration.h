@@ -11,9 +11,9 @@ const CanNodeId kNodeId = CanNodeId::asiNodeId;
 const uint8_t kCanIntPin = 2;
 const uint8_t kCanCSPin = 10;
 
-const uint8_t kStepPin = 8;
-const uint8_t kDirPin = 9;
-const uint8_t kRstPin = 7;
+const uint8_t kStepPin = 7;
+const uint8_t kDirPin = 8;
+const uint8_t kRstPin = 9;
 
 const uint16_t kMaximumDegree = 320;
 const uint16_t kSteps = kMaximumDegree * 12; // 320 degrees at 1/12 degree steps
