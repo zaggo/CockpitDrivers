@@ -79,6 +79,10 @@ The correct lever is the **washout time constants**, and counter to the "soften 
 instinct they must get *shorter*, which simultaneously de-saturates the channel and
 *reduces* phase lag:
 
+All excursion figures below assume **`heave_gain = 0.15`**, the value in the current
+`configuration.toml` — not the `WashoutConfig` struct default of 0.5. Excursion scales linearly
+with the gain, so figures measured against the struct defaults are 3.3× larger.
+
 | τ_vel = τ_pos | \|G\|max | sinusoidal peak at 0.3 g | sustained 0.3 g **step** |
 |---|---|---|---|
 | 2.0 (today) | 0.91 s² | ~400 mm → 13× over the clamp | ~286 mm (t ≈ 3.2 s) → 9.5× over |
