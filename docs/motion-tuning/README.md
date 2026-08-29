@@ -99,7 +99,7 @@ separate tool.
 In the header these are fields 2 and 4–16 (field 3, `dt_clamped`, is not a cue and is skipped):
 
 ```bash
-cut -d, -f2,4-16 motion-20260901-140322.csv | gzip > MotionProviderPlugin/reference/cruise_calm.csv.gz
+cut -d, -f2,4-16,58-61 motion-20260901-140322.csv | gzip > MotionProviderPlugin/reference/cruise_calm.csv.gz
 ```
 
 Because replay is a deterministic function of `(cues, dt, config)`, full telemetry can always
