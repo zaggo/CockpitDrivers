@@ -26,6 +26,10 @@
 
 namespace {
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 struct CueSample {
     double     dt = 1.0 / 60.0;
     MotionCues cues;
@@ -165,7 +169,12 @@ void usage() {
         "  --out FILE                write the replayed run as a telemetry CSV\n"
         "  --verify                  check the replay reproduces the recording's live_* columns\n"
         "  --sweep section.key=A,B,C run once per value, printing a summary table\n"
-        "  --resample-dt SEC         re-run at a fixed timestep instead of the recorded one\n");
+        "  --resample-dt SEC         re-run at a fixed timestep instead of the recorded one\n"
+        "  --synth SPEC              synthesise cues instead of reading a file:\n"
+        "                              step:<g>:<durSec>\n"
+        "                              sine:<hz>:<g>:<durSec>\n"
+        "                              chirp:<f0>-<f1>:<g>:<durSec>\n"
+        "  --synth-dt SEC            timestep for --synth (default 1/60)\n");
 }
 
 // One full pass of the cueing chain over `samples`. Shared by the plain replay
@@ -289,6 +298,57 @@ RunResult runChain(const std::vector<CueSample>& samples,
     return res;
 }
 
+// Synthetic cue streams, so the filter's response can be characterised with no
+// flight at all. SPEC forms:
+//   step:<g>:<durSec>            constant g_nrml offset after 1 s
+//   sine:<hz>:<g>:<durSec>       sinusoidal g_nrml
+//   chirp:<f0>-<f1>:<g>:<durSec> logarithmic sweep, for the frequency response
+bool synthCues(const std::string& spec, double dt, std::vector<CueSample>& out,
+               std::string& err) {
+    std::vector<std::string> p;
+    { std::stringstream ss(spec); std::string f;
+      while (std::getline(ss, f, ':')) p.push_back(f); }
+    if (p.empty()) { err = "empty --synth spec"; return false; }
+
+    const std::string kind = p[0];
+    auto sample = [&](double gOffset) {
+        CueSample s;
+        s.dt = dt;
+        s.cues.heaveG = static_cast<float>(1.0 + gOffset);
+        return s;
+    };
+
+    if (kind == "step" && p.size() >= 3) {
+        const double g = std::atof(p[1].c_str()), dur = std::atof(p[2].c_str());
+        for (double t = 0.0; t < dur; t += dt) out.push_back(sample(t < 1.0 ? 0.0 : g));
+        return true;
+    }
+    if (kind == "sine" && p.size() >= 4) {
+        const double hz = std::atof(p[1].c_str()), g = std::atof(p[2].c_str());
+        const double dur = std::atof(p[3].c_str());
+        for (double t = 0.0; t < dur; t += dt)
+            out.push_back(sample(g * std::sin(2.0 * M_PI * hz * t)));
+        return true;
+    }
+    if (kind == "chirp" && p.size() >= 4) {
+        const size_t dash = p[1].find('-');
+        if (dash == std::string::npos) { err = "chirp wants f0-f1"; return false; }
+        const double f0 = std::atof(p[1].substr(0, dash).c_str());
+        const double f1 = std::atof(p[1].c_str() + dash + 1);
+        const double g = std::atof(p[2].c_str()), dur = std::atof(p[3].c_str());
+        if (f0 <= 0.0 || f1 <= 0.0 || dur <= 0.0) { err = "chirp needs positive f0,f1,dur"; return false; }
+        // Logarithmic sweep: phase is the integral of the instantaneous frequency.
+        const double k = std::log(f1 / f0) / dur;
+        for (double t = 0.0; t < dur; t += dt) {
+            const double phase = 2.0 * M_PI * f0 * (std::exp(k * t) - 1.0) / k;
+            out.push_back(sample(g * std::sin(phase)));
+        }
+        return true;
+    }
+    err = "unrecognised --synth spec: " + spec;
+    return false;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -298,6 +358,8 @@ int main(int argc, char** argv) {
     double              resampleDt = 0.0;
     std::string         sweepKey;
     std::vector<double> sweepValues;
+    std::string synthSpec;
+    double      synthDt = 1.0 / 60.0;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -316,6 +378,8 @@ int main(int argc, char** argv) {
         }
         else if (a == "--verify")      doVerify = true;
         else if (a == "--resample-dt") resampleDt = std::atof(next("--resample-dt").c_str());
+        else if (a == "--synth")    synthSpec = next("--synth");
+        else if (a == "--synth-dt") synthDt   = std::atof(next("--synth-dt").c_str());
         else if (a == "--sweep") {
             const std::string kv = next("--sweep");
             const size_t eq = kv.find('=');
@@ -326,11 +390,17 @@ int main(int argc, char** argv) {
             while (std::getline(ss, v, ',')) sweepValues.push_back(std::atof(v.c_str()));
         } else { usage(); return 2; }
     }
-    if (cuesPath.empty() || configPath.empty()) { usage(); return 2; }
+    if (configPath.empty() || (cuesPath.empty() && synthSpec.empty())) { usage(); return 2; }
 
     std::vector<CueSample> samples;
     std::string err;
-    if (!loadCues(cuesPath, samples, err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 1; }
+    if (!synthSpec.empty()) {
+        if (!synthCues(synthSpec, synthDt, samples, err)) {
+            std::fprintf(stderr, "%s\n", err.c_str()); return 2;
+        }
+    } else if (!loadCues(cuesPath, samples, err)) {
+        std::fprintf(stderr, "%s\n", err.c_str()); return 1;
+    }
 
     StewartGeometry geo = MotionConfig::loadGeometry(configPath);
     WashoutConfig   wcfg = MotionConfig::loadWashout(configPath);
