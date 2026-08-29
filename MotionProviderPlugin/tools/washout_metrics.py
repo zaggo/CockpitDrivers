@@ -36,6 +36,25 @@ Metric notes:
               LAG_LO_HZ, or when either signal has no energy left in that
               band (e.g. heave frozen against a clamp) -- a stuck signal must
               never read as "zero added lag".
+  sat_*       Percentage of *unpaused* ticks (the required `paused` column
+              equal to 0) where the corresponding clamp/clip flag was set.
+              While the sim is paused the recorder keeps writing rows, but
+              the washout trace just holds whatever the last unpaused tick
+              left behind (a frozen heave_clamped, a frozen tilt_rate_active,
+              ...); counting those rows would let time spent on a loading
+              screen or a menu inflate sat_heave, the campaign's headline
+              number. If a file is paused throughout, the unpaused-row count
+              is zero and every sat_* is NaN (with a stderr warning naming
+              the file) rather than a divide-by-zero or a misleadingly clean
+              0%.
+
+              wrms, band_ratio, jerk_p95, and lag_ms are deliberately NOT
+              filtered this way: they operate on the full time series, and
+              excising scattered paused rows would corrupt the time axis
+              feeding the derivative/FFT/cross-correlation math -- worse
+              than the problem it would solve. So sat_* and the
+              spectral/lag metrics are not measured over identical sample
+              sets; that is intentional, not an oversight.
 """
 import argparse
 import csv
@@ -180,15 +199,30 @@ def metrics(path):
 
     g_cue = column(cols, arr, "g_nrml", 1.0, path=path) - 1.0
 
+    # sat_* is measured over unpaused ticks only -- see the module docstring.
+    # `paused` is required (not in OPTIONAL_COLUMNS): an older recorder
+    # missing it must abort, not silently behave as "never paused".
+    paused = column(cols, arr, "paused", path=path)
+    unpaused = paused < 0.5
+    n_unpaused = int(unpaused.sum())
+    if n_unpaused == 0:
+        print(f"{path}: every row is paused; sat_* metrics are undefined "
+              f"(NaN)", file=sys.stderr)
+
+    def sat_pct(flags):
+        if n_unpaused == 0:
+            return float("nan")
+        return 100.0 * flags[unpaused].mean()
+
     sat = {
-        "heave": 100.0 * column(cols, arr, "heave_clamped", path=path).mean(),
-        "rot_r": 100.0 * column(cols, arr, "rot_roll_clamped", path=path).mean(),
-        "rot_p": 100.0 * column(cols, arr, "rot_pitch_clamped", path=path).mean(),
-        "rot_y": 100.0 * column(cols, arr, "rot_yaw_clamped", path=path).mean(),
-        "tilt_rate": 100.0 * column(cols, arr, "tilt_rate_active", path=path).mean(),
-        "envelope": 100.0 * (column(cols, arr, "reach_scale", 1.0, path=path) < 1.0).mean(),
-        "sl_vel": 100.0 * (column(cols, arr, "sl_vel_clip", path=path) > 0).mean(),
-        "sl_acc": 100.0 * (column(cols, arr, "sl_acc_clip", path=path) > 0).mean(),
+        "heave": sat_pct(column(cols, arr, "heave_clamped", path=path)),
+        "rot_r": sat_pct(column(cols, arr, "rot_roll_clamped", path=path)),
+        "rot_p": sat_pct(column(cols, arr, "rot_pitch_clamped", path=path)),
+        "rot_y": sat_pct(column(cols, arr, "rot_yaw_clamped", path=path)),
+        "tilt_rate": sat_pct(column(cols, arr, "tilt_rate_active", path=path)),
+        "envelope": sat_pct(column(cols, arr, "reach_scale", 1.0, path=path) < 1.0),
+        "sl_vel": sat_pct(column(cols, arr, "sl_vel_clip", path=path) > 0),
+        "sl_acc": sat_pct(column(cols, arr, "sl_acc_clip", path=path) > 0),
     }
 
     jerks = []
