@@ -190,7 +190,7 @@ Per DOF, per segment:
 | Metric | What it shows |
 |---|---|
 | `sat_pct` | Fraction of ticks in a clamp, reported per source (heave limit, rot limit, tilt rate, envelope scaling, SafetyLimiter vel/acc). The primary diagnostic. |
-| `iso_rms` | ISO-2631 frequency-weighted RMS of heave acceleration (Wk weighting, peaks 0.1–0.63 Hz). The discomfort measure. |
+| `wrms` | Band-weighted RMS of heave acceleration, emphasising 0.1–0.63 Hz. The discomfort measure. **Not a conformant ISO-2631 Wk implementation** — it is a documented band emphasis chosen because that is where ISO-2631 puts its vertical peak. Adequate for ranking candidates against each other, which is all it is used for; it is not a comfort figure to quote elsewhere. |
 | `band_ratio` | Share of heave power in 0.1–0.5 Hz. States directly whether we sit in the motion-sickness band. |
 | `jerk_p95` | 95th percentile of jerk per actuator. The mechanical harshness measure. |
 | `lag_ms` | Cross-correlation delay from cue to commanded pose, per DOF. The lag budget. |
@@ -200,10 +200,10 @@ Per DOF, per segment:
 
 1. `lag_ms` ≤ baseline + **15 ms**. Hard limit — a candidate that breaks it is never flown.
    This is what turns "no more lag" into a number.
-2. `sat_pct`, `iso_rms` and `jerk_p95` must all decrease. **Stage 8 inverts this gate:**
+2. `sat_pct`, `wrms` and `jerk_p95` must all decrease. **Stage 8 inverts this gate:**
    raising `heave_gain` necessarily raises motion, so there the criterion is *thresholds
    held* rather than *values reduced* — heave `sat_pct` stays under its target, `jerk_p95`
-   stays at or below the Stage-7 value, and `iso_rms` may rise as long as `band_ratio` does
+   stays at or below the Stage-7 value, and `wrms` may rise as long as `band_ratio` does
    not (more cue is fine; more energy in the sickness band is not).
 3. **Rig veto.** If it feels worse on the rig, feel wins over the number. The case gets
    logged: it means a metric fails to capture the problem, which is itself a result.
