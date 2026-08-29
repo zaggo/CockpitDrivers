@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -175,7 +176,8 @@ struct RunResult {
     size_t samples = 0;
     double durationSec = 0.0;
     double maxLiveErr = 0.0;   // max |replayed - recorded| over the live_* columns
-    double satHeavePct = 0.0;  // % of ticks with the heave clamp engaged
+    bool   liveErrIsNaN = false;  // a NaN divergence was seen; maxLiveErr is a sentinel (inf), not a magnitude
+    double satHeavePct = 0.0;  // % of active (unpaused) ticks with the heave clamp engaged
     double peakHeaveRawMm = 0.0;
 };
 
@@ -202,7 +204,7 @@ RunResult runChain(const std::vector<CueSample>& samples,
 
     RunResult res;
     double t = 0.0;
-    size_t clamped = 0, counted = 0;
+    size_t clamped = 0, counted = 0, activeTicks = 0;
     // Both are held across paused ticks, mirroring MotionProvider's
     // lastLivePose_ and lastEffectsPose_ — the plugin holds them rather than
     // zeroing them, and a zero-dip in the middle of a recording would read as a
@@ -237,7 +239,14 @@ RunResult runChain(const std::vector<CueSample>& samples,
 
         const WashoutTrace& tr = washout.trace();
         ++counted;
-        if (tr.heaveClamped) ++clamped;
+        // washout.update() didn't run this tick when paused, so tr.heaveClamped
+        // still holds whatever the last real tick left behind -- it must not
+        // count toward the saturation statistic (the row is still written every
+        // tick either way, for row-count parity with the plugin).
+        if (!s.cues.simPaused) {
+            ++activeTicks;
+            if (tr.heaveClamped) ++clamped;
+        }
         const double raw = std::fabs(tr.heavePosRaw);
         if (raw > res.peakHeaveRawMm) res.peakHeaveRawMm = raw;
 
@@ -247,7 +256,17 @@ RunResult runChain(const std::vector<CueSample>& samples,
                 std::fabs(static_cast<double>(live.roll)  - s.recLiveRoll),
                 std::fabs(static_cast<double>(live.pitch) - s.recLivePitch),
                 std::fabs(static_cast<double>(live.yaw)   - s.recLiveYaw)};
-            for (double v : d) if (v > res.maxLiveErr) res.maxLiveErr = v;
+            for (double v : d) {
+                // fabs(NaN) is NaN, and "NaN > maxLiveErr" is false by IEEE-754,
+                // so a naive max-tracking comparison silently drops a NaN
+                // divergence instead of ever seeing it. Latch a sentinel instead.
+                if (std::isnan(v)) {
+                    res.maxLiveErr   = std::numeric_limits<double>::infinity();
+                    res.liveErrIsNaN = true;
+                } else if (v > res.maxLiveErr) {
+                    res.maxLiveErr = v;
+                }
+            }
         }
 
         if (out && out->recording()) {
@@ -266,7 +285,7 @@ RunResult runChain(const std::vector<CueSample>& samples,
     }
     res.samples     = counted;
     res.durationSec = t;
-    res.satHeavePct = counted ? 100.0 * static_cast<double>(clamped) / static_cast<double>(counted) : 0.0;
+    res.satHeavePct = activeTicks ? 100.0 * static_cast<double>(clamped) / static_cast<double>(activeTicks) : 0.0;
     return res;
 }
 
@@ -326,14 +345,25 @@ int main(int argc, char** argv) {
     }
 
     if (!sweepKey.empty()) {
+        if (doVerify) {
+            std::fprintf(stderr, "VERIFY REFUSED: --verify does not run with --sweep\n");
+            return 2;
+        }
+        // Validate the key once, before anything goes to stdout -- otherwise an
+        // unknown key still fails (correctly, exit 2) but only after the table
+        // header has already been printed.
+        {
+            WashoutConfig w = wcfg; SafetyConfig s = scfg; EffectsConfig e = ecfg;
+            if (!applyOverride(sweepKey, 0.0, w, s, e)) {
+                std::fprintf(stderr, "unknown key: %s\n", sweepKey.c_str());
+                return 2;
+            }
+        }
         std::printf("%-28s %10s %10s %14s\n", sweepKey.c_str(),
                     "sat_heave%", "peak_raw_mm", "samples");
         for (double v : sweepValues) {
             WashoutConfig w = wcfg; SafetyConfig s = scfg; EffectsConfig e = ecfg;
-            if (!applyOverride(sweepKey, v, w, s, e)) {
-                std::fprintf(stderr, "unknown key: %s\n", sweepKey.c_str());
-                return 2;
-            }
+            applyOverride(sweepKey, v, w, s, e);  // key already validated above
             Telemetry sweepOut;
             if (!outPath.empty()) {
                 char name[512];
@@ -376,6 +406,12 @@ int main(int argc, char** argv) {
                 return 1;
             }
             std::printf("verify: max |replay - recorded| over live_* = %.9g mm/deg\n", r.maxLiveErr);
+            if (r.liveErrIsNaN) {
+                std::fprintf(stderr,
+                    "VERIFY FAILED: a NaN divergence was encountered in the live_* "
+                    "comparison (the max above is an inf sentinel, not a magnitude)\n");
+                return 1;
+            }
             if (r.maxLiveErr != 0.0) {
                 std::fprintf(stderr, "VERIFY FAILED: replay does not reproduce the recording\n");
                 return 1;
