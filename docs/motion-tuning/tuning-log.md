@@ -6,9 +6,12 @@ See `docs/motion-tuning/README.md` for how to produce every number in this table
 and `docs/superpowers/plans/2026-08-29-motion-heave-tuning.md` for the stage plan
 these rows track.
 
+The first row below is a worked example illustrating the format — **not real data** (Stage 2
+hasn't run yet). Leave it in place as documentation; real entries append after it.
+
 | Date | Stage | Parameter | Old → New | sat_heave% | wrms | jerk_p95 | lag_ms (Δ) | Rig verdict | Decision |
 |---|---|---|---|---|---|---|---|---|---|
-| 2026-08-29 (worked example, not real data) | 3 | `washout.heave_pos_washout_tau` + `washout.heave_vel_washout_tau` | 2.0 → 0.5 | 91.4 → 38.2 | 0.081 → 0.049 | 612 → 470 | +4 | "Cruise is noticeably calmer; steep turns still snap a bit on reversal." | Adopted for cruise; carry the reversal snap into Stage 5 (anti-windup) rather than re-tuning here |
+| 2026-08-29 | 3 | `washout.heave_pos_washout_tau` + `washout.heave_vel_washout_tau` | 2.0 → 0.5 | 91.4 → 38.2 | 0.081 → 0.049 | 612 → 470 | +4 | "Cruise is noticeably calmer; steep turns still snap a bit on reversal." | Adopted for cruise; carry the reversal snap into Stage 5 (anti-windup) rather than re-tuning here |
 
 **Column meanings:**
 

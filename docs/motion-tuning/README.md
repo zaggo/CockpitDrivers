@@ -202,7 +202,8 @@ is measured independently and printed as its own row.
 | Metric | What it is | Gate / how to read it |
 |---|---|---|
 | `sat_heave` | % of unpaused ticks with the heave clamp engaged | **The primary diagnostic.** Target for the diagnosis stage: under 2% in calm cruise. Today's expectation there is 80–100%. |
-| `sat_rot`, `sat_tilt_rate`, `sat_envelope`, `sat_sl_vel`, `sat_sl_acc` | same idea for the rotational clamp, the tilt-rate limiter, the pose-wide envelope bisection, and the `SafetyLimiter`'s velocity/acceleration clips | Secondary diagnostics — same "must fall" gate as `sat_heave` unless a stage says otherwise. |
+| `sat_rot`, `sat_tilt_rate`, `sat_sl_vel`, `sat_sl_acc` | same idea for the rotational clamp, the tilt-rate limiter, and the `SafetyLimiter`'s velocity/acceleration clips | Secondary diagnostics — same "must fall" gate as `sat_heave` unless a stage says otherwise. |
+| `sat_envelope` (from `reach_scale`) | % of unpaused ticks where the **pre-blend** envelope bisection engaged (`reach_scale < 1.0`) | See "Why `sat_envelope` only sees one of two clamps" below — it is blind to the second, post-blend clamp by design, not by omission. |
 | `wrms` | RMS of heave acceleration, band-limited to 0.1–0.63 Hz with a Hann window (RMS-corrected for the window's power loss) | A documented band emphasis, **not a conformant ISO-2631 Wk weighting**. Ranks candidates against each other only — never quote it as a comfort figure. |
 | `band_ratio` | fraction of heave-acceleration spectral power inside that same 0.1–0.63 Hz band | States directly whether motion sits in the motion-sickness band. Stage 8's inverted gate depends on this: `wrms` may rise as amplitude comes back, but `band_ratio` must not. |
 | `jerk_p95` | 95th-percentile \|third difference\| of the six streamed BFF demand channels, normalised to counts/s³ via the file's own sampling rate | Comparative only — actuator counts, no counts-to-mm conversion exists. Runs at different framerates are still comparable because of the normalisation. |
@@ -216,6 +217,19 @@ with a fixed injected delay, changing the tone's frequency from 0.3 Hz to 0.5 Hz
 job is retuning the washout's corner frequency, that artefact would land squarely on top of
 the 15 ms gate and make it meaningless. Restricting the correlation to 0.3–1 Hz and requiring
 8 periods at the low end is what makes the number trustworthy enough to gate on.
+
+**Why `sat_envelope` only sees one of two clamps.** `MotionProvider::blendedCommand` calls
+`StewartKinematics::clampToReachable` **twice**. The first call runs on `rawLive` — the
+washout+effects demand before any arm-blend attenuation — and *that* call's scale is what
+gets recorded as `reach_scale`/`sat_envelope`: it answers whether the cueing chain demanded
+more than the platform can physically reach, which is what the tuning campaign cares about.
+The second call guards the *blended* pose (a mix of the already-reachable park pose and the
+already-clamped `live` pose from the first call). That mix is reachable in practice, so
+`clampToReachable` short-circuits to scale 1.0 whenever its input is already reachable —
+recording *that* scale would pin `sat_envelope` at 0% forever, regardless of what the platform
+actually did. The second clamp stays in the code as a guard; its scale is deliberately never
+written to telemetry. Don't read a low `sat_envelope` as "the envelope is never a constraint
+anywhere in the chain" — it can only ever tell you about the first clamp.
 
 **Missing columns are treated as a safety issue, not a formatting one.** Only `dt_real`,
 `g_nrml` and `reach_scale` may fall back to a default when absent from a CSV. Every other
