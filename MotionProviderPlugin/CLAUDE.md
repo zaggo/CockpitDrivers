@@ -26,8 +26,9 @@ Unit tests (host build, no X-Plane, no rig):
 cmake -S tests -B tests/build && cmake --build tests/build && ctest --test-dir tests/build
 ```
 
-Ten suites: `kinematics`, `config`, `washout`, `effects`, `bff`, `safety`, `monitor`, `heartbeat`,
-`armramp`, `armgate`. They link the real source files, so a behaviour change shows up here first.
+Eleven suites: `kinematics`, `config`, `washout`, `effects`, `bff`, `safety`, `monitor`, `heartbeat`,
+`armramp`, `armgate`, `telemetry`. They link the real source files, so a behaviour change shows up
+here first.
 
 ## What the plugin is
 
@@ -47,7 +48,7 @@ DataRefManager ─▶ WashoutFilter ─┐
 `configuration.toml` lives in the plugin directory (resolved from the plugin's own `.xpl` path), is
 seeded with defaults on first run, and is re-read by the **"Reload config"** button in the status
 window — no X-Plane restart, no rebuild. Sections: `[geometry]`, `[servo]`, `[washout]`, `[effects]`,
-`[serial]`, `[safety]`.
+`[serial]`, `[safety]`, `[telemetry]`.
 
 Reloading resets the stateful filters, so a reload during flight starts the washout from a clean
 pose rather than jumping.
@@ -69,7 +70,8 @@ makes it host-testable and offline-replayable.
 harsh 4–8 s pumping motion. Diagnosis, the two levers that do *not* fix it (`heave_gain`, the
 actuator-space velocity/acceleration caps), and the staged fix are in
 `../docs/superpowers/specs/2026-08-29-motion-heave-tuning-design.md`. Read that before touching the
-washout parameters.
+washout parameters. For how to record, replay, sweep and measure a candidate against the harness
+built for that campaign, see `../docs/motion-tuning/README.md`.
 
 Two structural notes that matter when changing this file: the limit clamps write back to **integrator
 state** rather than only to the output (windup with no anti-windup), and
