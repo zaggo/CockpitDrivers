@@ -84,14 +84,22 @@ first missing column. Replay first, then measure the replay:
 
 ```bash
 cd MotionProviderPlugin
+mkdir -p /tmp/cues /tmp/replay
 for seg in cruise_calm steep_turns climb_descent turbulence \
            ground_takeoff approach_landing acceptance; do
-    gunzip -c "reference/$seg.csv.gz" > "/tmp/$seg.cues.csv"
-    ./tools/build/washout_replay --cues "/tmp/$seg.cues.csv" \
-        --config configuration.toml --out "/tmp/$seg.csv"
+    gunzip -c "reference/$seg.csv.gz" > "/tmp/cues/$seg.csv"
+    ./tools/build/washout_replay --cues "/tmp/cues/$seg.csv" \
+        --config configuration.toml --out "/tmp/replay/$seg.csv"
 done
-tools/.venv/bin/python tools/washout_metrics.py /tmp/*.csv
+tools/.venv/bin/python tools/washout_metrics.py /tmp/replay/*.csv
 ```
+
+(The cue-only intermediates and the replay output must land in separate directories: both used to
+be named `/tmp/$seg.cues.csv` / `/tmp/$seg.csv`, and a glob of `/tmp/*.csv` over that layout also
+matches the cue-only files -- which are missing every output column `washout_metrics.py` needs, so
+`metrics()` raises `SystemExit` from inside a list comprehension and the whole batch dies with no
+table at all. The same broad glob would also sweep up any other `/tmp/*.csv` left over from the
+README's own single-file examples, such as `/tmp/run.csv` or `/tmp/chirp.csv`.)
 
 (`washout_replay` reads plain CSV only, hence the `gunzip -c`; `washout_metrics.py` itself is
 gzip-transparent and takes `.csv.gz` directly, which is useful for archived *replay* output.)

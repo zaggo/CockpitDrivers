@@ -289,15 +289,31 @@ def metrics(path):
         "sl_acc": sat_pct(column(cols, arr, "sl_acc_clip", path=path) > 0),
     }
 
+    # A disarmed or never-armed recording holds sent0..sent5 pinned to the
+    # park pose while live_heave still moves normally -- the frozen-heave
+    # guard above does not fire, so nothing else catches this case. jerk_p95
+    # then reports 0.0, its best possible value, off a third difference of a
+    # dead-flat signal: a disarmed recording would read as a perfect
+    # candidate on one of the three gated "must decrease" metrics. Same
+    # refusal principle as heave_dead above.
+    sent_cols = [column(cols, arr, f"sent{i}", path=path) for i in range(6)]
+    sent_dead = all(float(np.std(s)) == 0.0 for s in sent_cols)
+    if sent_dead:
+        print(f"{path}: sent0..sent5 never move -- disarmed or never-armed recording; "
+              f"jerk_p95 and sat_sl_* are not measurements. Replay it first.", file=sys.stderr)
+
     jerks = []
-    for i in range(6):
-        sent = column(cols, arr, f"sent{i}", path=path)
+    for sent in sent_cols:
         if sent.size > 3:
             jerks.append(np.percentile(np.abs(np.diff(sent, n=3)), 95))
     # Normalise by (1/fs)**3 so this is counts/s^3 rather than a raw
     # per-sample third difference, which would otherwise scale with each
     # file's own frame rate and make cross-file comparison meaningless.
-    jerk_p95 = float(max(jerks)) / (1.0 / fs) ** 3 if jerks else 0.0
+    jerk_p95 = (float("nan") if sent_dead
+                else (float(max(jerks)) / (1.0 / fs) ** 3 if jerks else 0.0))
+    if sent_dead:
+        sat["sl_vel"] = float("nan")
+        sat["sl_acc"] = float("nan")
 
     peak_raw = float(np.max(np.abs(column(cols, arr, "heave_pos_raw", path=path))))
 
