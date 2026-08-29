@@ -1,7 +1,11 @@
 # Build artifacts
 build-*/
 tests/build/
+tools/build/
 output/
+
+# Python venv for the tuning metrics script (numpy; see docs/motion-tuning/README.md)
+tools/.venv/
 *.xpl
 *.o
 *.a

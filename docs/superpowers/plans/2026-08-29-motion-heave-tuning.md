@@ -12,7 +12,9 @@
 
 ## Global Constraints
 
-- **This sandbox cannot build C++ or run Python.** Every build and run step is executed by the user, who reports the output back. Write the code, state the exact command, and stop at that step until results arrive. Never claim a build passed without the user's output.
+- **Build and test commands run directly** (verified 2026-08-29: cmake 4.4.2, Apple clang 21, `ctest` 10/10 green). Run them yourself and report the real output — never claim a build passed without it.
+- **Python is a venv, not the system interpreter.** Use `tools/.venv/bin/python`, never `python3` — Homebrew's Python has no numpy and refuses global installs (PEP 668). The venv is gitignored.
+- Toolchain quirks that will bite a fresh session (Xcode Beta path, `/private/var` symlinks, the JSON-comment trap in settings) are recorded in the `sandbox-toolchain-setup` memory.
 - **Additive only in Part A.** Tasks 1–9 must not change any filter's numerical behaviour. The ten existing suites in `MotionProviderPlugin/tests/` staying green is the proof.
 - **No behaviour change without its own stage.** One knob per change, counter-tested immediately. The single deliberate exception is Stage 3, which moves `heave_vel_washout_tau` and `heave_pos_washout_tau` together because they are the two poles of one washout.
 - **Lag budget: `lag_ms` ≤ baseline + 15 ms.** A candidate breaking it is never flown.
@@ -1900,7 +1902,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run it against the baseline replay**
 
 ```bash
-cd MotionProviderPlugin && python3 tools/washout_metrics.py /tmp/replay.csv
+cd MotionProviderPlugin && tools/.venv/bin/python tools/washout_metrics.py /tmp/replay.csv
 ```
 Expected: one row. **`sat_heave` is the headline number** — the spec predicts 80–100 % for a recording that includes any manoeuvring.
 
@@ -1970,7 +1972,7 @@ Part B is procedural. Each stage ends with a row appended to `docs/motion-tuning
 ```bash
 cd MotionProviderPlugin && ./tools/build/washout_replay \
     --synth chirp:0.02-5.0:0.3:300 --config configuration.toml --out /tmp/chirp.csv
-python3 tools/washout_metrics.py /tmp/chirp.csv
+tools/.venv/bin/python tools/washout_metrics.py /tmp/chirp.csv
 ```
 
 - [ ] Find the saturation threshold by sweeping the input amplitude. Run `--synth sine:0.067:<g>:120` for `g` in `0.01, 0.02, 0.03, 0.05, 0.1` and record where `sat_heave` first exceeds 0.
