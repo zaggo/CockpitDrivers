@@ -10,6 +10,7 @@ enum class CanNodeId : uint8_t {
   transponderNodeId = 0x03,
   handbrakeNodeId = 0x04,
   rpmGaugeNodeId = 0x05,
-  rudderNodeId = 0x06
+  rudderNodeId = 0x06,
+  asiNodeId = 0x07
 };
 #endif // CAN_NODE_ID_H

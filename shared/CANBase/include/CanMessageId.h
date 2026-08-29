@@ -5,6 +5,13 @@
 
 // Message_IDs for CAN messages
 enum class CanMessageId : uint16_t {
+  // 0x100: Airspeed (Gateway -> Instruments, 50Hz)
+  // [0..1] IAS  uint16, knots * 10 (sim/cockpit2/gauges/indicators/airspeed_kts_pilot)
+  // [2..3] TAS  uint16, knots * 10, optional - the ASI's TAS ring is mechanical,
+  //             so AirspeedCAN ignores these bytes
+  // [4..7] reserved
+  airspeed = 0x100,
+
   rpm = 0x106,
 
   odometer = 0x1F0,
