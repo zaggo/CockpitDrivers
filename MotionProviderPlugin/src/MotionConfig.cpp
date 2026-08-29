@@ -175,7 +175,7 @@ SafetyConfig MotionConfig::loadSafety(const std::string& path) {
 TelemetryConfig MotionConfig::loadTelemetry(const std::string& path) {
     TelemetryConfig cfg = TelemetryConfig::defaults();
     toml::table tbl;
-    try { tbl = toml::parse_file(path); } catch (...) { return cfg; }
+    try { tbl = toml::parse_file(path); } catch (const toml::parse_error&) { return cfg; }
     if (auto* t = tbl["telemetry"].as_table()) {
         if (auto v = (*t)["enabled"].value<bool>())        cfg.enabled = *v;
         if (auto v = (*t)["dir"].value<std::string>())     cfg.dir     = *v;
@@ -193,6 +193,7 @@ bool MotionConfig::writeDefaults(const std::string& path) {
     const EffectsConfig   e = EffectsConfig::defaults();
     const SerialConfig    s = SerialConfig::defaults();
     const SafetyConfig   sf = SafetyConfig::defaults();
+    const TelemetryConfig t = TelemetryConfig::defaults();
 
     auto arrD = [&](const char* key, const double v[6]) {
         f << key << " = [" << v[0];
@@ -267,8 +268,8 @@ bool MotionConfig::writeDefaults(const std::string& path) {
     f << "max_dt_sec = "            << sf.maxDtSec        << "\n";
 
     f << "\n[telemetry]\n";
-    f << "enabled = false # set true to auto-start CSV recording on plugin load\n";
-    f << "dir = \"\" # output directory; empty = the plugin directory\n";
+    f << "enabled = " << (t.enabled ? "true" : "false") << " # set true to auto-start CSV recording on plugin load\n";
+    f << "dir = \"" << t.dir << "\" # output directory; empty = the plugin directory\n";
 
     return f.good();
 }
