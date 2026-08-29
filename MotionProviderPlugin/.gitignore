@@ -6,6 +6,12 @@ output/
 
 # Python venv for the tuning metrics script (numpy; see docs/motion-tuning/README.md)
 tools/.venv/
+tools/__pycache__/
+
+# Telemetry recordings. Reference segments belong in reference/ as gzipped
+# cue-only exports (see docs/motion-tuning/README.md); raw full-column captures
+# are working files and are several MB each.
+motion-*.csv
 *.xpl
 *.o
 *.a
