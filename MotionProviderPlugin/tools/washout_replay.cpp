@@ -12,6 +12,7 @@
 #include "Telemetry.h"
 #include "WashoutFilter.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -160,7 +161,113 @@ void usage() {
     std::printf(
         "usage: washout_replay --cues FILE --config FILE [options]\n"
         "  --set section.key=VALUE   override a config value (repeatable)\n"
-        "  --out FILE                write the replayed run as a telemetry CSV\n");
+        "  --out FILE                write the replayed run as a telemetry CSV\n"
+        "  --verify                  check the replay reproduces the recording's live_* columns\n"
+        "  --sweep section.key=A,B,C run once per value, printing a summary table\n"
+        "  --resample-dt SEC         re-run at a fixed timestep instead of the recorded one\n");
+}
+
+// One full pass of the cueing chain over `samples`. Shared by the plain replay
+// path, --sweep (run once per swept value) and --verify (run once, compared
+// against the recording's live_* columns). Pulling this out of main() is what
+// lets --sweep re-run the whole chain per value without duplicating the loop.
+struct RunResult {
+    size_t samples = 0;
+    double durationSec = 0.0;
+    double maxLiveErr = 0.0;   // max |replayed - recorded| over the live_* columns
+    double satHeavePct = 0.0;  // % of ticks with the heave clamp engaged
+    double peakHeaveRawMm = 0.0;
+};
+
+RunResult runChain(const std::vector<CueSample>& samples,
+                   const StewartGeometry& geo, const WashoutConfig& wcfg,
+                   const EffectsConfig& ecfg, const SafetyConfig& scfg,
+                   double resampleDt, Telemetry* out) {
+    WashoutFilter     washout(wcfg);
+    EffectsLayer      effects(ecfg);
+    StewartKinematics kin(geo);
+    SafetyLimiter     safety(scfg);
+
+    // Seed the limiter the way MotionProvider::initialize does — from the PARK
+    // pose, not from home. The limiter is stateful, so a different seed diverges
+    // the first ticks' sent[] values from what a real recording shows.
+    uint16_t seed[6];
+    {
+        Pose parkTarget;
+        parkTarget.heave = static_cast<float>(scfg.parkHeaveMm);
+        const SolveResult s = kin.solve(kin.clampToReachable(parkTarget));
+        for (int i = 0; i < 6; ++i) seed[i] = s.setpoints[i];
+    }
+    safety.reset(seed);
+
+    RunResult res;
+    double t = 0.0;
+    size_t clamped = 0, counted = 0;
+    // Both are held across paused ticks, mirroring MotionProvider's
+    // lastLivePose_ and lastEffectsPose_ — the plugin holds them rather than
+    // zeroing them, and a zero-dip in the middle of a recording would read as a
+    // real signal to anyone inspecting the CSV later.
+    Pose live;
+    Pose e;
+
+    for (const CueSample& s : samples) {
+        const double dtRaw = (resampleDt > 0.0) ? resampleDt : s.dt;
+        double dt = dtRaw;
+        if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
+
+        // The plugin gates ONLY the filter update on pause: the IK solve, the
+        // limiter and the telemetry write all run every tick against the held
+        // pose (MotionProvider::onFlightLoopTick). Replay must mirror that, or a
+        // recording containing a pause replays to fewer rows than it has and the
+        // limiter state diverges across the gap — which would break the
+        // row-for-row --verify below.
+        if (!s.cues.simPaused) {
+            const Pose w = washout.update(s.cues, dt);
+            e = effects.update(s.cues, dt);
+            live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
+            live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
+        }
+
+        double scale = 1.0;
+        const Pose cmd = kin.clampToReachable(live, &scale);
+        const SolveResult sol = kin.solve(cmd);
+        uint16_t target[6], sent[6];
+        for (int i = 0; i < 6; ++i) target[i] = sol.setpoints[i];
+        safety.limit(target, dt, sent);
+
+        const WashoutTrace& tr = washout.trace();
+        ++counted;
+        if (tr.heaveClamped) ++clamped;
+        const double raw = std::fabs(tr.heavePosRaw);
+        if (raw > res.peakHeaveRawMm) res.peakHeaveRawMm = raw;
+
+        if (s.haveRecorded) {
+            const double d[4] = {
+                std::fabs(static_cast<double>(live.heave) - s.recLiveHeave),
+                std::fabs(static_cast<double>(live.roll)  - s.recLiveRoll),
+                std::fabs(static_cast<double>(live.pitch) - s.recLivePitch),
+                std::fabs(static_cast<double>(live.yaw)   - s.recLiveYaw)};
+            for (double v : d) if (v > res.maxLiveErr) res.maxLiveErr = v;
+        }
+
+        if (out && out->recording()) {
+            TelemetryRow r;
+            r.t = t; r.dtReal = dtRaw; r.dtClamped = dt;
+            r.cues = s.cues; r.trace = tr;
+            r.effects = e; r.live = live; r.commanded = cmd;
+            r.reachScale = scale;
+            for (int i = 0; i < 6; ++i) { r.setpoints[i] = target[i]; r.sent[i] = sent[i]; }
+            r.velClips = safety.velClipCount();
+            r.accClips = safety.accClipCount();
+            r.armState = 2;
+            out->write(r);
+        }
+        t += dtRaw;
+    }
+    res.samples     = counted;
+    res.durationSec = t;
+    res.satHeavePct = counted ? 100.0 * static_cast<double>(clamped) / static_cast<double>(counted) : 0.0;
+    return res;
 }
 
 }  // namespace
@@ -168,6 +275,10 @@ void usage() {
 int main(int argc, char** argv) {
     std::string cuesPath, configPath, outPath;
     std::vector<std::pair<std::string, double>> overrides;
+    bool                doVerify = false;
+    double              resampleDt = 0.0;
+    std::string         sweepKey;
+    std::vector<double> sweepValues;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -183,6 +294,17 @@ int main(int argc, char** argv) {
             const size_t eq = kv.find('=');
             if (eq == std::string::npos) { std::fprintf(stderr, "--set wants key=value\n"); return 2; }
             overrides.emplace_back(kv.substr(0, eq), std::atof(kv.c_str() + eq + 1));
+        }
+        else if (a == "--verify")      doVerify = true;
+        else if (a == "--resample-dt") resampleDt = std::atof(next("--resample-dt").c_str());
+        else if (a == "--sweep") {
+            const std::string kv = next("--sweep");
+            const size_t eq = kv.find('=');
+            if (eq == std::string::npos) { std::fprintf(stderr, "--sweep wants key=v1,v2\n"); return 2; }
+            sweepKey = kv.substr(0, eq);
+            std::stringstream ss(kv.substr(eq + 1));
+            std::string v;
+            while (std::getline(ss, v, ',')) sweepValues.push_back(std::atof(v.c_str()));
         } else { usage(); return 2; }
     }
     if (cuesPath.empty() || configPath.empty()) { usage(); return 2; }
@@ -203,74 +325,67 @@ int main(int argc, char** argv) {
         }
     }
 
-    WashoutFilter      washout(wcfg);
-    EffectsLayer       effects(ecfg);
-    StewartKinematics  kin(geo);
-    SafetyLimiter      safety(scfg);
-
-    // Replay is always "armed and live": the arm blend is a transition, not part
-    // of the cueing chain under test. Still seed the limiter from the park pose
-    // (as MotionProvider::initialize does), not home -- the limiter is stateful,
-    // so a different seed diverges the first ticks' sent[]/clip counts from a
-    // real recording.
-    Pose park;
-    park.heave = static_cast<float>(scfg.parkHeaveMm);
-    const Pose parkClamped = kin.clampToReachable(park);
-    const SolveResult parkSolve = kin.solve(parkClamped);
-    uint16_t parkSetpoints[6];
-    for (int i = 0; i < 6; ++i) parkSetpoints[i] = parkSolve.setpoints[i];
-    safety.reset(parkSetpoints);
+    if (!sweepKey.empty()) {
+        std::printf("%-28s %10s %10s %14s\n", sweepKey.c_str(),
+                    "sat_heave%", "peak_raw_mm", "samples");
+        for (double v : sweepValues) {
+            WashoutConfig w = wcfg; SafetyConfig s = scfg; EffectsConfig e = ecfg;
+            if (!applyOverride(sweepKey, v, w, s, e)) {
+                std::fprintf(stderr, "unknown key: %s\n", sweepKey.c_str());
+                return 2;
+            }
+            Telemetry sweepOut;
+            if (!outPath.empty()) {
+                char name[512];
+                std::snprintf(name, sizeof(name), "%s.%g.csv", outPath.c_str(), v);
+                sweepOut.start(name);
+            }
+            const RunResult r = runChain(samples, geo, w, e, s, resampleDt,
+                                         outPath.empty() ? nullptr : &sweepOut);
+            sweepOut.stop();
+            std::printf("%-28g %10.2f %10.1f %14zu\n", v, r.satHeavePct,
+                        r.peakHeaveRawMm, r.samples);
+        }
+        return 0;
+    }
 
     Telemetry out;
     if (!outPath.empty() && !out.start(outPath)) {
         std::fprintf(stderr, "cannot write %s\n", outPath.c_str());
         return 1;
     }
-
-    // Persists across paused ticks, mirroring MotionProvider::lastLivePose_: the
-    // flight loop keeps ticking with wall-clock dt while the sim is paused, but
-    // the filters must not see that time, so the last live pose is held instead
-    // of integrated.
-    Pose live;
-    double t = 0.0;
-    for (const CueSample& s : samples) {
-        double dt = s.dt;
-        if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
-
-        // This tick's effects contribution only, for the telemetry row -- zero
-        // on a paused tick (the held `live` pose above already carries the
-        // combined value forward, matching clampToReachable/solve/limit/write
-        // running unconditionally every tick just like MotionProvider does).
-        Pose e;
-        if (!s.cues.simPaused) {
-            const Pose w = washout.update(s.cues, dt);
-            e = effects.update(s.cues, dt);
-            live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
-            live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
-        }
-
-        double scale = 1.0;
-        const Pose cmd = kin.clampToReachable(live, &scale);
-        const SolveResult sol = kin.solve(cmd);
-        uint16_t target[6], sent[6];
-        for (int i = 0; i < 6; ++i) target[i] = sol.setpoints[i];
-        safety.limit(target, dt, sent);
-
-        if (out.recording()) {
-            TelemetryRow r;
-            r.t = t; r.dtReal = s.dt; r.dtClamped = dt;
-            r.cues = s.cues; r.trace = washout.trace();
-            r.effects = e; r.live = live; r.commanded = cmd;
-            r.reachScale = scale;
-            for (int i = 0; i < 6; ++i) { r.setpoints[i] = target[i]; r.sent[i] = sent[i]; }
-            r.velClips = safety.velClipCount();
-            r.accClips = safety.accClipCount();
-            r.armState = 2;   // Armed
-            out.write(r);
-        }
-        t += s.dt;
-    }
+    const RunResult r = runChain(samples, geo, wcfg, ecfg, scfg, resampleDt,
+                                 outPath.empty() ? nullptr : &out);
     out.stop();
-    std::printf("replayed %zu samples (%.1f s)\n", samples.size(), t);
+    std::printf("replayed %zu samples (%.1f s), heave saturated %.2f%% of ticks, "
+                "peak raw heave %.1f mm\n",
+                r.samples, r.durationSec, r.satHeavePct, r.peakHeaveRawMm);
+
+    if (doVerify) {
+        if (overrides.empty() && resampleDt == 0.0) {
+            // A --synth (or otherwise bare) cue stream carries no recorded
+            // live_* columns at all, so maxLiveErr never accumulates and would
+            // stay 0.0 -- a false PASS on the one gate the campaign treats as
+            // blocking. Refuse instead of reporting success on nothing.
+            const bool anyRecorded = std::any_of(samples.begin(), samples.end(),
+                [](const CueSample& s) { return s.haveRecorded; });
+            if (!anyRecorded) {
+                std::fprintf(stderr,
+                    "VERIFY FAILED: no sample carried recorded live_* columns -- "
+                    "nothing to verify against (synthetic or bare cue stream?)\n");
+                return 1;
+            }
+            std::printf("verify: max |replay - recorded| over live_* = %.9g mm/deg\n", r.maxLiveErr);
+            if (r.maxLiveErr != 0.0) {
+                std::fprintf(stderr, "VERIFY FAILED: replay does not reproduce the recording\n");
+                return 1;
+            }
+            std::printf("verify: PASS (bit-exact)\n");
+        } else {
+            std::fprintf(stderr,
+                "VERIFY REFUSED: --verify requires no --set and no --resample-dt\n");
+            return 2;
+        }
+    }
     return 0;
 }
