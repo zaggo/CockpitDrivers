@@ -1460,7 +1460,12 @@ RunResult runChain(const std::vector<CueSample>& samples,
     RunResult res;
     double t = 0.0;
     size_t clamped = 0, counted = 0;
-    Pose live;   // held across paused ticks, mirroring MotionProvider::lastLivePose_
+    // Both are held across paused ticks, mirroring MotionProvider's
+    // lastLivePose_ and lastEffectsPose_ — the plugin holds them rather than
+    // zeroing them, and a zero-dip in the middle of a recording would read as a
+    // real signal to anyone inspecting the CSV later.
+    Pose live;
+    Pose e;
 
     for (const CueSample& s : samples) {
         const double dtRaw = (resampleDt > 0.0) ? resampleDt : s.dt;
@@ -1473,7 +1478,6 @@ RunResult runChain(const std::vector<CueSample>& samples,
         // recording containing a pause replays to fewer rows than it has and the
         // limiter state diverges across the gap — which would break the
         // row-for-row --verify below.
-        Pose e;   // effects contribution; stays zero on a paused tick
         if (!s.cues.simPaused) {
             const Pose w = washout.update(s.cues, dt);
             e = effects.update(s.cues, dt);
