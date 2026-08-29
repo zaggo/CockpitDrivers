@@ -86,8 +86,8 @@ SolveResult StewartKinematics::solve(const Pose& pose) const {
     return out;
 }
 
-Pose StewartKinematics::clampToReachable(const Pose& pose) const {
-    if (solve(pose).allReachable) return pose;
+Pose StewartKinematics::clampToReachable(const Pose& pose, double* outScale) const {
+    if (solve(pose).allReachable) { if (outScale) *outScale = 1.0; return pose; }
 
     auto scaled = [&](double s) {
         Pose p;
@@ -105,5 +105,6 @@ Pose StewartKinematics::clampToReachable(const Pose& pose) const {
         double mid = 0.5 * (lo + hi);
         if (solve(scaled(mid)).allReachable) lo = mid; else hi = mid;
     }
+    if (outScale) *outScale = lo;
     return scaled(lo);
 }

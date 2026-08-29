@@ -16,9 +16,15 @@ public:
 
     void setConfig(const SafetyConfig& cfg) { cfg_ = cfg; }
 
+    // Channels limited on the most recent limit() call, 0..6. Diagnostic only.
+    int velClipCount() const { return velClips_; }
+    int accClipCount() const { return accClips_; }
+
 private:
     SafetyConfig cfg_;
     double pos_[6] = {0,0,0,0,0,0};
     double vel_[6] = {0,0,0,0,0,0};
     bool   init_ = false;
+    int velClips_ = 0;
+    int accClips_ = 0;
 };

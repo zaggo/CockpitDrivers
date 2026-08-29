@@ -99,6 +99,19 @@ int main() {
         for (int i=0;i<6;i++) check(std::isfinite(r.legs[i].angleDeg), "angle finite");
     }
 
+    // clampToReachable reports the uniform scale factor it applied.
+    {
+        double scale = -1.0;
+        Pose home;                                  // all zero -> reachable
+        K.clampToReachable(home, &scale);
+        check(scale == 1.0, "reachable pose reports scale 1.0");
+
+        Pose absurd; absurd.heave = 5000.0f;        // far outside the envelope
+        scale = -1.0;
+        K.clampToReachable(absurd, &scale);
+        check(scale >= 0.0 && scale < 1.0, "unreachable pose reports a scale below 1");
+    }
+
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

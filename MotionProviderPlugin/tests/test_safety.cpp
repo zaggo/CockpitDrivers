@@ -92,6 +92,29 @@ int main() {
         check(r2.state()==ArmState::Disarming, "requestDisarm -> disarming");
     }
 
+    // Clip counters: a full-scale step saturates both limits on all six channels.
+    {
+        SafetyLimiter lim(SafetyConfig::defaults());
+        uint16_t home[6]; for (int i = 0; i < 6; ++i) home[i] = 32640;
+        lim.reset(home);
+        uint16_t want[6]; for (int i = 0; i < 6; ++i) want[i] = 65280;
+        uint16_t out[6];
+        lim.limit(want, 1.0 / 60.0, out);
+        check(lim.velClipCount() == 6, "full-scale step clips velocity on all 6");
+        check(lim.accClipCount() == 6, "full-scale step clips acceleration on all 6");
+    }
+
+    // A held target clips nothing.
+    {
+        SafetyLimiter lim(SafetyConfig::defaults());
+        uint16_t home[6]; for (int i = 0; i < 6; ++i) home[i] = 32640;
+        lim.reset(home);
+        uint16_t out[6];
+        lim.limit(home, 1.0 / 60.0, out);
+        check(lim.velClipCount() == 0 && lim.accClipCount() == 0,
+              "held target clips nothing");
+    }
+
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

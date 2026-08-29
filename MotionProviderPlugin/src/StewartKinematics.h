@@ -25,7 +25,9 @@ public:
     // Scale a commanded pose toward home (all-zero pose, always reachable) until
     // every leg is reachable, so the platform degrades gracefully instead of
     // saturating. Returns pose unchanged if already fully reachable.
-    Pose clampToReachable(const Pose& pose) const;
+    // `outScale`, if non-null, receives the factor applied (1.0 = the pose was
+    // already reachable). Diagnostic only; the returned pose is unchanged by it.
+    Pose clampToReachable(const Pose& pose, double* outScale = nullptr) const;
 
 private:
     StewartGeometry geo_;
