@@ -9,11 +9,11 @@ double lpAlpha(double dt, double tau) { return tau > 0.0 ? dt / (tau + dt) : 1.0
 double leak(double dt, double tau)    { return tau > 0.0 ? std::exp(-dt / tau) : 0.0; }
 double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-double rateLimit(double cur, double tgt, double ratePerSec, double dt) {
+double rateLimit(double cur, double tgt, double ratePerSec, double dt, bool& limited) {
     const double step = ratePerSec * dt;
     const double d = tgt - cur;
-    if (d >  step) return cur + step;
-    if (d < -step) return cur - step;
+    if (d >  step) { limited = true; return cur + step; }
+    if (d < -step) { limited = true; return cur - step; }
     return tgt;
 }
 }  // namespace
@@ -26,6 +26,7 @@ void WashoutFilter::reset() {
     rollRateLp_ = pitchRateLp_ = yawRateLp_ = 0.0;
     rollAngle_ = pitchAngle_ = yawAngle_ = 0.0;
     for (int i = 0; i < 4; ++i) { sm1_[i] = 0.0; sm2_[i] = 0.0; }
+    trace_ = WashoutTrace{};
 }
 
 Pose WashoutFilter::update(const MotionCues& c, double dt) {
@@ -37,7 +38,12 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     const double aHp = aZ - heaveAccelLp_;
     heaveVel_ = heaveVel_ * leak(dt, cfg_.heaveVelWashoutTau) + aHp * dt;
     heavePos_ = heavePos_ * leak(dt, cfg_.heavePosWashoutTau) + heaveVel_ * dt * 1000.0;
-    heavePos_ = clampd(heavePos_, -cfg_.heaveLimitMm, cfg_.heaveLimitMm);
+    trace_.heaveAHp    = aHp;
+    trace_.heaveVel    = heaveVel_;
+    trace_.heavePosRaw = heavePos_;
+    const double heaveLimited = clampd(heavePos_, -cfg_.heaveLimitMm, cfg_.heaveLimitMm);
+    trace_.heaveClamped = (heaveLimited != heavePos_);
+    heavePos_ = heaveLimited;
 
     // --- Tilt-coordination: sustained horizontal accel -> rate-limited tilt ---
     const double aX = cfg_.tiltSurgeGain * static_cast<double>(c.surgeG) * G;
@@ -48,20 +54,31 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     double tgtRoll  = std::asin(clampd(swayLp_  / G, -1.0, 1.0)) * kRad2Deg;
     tgtPitch = clampd(tgtPitch, -cfg_.tiltLimitDeg, cfg_.tiltLimitDeg);
     tgtRoll  = clampd(tgtRoll,  -cfg_.tiltLimitDeg, cfg_.tiltLimitDeg);
-    tiltPitch_ = rateLimit(tiltPitch_, tgtPitch, cfg_.tiltRateLimitDps, dt);
-    tiltRoll_  = rateLimit(tiltRoll_,  tgtRoll,  cfg_.tiltRateLimitDps, dt);
+    bool tiltLimited = false;
+    tiltPitch_ = rateLimit(tiltPitch_, tgtPitch, cfg_.tiltRateLimitDps, dt, tiltLimited);
+    tiltRoll_  = rateLimit(tiltRoll_,  tgtRoll,  cfg_.tiltRateLimitDps, dt, tiltLimited);
+    trace_.tiltPitch      = tiltPitch_;
+    trace_.tiltRoll       = tiltRoll_;
+    trace_.tiltRateActive = tiltLimited;
 
     // --- Rotational: HP(rate) -> integrate -> washout leak ---
-    auto rotChan = [&](double gain, double rate, double& rateLp, double& angle) {
+    auto rotChan = [&](double gain, double rate, double& rateLp, double& angle,
+                       double& rawOut, bool& clampedOut) {
         const double w = gain * rate;                // deg/s
         rateLp += lpAlpha(dt, cfg_.rotHpTau) * (w - rateLp);
         const double wHp = w - rateLp;
         angle = (angle + wHp * dt) * leak(dt, cfg_.rotWashoutTau);
-        angle = clampd(angle, -cfg_.rotLimitDeg, cfg_.rotLimitDeg);
+        rawOut = angle;
+        const double limited = clampd(angle, -cfg_.rotLimitDeg, cfg_.rotLimitDeg);
+        clampedOut = (limited != angle);
+        angle = limited;
     };
-    rotChan(cfg_.rotRollGain,  c.rollRate,  rollRateLp_,  rollAngle_);
-    rotChan(cfg_.rotPitchGain, c.pitchRate, pitchRateLp_, pitchAngle_);
-    rotChan(cfg_.rotYawGain,   c.yawRate,   yawRateLp_,   yawAngle_);
+    rotChan(cfg_.rotRollGain,  c.rollRate,  rollRateLp_,  rollAngle_,
+            trace_.rotRollRaw,  trace_.rotRollClamped);
+    rotChan(cfg_.rotPitchGain, c.pitchRate, pitchRateLp_, pitchAngle_,
+            trace_.rotPitchRaw, trace_.rotPitchClamped);
+    rotChan(cfg_.rotYawGain,   c.yawRate,   yawRateLp_,   yawAngle_,
+            trace_.rotYawRaw,   trace_.rotYawClamped);
 
     // --- Output smoothing: 2nd-order LP removes high-frequency grain the HP
     // channels pass through (turbulence/engine jitter in g/PQR). The actuators

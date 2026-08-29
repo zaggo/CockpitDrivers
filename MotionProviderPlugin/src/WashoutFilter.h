@@ -3,6 +3,25 @@
 #include "MotionCues.h"
 #include "WashoutConfig.h"
 
+// Per-tick snapshot of the filter's internals. Written on every update();
+// read by Telemetry and by the offline replay tool. Purely observational --
+// nothing here feeds back into the filter.
+struct WashoutTrace {
+    double heaveAHp       = 0.0;   // high-passed vertical specific force, m/s^2
+    double heaveVel       = 0.0;   // leaky velocity integrator, m/s
+    double heavePosRaw    = 0.0;   // position BEFORE the +/-heaveLimitMm clamp, mm
+    bool   heaveClamped   = false;
+    double tiltPitch      = 0.0;   // deg, after rate limiting
+    double tiltRoll       = 0.0;
+    bool   tiltRateActive = false; // rate limiter engaged on either tilt axis
+    double rotRollRaw     = 0.0;   // angles BEFORE the +/-rotLimitDeg clamp, deg
+    double rotPitchRaw    = 0.0;
+    double rotYawRaw      = 0.0;
+    bool   rotRollClamped  = false;
+    bool   rotPitchClamped = false;
+    bool   rotYawClamped   = false;
+};
+
 // Classical (pragmatic) motion-cueing washout: flight cues -> platform pose.
 // Stateful; all time dependence is via the dt argument. No X-Plane deps.
 class WashoutFilter {
@@ -12,6 +31,7 @@ public:
     Pose update(const MotionCues& cues, double dt);
     void reset();
     void setConfig(const WashoutConfig& cfg) { cfg_ = cfg; }
+    const WashoutTrace& trace() const { return trace_; }
 
 private:
     WashoutConfig cfg_;
@@ -35,4 +55,6 @@ private:
     // pitch, yaw - surge/sway are always 0 here). Active when cfg_.smoothTau > 0.
     double sm1_[4] = {0, 0, 0, 0};
     double sm2_[4] = {0, 0, 0, 0};
+
+    WashoutTrace trace_;
 };
