@@ -180,11 +180,41 @@ cd MotionProviderPlugin
 ./tools/build/washout_replay --cues motion-20260901-140322.csv --config configuration.toml --verify
 ```
 
-Compares the replay's `live_heave/roll/pitch/yaw` against the recording's, tick for tick, and
-reports `verify: PASS (bit-exact)` only on an exact match. It checks `live_*` and not `cmd_*`
-because `live_*` alone is a pure function of `(cues, dt, config, arm edges)`; `cmd_*` also
-depends on the arm ramp blend, which replay deliberately does not model (replay always runs
-"armed and live").
+Compares the replay's `live_heave/roll/pitch/yaw` against the recording's, tick for tick, over a
+comparison window that skips a leading warm-up (see below), and reports
+`verify: PASS (within 1e-04 mm/deg floating-point noise floor)` when the max divergence over that
+window stays at or under that tolerance. It checks `live_*` and not `cmd_*` because `live_*` alone
+is a pure function of `(cues, dt, config, arm edges)`; `cmd_*` also depends on the arm ramp blend,
+which replay deliberately does not model (replay always runs "armed and live").
+
+**The warm-up window, and why `--verify` is not a literal bit-for-bit check.** `runChain` always
+starts the washout/effects filters from zero. A real recording usually does not: if Record is
+pressed after the platform has been running for a while, row 1 already carries whatever pose the
+filters had settled into (measured: `live_heave = 0.1356 mm` at row 1 of one campaign recording,
+against replay's `0`). That is an unrecorded initial condition, not a reproduction defect — but it
+takes real time to wash out, so `--verify` skips a warm-up window before comparing rather than
+comparing from row 1.
+
+The default window is derived from the config's own slowest time constant —
+`10 × max(heave_hp_tau, heave_vel/pos_washout_tau, rot_hp_tau, rot_washout_tau, tilt_lp_tau,
+smooth_tau)` — never a hard-coded number, because retuning exactly those constants is this
+campaign's job; a fixed window would silently go stale the moment a candidate changed them.
+Override it with `--verify-warmup SEC` (`0` compares everything, useful for seeing the raw
+transient). `--verify`'s output line reports what it skipped on the same line as the result — how
+many seconds and samples were excluded, and how many were compared — so the number is never a
+silent gate. A recording shorter than its own warm-up is refused (`VERIFY REFUSED`) rather than
+"passed" on whatever handful of rows happen to remain: fewer than 100 post-warm-up samples stops
+the run.
+
+Even past the warm-up, the divergence does not reach literal `0.0`: it decays asymptotically, and
+on both of the campaign's real recordings a residual on the order of `1e-12`–`1e-5` mm/deg
+persists deep into the file — traced (see the campaign log) to the rotational channels, whose
+washout carries the config's slowest time constant (`rot_washout_tau`), showing isolated
+single-ULP float32-rounding blips from two independently-converging trajectories. Demanding exact
+equality would make `--verify` fail on every real recording forever, which defeats the point of
+this check, so the pass tolerance is `1e-4` mm/deg — four orders of magnitude below the `0.415 mm`
+divergence a genuine reproduction failure showed before this fix, and comfortably above the
+measured noise floor on both real recordings (`~1e-5` mm/deg with the default warm-up window).
 
 **What replay does *not* model, and what that costs.** Replay drives the armed live pose from
 tick 1, blend = 1, `arm_state` written as `Armed`. The plugin instead glides from the park pose
@@ -214,7 +244,7 @@ the top, the reset ~40 lines later, and `row.armState` is written after `armRamp
 so the edge row itself is still a pre-reset row. A file with no `arm_state` column (synthetic
 streams, cue-only exports) simply carries no edges, which is a valid input, not an error.
 
-**`--verify` refuses to run in four situations**, each returning a distinct error rather than
+**`--verify` refuses to run in five situations**, each returning a distinct error rather than
 a misleading pass. The first three are decidable from the arguments alone and are refused
 *before* the chain runs, so nothing reaches stdout first:
 
@@ -228,6 +258,8 @@ a misleading pass. The first three are decidable from the arguments alone and ar
   stream, and for any cues-only export. Without a `live_*` column to compare against, a naive
   implementation would report a false PASS (zero accumulated error over nothing); this harness
   refuses instead.
+- **when fewer than 100 samples remain after the warm-up skip** — a recording shorter than its
+  own warm-up cannot be verified; saying so is better than passing on a handful of rows.
 
 Nothing produced by this harness — no sweep result, no metric, no rig recommendation — should
 be trusted until it has passed `--verify` against a real recording of the segment in question.
@@ -315,6 +347,80 @@ with a fixed injected delay, changing the tone's frequency from 0.3 Hz to 0.5 Hz
 job is retuning the washout's corner frequency, that artefact would land squarely on top of
 the 15 ms gate and make it meaningless. Restricting the correlation to 0.3–1 Hz and requiring
 8 periods at the low end is what makes the number trustworthy enough to gate on.
+
+**The shipped settings' `lag_ms` is ~730 ms, and that is real, not a spurious peak.**
+Measured on the campaign's hand-flown recording (replayed, then `washout_metrics.py`):
+`lag_ms = 730.0`, uncomfortably close to the estimator's 1000 ms search ceiling — which looks
+like exactly the kind of artefact this harness exists to catch. It is not one; it was tested,
+not assumed:
+
+*Analytic.* The heave chain (`WashoutFilter::update`) is, ignoring gain and the tiny
+`smooth_tau` output low-pass, `G(s) = s / ((s+a)(s+b1)(s+b2))` with `a = 1/heave_hp_tau`,
+`b1 = 1/heave_vel_washout_tau`, `b2 = 1/heave_pos_washout_tau` — a differentiator (the
+high-pass) followed by two leaky integrators (the vel/pos washouts). Phase delay is
+`-angle(G(j2πf)) / (2πf)`. At the shipped settings (`heave_hp_tau=1`,
+`heave_vel/pos_washout_tau=2` each) versus a candidate that shortens the washout pair to `0.3`:
+
+| f (Hz) | shipped: phase | shipped: delay | candidate (τ=0.3): phase | candidate: delay |
+|---|---|---|---|---|
+| 0.3 | −122.3° | 1132.8 ms | −31.0° | 287.3 ms |
+| 0.4 | −135.8° |  943.1 ms | −52.3° | 363.4 ms |
+| 0.5 | −144.3° |  801.4 ms | −69.0° | 383.1 ms |
+| 0.6 | −150.0° |  694.6 ms | −82.2° | 380.5 ms |
+| 0.7 | −154.2° |  612.0 ms | −92.9° | 368.6 ms |
+| 0.8 | −157.4° |  546.5 ms | −101.6° | 352.9 ms |
+| 0.9 | −159.9° |  493.4 ms | −108.9° | 336.2 ms |
+| 1.0 | −161.9° |  449.6 ms | −115.1° | 319.6 ms |
+
+(At 0.5 Hz this matches the campaign's own back-of-envelope estimate, ≈800 ms, almost exactly.)
+Note the shipped settings' delay at the *low* end of the band (1132.8 ms at 0.3 Hz) already
+**exceeds** `xcorr_lag_ms`'s 1000 ms search ceiling — a real, documented limitation, not a bug:
+see below.
+
+*Empirical.* `--synth sine:<hz>:0.03:40` at each frequency in the table above, replayed, then
+measured with `washout_metrics.py`, for both settings:
+
+| f (Hz) | shipped: measured `lag_ms` | candidate: measured `lag_ms` |
+|---|---|---|
+| 0.3 | 1000.0 (clamped — see below) | 266.7 |
+| 0.4 |  950.0 | 366.7 |
+| 0.5 |  800.0 | 383.3 |
+| 0.6 |  700.0 | 383.3 |
+| 0.7 |  616.7 | 366.7 |
+| 0.8 |  550.0 | 350.0 |
+| 0.9 |  500.0 | 333.3 |
+| 1.0 |  450.0 | 316.7 |
+
+Every measured value tracks its analytic prediction to within one or two lag-resolution steps
+(`1000/fs` ≈ 16.7 ms at the 60 Hz synth rate) — the one exception being 0.3 Hz on the shipped
+settings, where the true delay (1132.8 ms) is outside what a 1 s search can find at all, so the
+estimator reports the ceiling instead of a wrong answer in the wrong direction. That the number
+moves smoothly and correctly with frequency, matching a closed-form prediction derived from the
+filter's own poles, is what an estimator picking a genuine feature of the signal looks like — not
+what a spurious argmax on a flat correlation looks like.
+
+*Peak shape.* On the real hand-flown recording's `g_nrml`/`live_heave` correlation (band-limited
+to 0.3–1 Hz), the curve is a single smooth hump: −0.20 at lag 0, rising monotonically to a clear
+maximum of 0.334 at 730 ms, then falling monotonically back to 0.26 by 955 ms. That is a
+well-defined argmax, not a flat plateau where the location would be noise-sensitive.
+
+**Verdict: the hypothesis holds.** `lag_ms ≈ 730 ms` on the shipped settings is a real property of
+the current heave washout's phase response in the band the pilot feels, not an estimator defect.
+This reframes the campaign's "no added lag" constraint (`lag_ms` ≤ baseline + 15 ms, above): the
+*baseline itself* already carries roughly 0.7–1.1 s of phase delay across 0.3–1 Hz, worst at the
+low end. Shortening `heave_vel/pos_washout_tau` toward the candidate value cuts that delay by
+roughly half to two-thirds across the same band (e.g. 801 ms → 383 ms at 0.5 Hz) — the intended
+fix for saturation *also* improves the thing the "no added lag" gate was written to protect,
+rather than trading against it.
+
+**The 1000 ms search ceiling is a real, separate limitation, worth knowing about going forward.**
+`xcorr_lag_ms`'s `max_lag_sec` defaults to `1.0`; any true delay beyond that cannot be found and
+the estimator reports (at most) the ceiling instead. The shipped settings are already at the edge
+of this at the low end of the band (0.3 Hz); a *slower* candidate than shipped (longer washout
+time constants) could exceed it more broadly and have its `lag_ms` silently underreported as
+"no worse than baseline" when it is actually worse. This campaign only shortens the washout, so it
+never approaches the ceiling from the wrong side — but a future change that lengthens
+`heave_vel/pos_washout_tau` past roughly 2 s should widen `max_lag_sec` first and re-check.
 
 **Why `sat_envelope` only sees one of two clamps.** `MotionProvider::blendedCommand` calls
 `StewartKinematics::clampToReachable` **twice**. The first call runs on `rawLive` — the

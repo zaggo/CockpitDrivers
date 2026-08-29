@@ -121,6 +121,14 @@ either way.
 4. **Heave is the only common-mode DOF.** It drives all six actuators in phase, so it is the
    worst case for drive load — a plausible contributor to why heave specifically feels hard
    while the differential DOF do not.
+5. **The shipped heave washout already carries ~0.7–1.1 s of phase delay in the 0.3–1 Hz band**
+   (analytic, from `G(s) = s/((s+a)(s+b1)(s+b2))`, confirmed against `--synth sine:` sweeps
+   measured with `washout_metrics.py`'s `lag_ms` — see the campaign-finding subsection beside
+   `lag_ms` in `docs/motion-tuning/README.md`). The 730 ms figure measured on the first
+   hand-flown recording is this real delay, not a spurious correlation peak. Shortening
+   `heave_vel/pos_washout_tau` toward the values this campaign is already moving to cuts that
+   delay roughly in half to a third across the same band — the fix for saturation also reduces
+   the platform's inherent lag, rather than trading against the "no added lag" gate.
 
 ### Explicitly rejected
 
