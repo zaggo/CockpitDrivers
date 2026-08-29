@@ -978,14 +978,20 @@ In `onFlightLoopTick`, inside the `if (!latestCues_.simPaused)` block, replace t
             lastEffectsPose_ = e;
 ```
 
-In `blendedCommand`, capture the scale of the final clamp — replace the final return with:
+In `blendedCommand`, capture the scale of the **first** clamp — the one applied to `rawLive`:
 
 ```cpp
     double scale = 1.0;
-    const Pose out = kin_->clampToReachable(eff, &scale);
+    const Pose live = kin_->clampToReachable(rawLive, &scale);
     lastReachScale_ = scale;
-    return out;
 ```
+
+Leave the second clamp (on the blended pose) untouched and do **not** record its scale. It is a
+guard, not a measurement: its input is a blend of the park pose and an already-clamped live pose,
+so it is reachable in practice and `clampToReachable` short-circuits to 1.0. Recording that value
+would pin `reach_scale` at 1.0 for every armed, flying tick and leave `sat_envelope` permanently
+reading 0 % — blinding the metric that Stage 7 is gated on. The first clamp is the one that answers
+the question the campaign asks: did the cueing chain demand more than the platform can reach?
 
 - [ ] **Step 6: Write the row**
 
@@ -1283,10 +1289,18 @@ int main(int argc, char** argv) {
     SafetyLimiter      safety(scfg);
 
     // Replay is always "armed and live": the arm blend is a transition, not part
-    // of the cueing chain under test.
-    uint16_t home[6];
-    { const SolveResult s = kin.solve(Pose{}); for (int i = 0; i < 6; ++i) home[i] = s.setpoints[i]; }
-    safety.reset(home);
+    // of the cueing chain under test. The limiter is still seeded from the PARK
+    // pose the way MotionProvider::initialize does — it is stateful, so seeding
+    // from home instead would diverge the first ticks' sent[] values from what a
+    // real recording shows.
+    uint16_t seed[6];
+    {
+        Pose parkTarget;
+        parkTarget.heave = static_cast<float>(scfg.parkHeaveMm);
+        const SolveResult s = kin.solve(kin.clampToReachable(parkTarget));
+        for (int i = 0; i < 6; ++i) seed[i] = s.setpoints[i];
+    }
+    safety.reset(seed);
 
     Telemetry out;
     if (!outPath.empty() && !out.start(outPath)) {
@@ -1295,36 +1309,43 @@ int main(int argc, char** argv) {
     }
 
     double t = 0.0;
+    Pose live;   // held across paused ticks, mirroring MotionProvider::lastLivePose_
+
     for (const CueSample& s : samples) {
         double dt = s.dt;
         if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
 
-        Pose live;
+        // The plugin gates ONLY the filter update on pause. Its IK solve, limiter
+        // and telemetry write run every tick against the held pose — see
+        // MotionProvider::onFlightLoopTick. Replay must mirror that structure, or
+        // a recording containing a paused span replays to FEWER rows than it has
+        // and the limiter state freezes across the gap instead of converging.
+        Pose e;   // effects contribution; stays zero on a paused tick
         if (!s.cues.simPaused) {
             const Pose w = washout.update(s.cues, dt);
-            const Pose e = effects.update(s.cues, dt);
+            e = effects.update(s.cues, dt);
             live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
             live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
+        }
 
-            double scale = 1.0;
-            const Pose cmd = kin.clampToReachable(live, &scale);
-            const SolveResult sol = kin.solve(cmd);
-            uint16_t target[6], sent[6];
-            for (int i = 0; i < 6; ++i) target[i] = sol.setpoints[i];
-            safety.limit(target, dt, sent);
+        double scale = 1.0;
+        const Pose cmd = kin.clampToReachable(live, &scale);
+        const SolveResult sol = kin.solve(cmd);
+        uint16_t target[6], sent[6];
+        for (int i = 0; i < 6; ++i) target[i] = sol.setpoints[i];
+        safety.limit(target, dt, sent);
 
-            if (out.recording()) {
-                TelemetryRow r;
-                r.t = t; r.dtReal = s.dt; r.dtClamped = dt;
-                r.cues = s.cues; r.trace = washout.trace();
-                r.effects = e; r.live = live; r.commanded = cmd;
-                r.reachScale = scale;
-                for (int i = 0; i < 6; ++i) { r.setpoints[i] = target[i]; r.sent[i] = sent[i]; }
-                r.velClips = safety.velClipCount();
-                r.accClips = safety.accClipCount();
-                r.armState = 2;   // Armed
-                out.write(r);
-            }
+        if (out.recording()) {
+            TelemetryRow r;
+            r.t = t; r.dtReal = s.dt; r.dtClamped = dt;
+            r.cues = s.cues; r.trace = washout.trace();
+            r.effects = e; r.live = live; r.commanded = cmd;
+            r.reachScale = scale;
+            for (int i = 0; i < 6; ++i) { r.setpoints[i] = target[i]; r.sent[i] = sent[i]; }
+            r.velClips = safety.velClipCount();
+            r.accClips = safety.accClipCount();
+            r.armState = 2;   // Armed
+            out.write(r);
         }
         t += s.dt;
     }
@@ -1424,25 +1445,41 @@ RunResult runChain(const std::vector<CueSample>& samples,
     StewartKinematics kin(geo);
     SafetyLimiter     safety(scfg);
 
-    uint16_t home[6];
-    { const SolveResult s = kin.solve(Pose{}); for (int i = 0; i < 6; ++i) home[i] = s.setpoints[i]; }
-    safety.reset(home);
+    // Seed the limiter the way MotionProvider::initialize does — from the PARK
+    // pose, not from home. The limiter is stateful, so a different seed diverges
+    // the first ticks' sent[] values from what a real recording shows.
+    uint16_t seed[6];
+    {
+        Pose parkTarget;
+        parkTarget.heave = static_cast<float>(scfg.parkHeaveMm);
+        const SolveResult s = kin.solve(kin.clampToReachable(parkTarget));
+        for (int i = 0; i < 6; ++i) seed[i] = s.setpoints[i];
+    }
+    safety.reset(seed);
 
     RunResult res;
     double t = 0.0;
     size_t clamped = 0, counted = 0;
+    Pose live;   // held across paused ticks, mirroring MotionProvider::lastLivePose_
 
     for (const CueSample& s : samples) {
         const double dtRaw = (resampleDt > 0.0) ? resampleDt : s.dt;
         double dt = dtRaw;
         if (dt > scfg.maxDtSec) dt = scfg.maxDtSec;
-        if (s.cues.simPaused) { t += dtRaw; continue; }
 
-        const Pose w = washout.update(s.cues, dt);
-        const Pose e = effects.update(s.cues, dt);
-        Pose live;
-        live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
-        live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
+        // The plugin gates ONLY the filter update on pause: the IK solve, the
+        // limiter and the telemetry write all run every tick against the held
+        // pose (MotionProvider::onFlightLoopTick). Replay must mirror that, or a
+        // recording containing a pause replays to fewer rows than it has and the
+        // limiter state diverges across the gap — which would break the
+        // row-for-row --verify below.
+        Pose e;   // effects contribution; stays zero on a paused tick
+        if (!s.cues.simPaused) {
+            const Pose w = washout.update(s.cues, dt);
+            e = effects.update(s.cues, dt);
+            live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
+            live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
+        }
 
         double scale = 1.0;
         const Pose cmd = kin.clampToReachable(live, &scale);
