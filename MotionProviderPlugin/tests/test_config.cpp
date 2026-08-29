@@ -2,6 +2,7 @@
 #include "StewartGeometry.h"
 #include "WashoutConfig.h"
 #include "EffectsConfig.h"
+#include "TelemetryConfig.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -109,6 +110,25 @@ int main() {
         near(s.parkHeaveMm, sd.parkHeaveMm, "roundtrip park heave");
         near(s.armRampSec, sd.armRampSec, "roundtrip arm ramp");
         std::remove(tmp.c_str());
+    }
+
+    // [telemetry] loads, and absent keys fall back to defaults.
+    {
+        const std::string p = "test_config_telemetry.toml";
+        {
+            std::ofstream f(p);
+            f << "[telemetry]\n";
+            f << "enabled = true\n";
+            f << "dir = \"/tmp/motion\"\n";
+        }
+        TelemetryConfig t = MotionConfig::loadTelemetry(p);
+        check(t.enabled, "telemetry.enabled parsed");
+        check(t.dir == "/tmp/motion", "telemetry.dir parsed");
+        std::remove(p.c_str());
+    }
+    {
+        TelemetryConfig t = MotionConfig::loadTelemetry("does_not_exist.toml");
+        check(!t.enabled && t.dir.empty(), "missing file -> telemetry defaults");
     }
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

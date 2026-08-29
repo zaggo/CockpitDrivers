@@ -5,6 +5,7 @@
 #include "EffectsConfig.h"
 #include "SerialConfig.h"
 #include "SafetyConfig.h"
+#include "TelemetryConfig.h"
 
 namespace MotionConfig {
     // Fallback path if the plugin directory can't be resolved (~/.motionprovider.toml).
@@ -34,4 +35,7 @@ namespace MotionConfig {
 
     // Load safety config from a TOML file. Same contract as loadWashout.
     SafetyConfig    loadSafety(const std::string& path);
+
+    // Load telemetry config from a TOML file. Same contract as loadWashout.
+    TelemetryConfig loadTelemetry(const std::string& path);
 }

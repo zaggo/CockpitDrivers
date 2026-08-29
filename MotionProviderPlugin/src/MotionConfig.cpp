@@ -172,6 +172,17 @@ SafetyConfig MotionConfig::loadSafety(const std::string& path) {
     return s;
 }
 
+TelemetryConfig MotionConfig::loadTelemetry(const std::string& path) {
+    TelemetryConfig cfg = TelemetryConfig::defaults();
+    toml::table tbl;
+    try { tbl = toml::parse_file(path); } catch (...) { return cfg; }
+    if (auto* t = tbl["telemetry"].as_table()) {
+        if (auto v = (*t)["enabled"].value<bool>())        cfg.enabled = *v;
+        if (auto v = (*t)["dir"].value<std::string>())     cfg.dir     = *v;
+    }
+    return cfg;
+}
+
 bool MotionConfig::writeDefaults(const std::string& path) {
     std::ofstream f(path);
     if (!f.is_open()) return false;
@@ -254,6 +265,10 @@ bool MotionConfig::writeDefaults(const std::string& path) {
     f << "runaway_trans_mm = "      << sf.runawayTransMm  << "\n";
     f << "runaway_hold_sec = "      << sf.runawayHoldSec  << "\n";
     f << "max_dt_sec = "            << sf.maxDtSec        << "\n";
+
+    f << "\n[telemetry]\n";
+    f << "enabled = false # set true to auto-start CSV recording on plugin load\n";
+    f << "dir = \"\" # output directory; empty = the plugin directory\n";
 
     return f.good();
 }
