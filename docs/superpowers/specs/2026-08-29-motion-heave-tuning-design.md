@@ -215,7 +215,22 @@ Per DOF, per segment:
 | `wrms` | Band-weighted RMS of heave acceleration, emphasising 0.1–0.63 Hz. The discomfort measure. **Not a conformant ISO-2631 Wk implementation** — it is a documented band emphasis chosen because that is where ISO-2631 puts its vertical peak. Adequate for ranking candidates against each other, which is all it is used for; it is not a comfort figure to quote elsewhere. |
 | `band_ratio` | Share of heave power in 0.1–0.5 Hz. States directly whether we sit in the motion-sickness band. |
 | `jerk_p95` | 95th percentile of jerk per actuator. The mechanical harshness measure. |
-| `lag_ms` | Cross-correlation delay from cue to commanded pose, per DOF. The lag budget. |
+| `lag_ms` | Phase-alignment shift from cue to commanded pose, measured by a **Pearson-normalised** cross-correlation over a **0.3–1 Hz** band, refusing to report below 8 periods at the band's lower edge. The lag budget. Not a broadband latency — see below. |
+
+**Why `lag_ms` is defined so narrowly.** The obvious estimator — a raw cross-correlation over the
+full cue band — is biased by the finite window, and the bias is *not* common-mode between a
+baseline and a candidate. Measured on a synthetic 0.3 Hz tone with a 100 ms injected delay: the raw
+estimator reports 133 ms at 3 periods and 117 ms at 5, converging only past 10. Changing the
+signal's **amplitude** leaves that bias identical, so it cancels in a delta; changing its
+**frequency** moves it — 0.3 Hz → 0.5 Hz shifted the reported lag by ~17 ms with no change in true
+delay. Tuning the washout's corner frequency is precisely what this campaign does, so that artefact
+would land on top of a 15 ms gate and make it meaningless.
+
+Pearson normalisation removes the bias exactly from 3 periods on for a clean tone. Restricting the
+correlation to 0.3–1 Hz gives 18–60 periods in a 60 s segment instead of the 6–9 available at the
+0.1 Hz floor. The 8-period refusal is the backstop for both. `wrms` and `band_ratio` keep the wider
+0.1–0.63 Hz band — they measure discomfort, which lives at the low end; `lag_ms` measures phase,
+which needs cycles.
 | `range_used_pct` | Fraction of the envelope actually used. For the amplitude stage. |
 
 **Gates applied to every candidate:**
