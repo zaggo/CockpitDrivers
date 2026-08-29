@@ -508,7 +508,14 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "%s\n", err.c_str()); return 1;
     }
 
-    StewartGeometry geo = MotionConfig::loadGeometry(configPath);
+    bool cfgLoaded = false;
+    StewartGeometry geo = MotionConfig::loadGeometry(configPath, &cfgLoaded);
+    if (!cfgLoaded) {
+        std::fprintf(stderr,
+            "cannot parse config %s -- refusing to replay on built-in defaults\n",
+            configPath.c_str());
+        return 2;
+    }
     WashoutConfig   wcfg = MotionConfig::loadWashout(configPath);
     EffectsConfig   ecfg = MotionConfig::loadEffects(configPath);
     SafetyConfig    scfg = MotionConfig::loadSafety(configPath);
