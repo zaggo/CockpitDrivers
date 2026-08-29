@@ -1,13 +1,35 @@
 #include "Telemetry.h"
-#include <cstdio>
+#include <charconv>
 
 namespace {
-// Round-trip-exact formatting. float carries 9 significant decimal digits,
-// double 17. The replay self-test compares recomputed values against these,
-// so anything shorter would fail it for the wrong reason.
-void putF(std::ofstream& o, float v)  { char b[32]; std::snprintf(b, sizeof(b), "%.9g",  static_cast<double>(v)); o << ',' << b; }
-void putD(std::ofstream& o, double v) { char b[40]; std::snprintf(b, sizeof(b), "%.17g", v); o << ',' << b; }
-void putI(std::ofstream& o, long v)   { o << ',' << v; }
+// Round-trip-exact AND locale-independent formatting.
+//
+// std::to_chars is the only C++ number formatter that is locale-independent
+// by definition: it always emits '.' as the decimal point and never applies
+// digit grouping. That matters here because this file ships inside a shared
+// library loaded into X-Plane. snprintf("%.9g"/"%.17g") honours LC_NUMERIC,
+// and stream insertion honours the imbued locale's numpunct -- so on a
+// comma-decimal machine, or after X-Plane or any other loaded plugin calls
+// setlocale(), every value would gain an embedded comma and the CSV would
+// silently grow columns. A recording is written once and cannot be
+// regenerated, so a corrupt one is unrecoverable.
+//
+// to_chars' default (no format/precision argument) is the SHORTEST
+// representation that round-trips exactly, so this is at least as precise as
+// the "%.9g" / "%.17g" it replaces, and usually shorter. tests/test_telemetry
+// asserts the exact round-trip the bit-exact replay self-test rests on.
+template <typename T>
+void putNum(std::ofstream& o, T v) {
+    char b[64];   // shortest round-trip of any double fits in ~24 chars
+    const std::to_chars_result r = std::to_chars(b, b + sizeof(b), v);
+    o << ',';
+    if (r.ec == std::errc()) o.write(b, static_cast<std::streamsize>(r.ptr - b));
+    else                     o << '0';   // unreachable with a 64-byte buffer
+}
+
+void putF(std::ofstream& o, float v)  { putNum(o, v); }
+void putD(std::ofstream& o, double v) { putNum(o, v); }
+void putI(std::ofstream& o, long v)   { putNum(o, v); }
 }  // namespace
 
 Telemetry::~Telemetry() { stop(); }
@@ -46,10 +68,14 @@ void Telemetry::stop() {
 void Telemetry::write(const TelemetryRow& r) {
     if (!out_.is_open()) return;
 
-    // First column has no leading comma; every put* adds one, so emit t_sec raw.
-    char b[40];
-    std::snprintf(b, sizeof(b), "%.17g", r.t);
-    out_ << b;
+    // First column has no leading comma; every put* adds one, so emit t_sec raw
+    // (same locale-independent to_chars path as putNum).
+    {
+        char b[64];
+        const std::to_chars_result tr = std::to_chars(b, b + sizeof(b), r.t);
+        if (tr.ec == std::errc()) out_.write(b, static_cast<std::streamsize>(tr.ptr - b));
+        else                      out_ << '0';
+    }
 
     putD(out_, r.dtReal);        putD(out_, r.dtClamped);
 
