@@ -339,7 +339,14 @@ def metrics(path):
     }
 
 
-# (column name, header format, value format)
+# (column name, alignment, value format -- no width baked in: main() sizes
+# every column to the max of its header and its widest formatted value, so a
+# value that outgrows its header's old fixed width can never run into the
+# next column. See the module docstring / --csv for why this exists: a fixed
+# width silently truncated nothing, it let two adjacent columns' text run
+# together with no separator at all (`band_ratio` immediately followed by
+# `jerk_p95`, e.g. "0.2324873112.9"), which is a much easier failure to miss
+# than a truncated number.
 #
 # peak_out_mm (= max |live_heave|) earns its place here even though it is not
 # gated: the refusal warnings for a dead run go to stderr while this table
@@ -348,20 +355,20 @@ def metrics(path):
 # frozen or never-armed run obvious at a glance. rows and fs are here for the
 # same reason -- they say how much data the row was actually built from.
 HEADERS = [
-    ("file", "{:<34}", "{:<34}"),
-    ("rows", "{:>7}", "{:>7d}"),
-    ("sec", "{:>7}", "{:>7.1f}"),
-    ("fs", "{:>6}", "{:>6.1f}"),
-    ("sat_heave", "{:>10}", "{:>10.2f}"),
-    ("sat_rot", "{:>8}", "{:>8.2f}"),
-    ("sat_envelope", "{:>13}", "{:>13.2f}"),
-    ("sat_sl_acc", "{:>11}", "{:>11.2f}"),
-    ("wrms", "{:>9}", "{:>9.4f}"),
-    ("band_ratio", "{:>11}", "{:>11.3f}"),
-    ("jerk_p95", "{:>9}", "{:>9.1f}"),
-    ("lag_ms", "{:>8}", "{:>8.1f}"),
-    ("peak_raw_mm", "{:>12}", "{:>12.1f}"),
-    ("peak_out_mm", "{:>12}", "{:>12.1f}"),
+    ("file", "<", "{}"),
+    ("rows", ">", "{:d}"),
+    ("sec", ">", "{:.1f}"),
+    ("fs", ">", "{:.1f}"),
+    ("sat_heave", ">", "{:.2f}"),
+    ("sat_rot", ">", "{:.2f}"),
+    ("sat_envelope", ">", "{:.2f}"),
+    ("sat_sl_acc", ">", "{:.2f}"),
+    ("wrms", ">", "{:.4f}"),
+    ("band_ratio", ">", "{:.3f}"),
+    ("jerk_p95", ">", "{:.1f}"),
+    ("lag_ms", ">", "{:.1f}"),
+    ("peak_raw_mm", ">", "{:.1f}"),
+    ("peak_out_mm", ">", "{:.1f}"),
 ]
 
 
@@ -380,9 +387,23 @@ def main():
         w.writerows(results)
         return
 
-    print("".join(hfmt.format(name) for name, hfmt, _ in HEADERS))
-    for r in results:
-        print("".join(vfmt.format(r[name]) for name, _, vfmt in HEADERS))
+    # Format every cell first (never truncated), THEN size each column to the
+    # max of its header and its widest formatted value -- a wider fixed width
+    # would just move the collision to the next value that doesn't fit it
+    # either. A single space between columns keeps them separated even when
+    # every cell in a column is exactly header-width (the old fixed widths'
+    # implicit margin, made explicit here since it's no longer baked into a
+    # per-column constant).
+    cells = [[fmt.format(r[name]) for name, _, fmt in HEADERS] for r in results]
+    widths = [max(len(name), *(len(row[i]) for row in cells)) if cells else len(name)
+              for i, (name, _, _) in enumerate(HEADERS)]
+
+    def pad(text, width, align):
+        return text.ljust(width) if align == "<" else text.rjust(width)
+
+    print(" ".join(pad(name, w, align) for (name, align, _), w in zip(HEADERS, widths)))
+    for row in cells:
+        print(" ".join(pad(v, w, align) for (_, align, _), v, w in zip(HEADERS, row, widths)))
 
 
 if __name__ == "__main__":
