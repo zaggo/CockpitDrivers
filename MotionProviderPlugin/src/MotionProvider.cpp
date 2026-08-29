@@ -431,7 +431,19 @@ void MotionProvider::recomputeParkPose() {
 
 Pose MotionProvider::blendedCommand(const Pose& rawLive) const {
     if (!kin_) return rawLive;
-    const Pose live = kin_->clampToReachable(rawLive);
+    // This first clamp is the one whose scale we record: rawLive is the
+    // washout+effects demand before any arm-blend attenuation, so its scale
+    // answers what the tuning campaign's sat_envelope metric actually asks -
+    // did the cueing chain demand more than the platform can physically
+    // reach. The second clamp below guards the blended pose (a mix of the
+    // already-reachable park pose and this already-clamped `live`), which is
+    // reachable in practice - clampToReachable short-circuits to scale 1.0
+    // whenever its input is already reachable, so recording its scale would
+    // pin sat_envelope at 0% forever. That clamp stays as a guard; it just
+    // deliberately doesn't feed lastReachScale_.
+    double scale = 1.0;
+    const Pose live = kin_->clampToReachable(rawLive, &scale);
+    lastReachScale_ = scale;
     const double b = armRamp_.blend();           // 0 = park, 1 = live
     const double p = 1.0 - b;
     Pose eff;
@@ -441,10 +453,7 @@ Pose MotionProvider::blendedCommand(const Pose& rawLive) const {
     eff.roll  = static_cast<float>(parkPose_.roll  * p + live.roll  * b);
     eff.pitch = static_cast<float>(parkPose_.pitch * p + live.pitch * b);
     eff.yaw   = static_cast<float>(parkPose_.yaw   * p + live.yaw   * b);
-    double scale = 1.0;
-    const Pose out = kin_->clampToReachable(eff, &scale);
-    lastReachScale_ = scale;
-    return out;
+    return kin_->clampToReachable(eff);           // guard the blended pose too
 }
 
 void MotionProvider::startGotoTransition(bool arming, const Pose& rawLive) {
