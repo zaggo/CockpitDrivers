@@ -90,13 +90,19 @@ int main() {
               "pre-clamp heave exceeds the limit");
     }
 
-    // Trace: nothing clamps at rest.
+    // Trace: nothing clamps at rest, on any tick of the run (not just the last).
     {
         WashoutFilter f(WashoutConfig::defaults());
-        run(f, level(), 300);
-        check(!f.trace().heaveClamped, "rest does not clamp heave");
-        check(!f.trace().rotRollClamped && !f.trace().rotPitchClamped &&
-              !f.trace().rotYawClamped, "rest does not clamp rotations");
+        bool heaveEverClamped = false;
+        bool rotEverClamped = false;
+        for (int i = 0; i < 300; ++i) {
+            f.update(level(), dt);
+            heaveEverClamped |= f.trace().heaveClamped;
+            rotEverClamped |= f.trace().rotRollClamped || f.trace().rotPitchClamped ||
+                               f.trace().rotYawClamped;
+        }
+        check(!heaveEverClamped, "rest does not clamp heave");
+        check(!rotEverClamped, "rest does not clamp rotations");
     }
 
     // Trace: reset() clears it.
@@ -105,8 +111,25 @@ int main() {
         MotionCues up = level(); up.heaveG = 1.6f;
         run(f, up, 60);
         f.reset();
-        check(f.trace().heavePosRaw == 0.0 && !f.trace().heaveClamped,
-              "reset clears the trace");
+        const WashoutTrace fresh{};
+        const WashoutTrace& t = f.trace();
+        // memcmp over the raw struct is unsafe here: WashoutTrace interleaves bool
+        // and double members, so the compiler inserts padding bytes (after
+        // heaveClamped, after tiltRateActive, and trailing after rotYawClamped).
+        // trace_ is default-initialized as a plain data member (padding left
+        // indeterminate), while a locally list-initialized WashoutTrace{} does not
+        // reliably zero those same bytes the same way -- memcmp compared garbage
+        // padding, not the fields, and failed spuriously. Compare fields instead.
+        check(t.heaveAHp == fresh.heaveAHp && t.heaveVel == fresh.heaveVel &&
+              t.heavePosRaw == fresh.heavePosRaw && t.heaveClamped == fresh.heaveClamped &&
+              t.tiltPitch == fresh.tiltPitch && t.tiltRoll == fresh.tiltRoll &&
+              t.tiltRateActive == fresh.tiltRateActive &&
+              t.rotRollRaw == fresh.rotRollRaw && t.rotPitchRaw == fresh.rotPitchRaw &&
+              t.rotYawRaw == fresh.rotYawRaw &&
+              t.rotRollClamped == fresh.rotRollClamped &&
+              t.rotPitchClamped == fresh.rotPitchClamped &&
+              t.rotYawClamped == fresh.rotYawClamped,
+              "reset clears every trace field");
     }
 
     // Shortening the washout constants shrinks the excursion for the same input.
@@ -116,9 +139,12 @@ int main() {
     // was already clipped last tick, so with the shipped 30 mm limit the "raw"
     // peak can never exceed the limit by more than one integration step (~42 mm
     // measured). The comparison would then measure the clamp, not the filter.
-    // With the limit inert, the sustained-0.3g step response peaks at ~286 mm for
-    // tau 2.0 (t ~ 3.2 s) and ~46 mm for tau 0.3 (t ~ 1.0 s) - a ratio of ~0.16,
-    // so the 0.25 threshold holds with margin.
+    //
+    // Figures below are for WashoutConfig::defaults(), i.e. heaveGain 0.5 - NOT the
+    // 0.15 configured in configuration.toml, which yields excursions 3.3x smaller.
+    // With the limit inert, the sustained-0.3g step response peaks at ~950 mm for
+    // tau 2.0 (t ~ 3.2 s) and ~68 mm for tau 0.3 (t ~ 1.0 s) - a ratio of ~0.07,
+    // comfortably under the 0.25 threshold.
     {
         auto peakRaw = [](double tau) {
             WashoutConfig cfg = WashoutConfig::defaults();
