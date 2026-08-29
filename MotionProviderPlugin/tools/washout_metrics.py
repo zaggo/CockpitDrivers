@@ -4,11 +4,23 @@
 Reads telemetry CSVs (from the plugin or from washout_replay) and prints one
 row per file. Everything is numpy-only so it runs wherever numpy is installed.
 
-Every column is required except dt_real, g_nrml, and reach_scale (the three
-that pass an explicit `default=` to `column()`): a file missing one of them --
-an older recorder, a truncated capture -- aborts with a clear error instead
-of silently reporting a zero. A missing heave_clamped must never look
-identical to a run with zero saturation.
+This script measures REPLAY OUTPUT (or a full plugin recording). It is never
+run on a cue-only export: `MotionProviderPlugin/reference/*.csv.gz` carry the
+cue columns only and none of the output columns measured here, so replay them
+first and measure the replay:
+
+    ./tools/build/washout_replay --cues reference/cruise_calm.csv \
+        --config configuration.toml --out /tmp/cruise_calm.csv
+    tools/.venv/bin/python tools/washout_metrics.py /tmp/cruise_calm.csv
+
+Input may be a plain .csv or a gzipped .csv.gz -- load() picks the opener
+from the extension.
+
+Every column is required except dt_real and g_nrml (the two that pass an
+explicit `default=` to `column()`): a file missing any other one -- an older
+recorder, a truncated capture -- aborts with a clear error instead of
+silently reporting a zero. A missing heave_clamped must never look identical
+to a run with zero saturation.
 
 Metric notes:
 
@@ -17,15 +29,28 @@ Metric notes:
               the number stays meaningful). This is a documented band
               emphasis, NOT a conformant ISO-2631 Wk weighting. It is used
               only to rank candidates against each other.
+              Both wrms and band_ratio REFUSE (NaN, with a stderr warning)
+              when live_heave has no variation at all -- a heave frozen
+              against a clamp, or a recording made with the plugin never
+              armed. A constant heave scores wrms ~1e-20 and band_ratio
+              ~1e-8, i.e. the best values either metric can produce, and
+              Stage 8's inverted gate ("wrms may rise as long as band_ratio
+              does not") would read a dead run as an ideal candidate. Same
+              refusal principle as xcorr_lag_ms below.
   band_ratio  Fraction of heave-acceleration spectral power inside that same
               0.1-0.63 Hz band (Hann-windowed to limit edge leakage).
-  jerk_p95    95th-percentile |third difference| of the six streamed BFF
-              demand channels, normalised to counts/s^3 via the file's own
-              fs so runs recorded at different frame rates stay comparable.
-              Still raw demand-count units -- no counts-to-mm conversion is
-              available here -- so treat it as comparative, like wrms.
+  jerk_p95    Max over the six streamed BFF demand channels of that channel's
+              95th-percentile |third difference| -- a per-channel p95, then
+              the worst channel, not a p95 pooled across channels.
+              Normalised to counts/s^3 via the file's own fs so runs recorded
+              at different frame rates stay comparable. Still raw
+              demand-count units -- no counts-to-mm conversion is available
+              here -- so treat it as comparative, like wrms.
   lag_ms      Shift maximising the Pearson-normalised cross-correlation
-              between the drive cue and the commanded pose, computed after
+              between the drive cue (g_nrml) and live_heave -- the LIVE pose,
+              not the commanded one: live_* is the column --verify proves
+              replayable, while cmd_* also carries the arm blend that replay
+              deliberately does not model. Computed after
               band-limiting BOTH signals to LAG_LO_HZ-LAG_HI_HZ (0.3-1 Hz) --
               a narrower, higher band than wrms's, chosen so a single run
               gives enough cycles to converge. The washout is a high-pass,
@@ -58,6 +83,7 @@ Metric notes:
 """
 import argparse
 import csv
+import gzip
 import sys
 
 import numpy as np
@@ -75,11 +101,27 @@ LAG_MIN_PERIODS = 8
 
 # Columns allowed to fall back to a default when absent from a CSV. Every
 # other column is required -- see column() and the module docstring.
-OPTIONAL_COLUMNS = {"dt_real", "g_nrml", "reach_scale"}
+#
+# The bar for membership: a missing column must not be able to manufacture a
+# FAVOURABLE gate value on its own. A missing dt_real only assumes 60 Hz,
+# which by itself moves no gate; a missing g_nrml leaves the lag correlation
+# with a dead drive channel, which xcorr_lag_ms already refuses with an
+# honest NaN.
+#
+# reach_scale is deliberately NOT here. Defaulting it to 1.0 prints
+# `sat_envelope = 0.00 %` with no warning, and the campaign SKIPS its
+# envelope stage unless `reach_scale < 1` is common -- so a silently
+# defaulted column would silently skip a stage. Nor was the exemption ever
+# needed: heave_clamped, paused and reach_scale were all introduced by the
+# same commit series, so no recorder emits one without the others.
+OPTIONAL_COLUMNS = {"dt_real", "g_nrml"}
 
 
 def load(path):
-    with open(path, newline="") as fh:
+    # Gzip transparency: the committed reference segments are .csv.gz, and a
+    # plain open() on one dies with UnicodeDecodeError on the gzip magic byte.
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, mode="rt", newline="") as fh:
         rows = list(csv.reader(fh))
     header, data = rows[0], rows[1:]
     cols = {name: i for i, name in enumerate(header)}
@@ -137,6 +179,10 @@ def band_ratio(signal, fs, lo, hi):
     spec, freqs, _ = _windowed_spectrum(signal, fs)
     power = np.abs(spec) ** 2
     total = power.sum()
+    # Note this guard is effectively dead for real input: even a constant
+    # signal leaves float round-off in the FFT, so `total` stays strictly
+    # positive and band_ratio happily returns ~1e-8 for a dead trace. The
+    # real protection against that is the frozen-heave refusal in metrics().
     if total <= 0.0:
         return 0.0
     return float(power[(freqs >= lo) & (freqs <= hi)].sum() / total)
@@ -197,6 +243,24 @@ def metrics(path):
     heave_m = heave_mm / 1000.0
     accel = np.gradient(np.gradient(heave_m, t), t)
 
+    # A frozen live_heave -- pinned hard against a clamp, or a recording made
+    # with the plugin never armed -- has no variation at all, and both
+    # spectral metrics then report their BEST POSSIBLE values off nothing but
+    # FFT round-off (measured: wrms 1.24e-20, band_ratio 7.6e-08). Stage 8's
+    # inverted gate is exactly "wrms may rise as long as band_ratio does
+    # not", so a dead run would read as an ideal candidate. Refuse the same
+    # way xcorr_lag_ms already refuses a dead signal -- and note the warning
+    # goes to stderr while the table goes to stdout, which is why peak_out_mm
+    # is also in HEADERS: it makes a dead run visible in the table itself.
+    peak_out_mm = float(np.max(np.abs(heave_mm))) if heave_mm.size else 0.0
+    heave_std = float(np.std(heave_mm))
+    heave_dead = heave_std <= 1e-9 * max(peak_out_mm, 1.0)
+    if heave_dead:
+        print(f"{path}: live_heave is constant to within {heave_std:.3g} mm "
+              f"(peak |live_heave| = {peak_out_mm:.3g} mm); refusing to "
+              f"report wrms/band_ratio for a dead heave signal",
+              file=sys.stderr)
+
     g_cue = column(cols, arr, "g_nrml", 1.0, path=path) - 1.0
 
     # sat_* is measured over unpaused ticks only -- see the module docstring.
@@ -236,7 +300,6 @@ def metrics(path):
     jerk_p95 = float(max(jerks)) / (1.0 / fs) ** 3 if jerks else 0.0
 
     peak_raw = float(np.max(np.abs(column(cols, arr, "heave_pos_raw", path=path))))
-    limit_hint = float(np.max(np.abs(heave_mm)))
 
     return {
         "file": path,
@@ -249,19 +312,30 @@ def metrics(path):
         "sat_envelope": sat["envelope"],
         "sat_sl_vel": sat["sl_vel"],
         "sat_sl_acc": sat["sl_acc"],
-        "wrms": band_limited_rms(accel, fs, BAND_LO_HZ, BAND_HI_HZ),
-        "band_ratio": band_ratio(accel, fs, BAND_LO_HZ, BAND_HI_HZ),
+        "wrms": (float("nan") if heave_dead
+                 else band_limited_rms(accel, fs, BAND_LO_HZ, BAND_HI_HZ)),
+        "band_ratio": (float("nan") if heave_dead
+                       else band_ratio(accel, fs, BAND_LO_HZ, BAND_HI_HZ)),
         "jerk_p95": jerk_p95,
         "lag_ms": xcorr_lag_ms(g_cue, heave_mm, fs),
         "peak_raw_mm": peak_raw,
-        "peak_out_mm": limit_hint,
+        "peak_out_mm": peak_out_mm,
     }
 
 
 # (column name, header format, value format)
+#
+# peak_out_mm (= max |live_heave|) earns its place here even though it is not
+# gated: the refusal warnings for a dead run go to stderr while this table
+# goes to stdout, so an operator redirecting the table loses them. A
+# peak_out_mm that is flat, tiny, or exactly the park offset is what makes a
+# frozen or never-armed run obvious at a glance. rows and fs are here for the
+# same reason -- they say how much data the row was actually built from.
 HEADERS = [
     ("file", "{:<34}", "{:<34}"),
+    ("rows", "{:>7}", "{:>7d}"),
     ("sec", "{:>7}", "{:>7.1f}"),
+    ("fs", "{:>6}", "{:>6.1f}"),
     ("sat_heave", "{:>10}", "{:>10.2f}"),
     ("sat_rot", "{:>8}", "{:>8.2f}"),
     ("sat_envelope", "{:>13}", "{:>13.2f}"),
@@ -271,6 +345,7 @@ HEADERS = [
     ("jerk_p95", "{:>9}", "{:>9.1f}"),
     ("lag_ms", "{:>8}", "{:>8.1f}"),
     ("peak_raw_mm", "{:>12}", "{:>12.1f}"),
+    ("peak_out_mm", "{:>12}", "{:>12.1f}"),
 ]
 
 
