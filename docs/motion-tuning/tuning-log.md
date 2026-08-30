@@ -637,6 +637,68 @@ speed is partly inherent: at 10 m spacing, joints arrive at 3–4.5 per second o
 distinct thuds necessarily blur into texture. Larger `slab_spacing_m` would keep them distinct on
 the roll at the cost of being sparse while taxiing; that is a separate experiment.
 
+### Acceptance flight, 2026-08-30 — **campaign closed, both remaining candidates adopted**
+
+`abnahme-motion-20260830-185827.csv`, 66 columns, bit-exact against `configuration.toml`, so both
+unflown candidates (slab joints at 2 mm, touchdown at 3.5 / 0.8 / 0.55) were genuinely active.
+
+Pilot, before seeing any numbers:
+
+> Beim Rollen die Beton-Kanten gefühlt, wobei man schon ungefähr wissen muss, auf was man "achten"
+> muss. Bei größerer Geschwindigkeit faden die "Bumps" dann aus. Keine Bumps mehr sobald man
+> abgehoben hat. Amplituden und Softness für Kurven und Steig/Sinkflug sind ausreichend und
+> "glaubhaft". Cruise bei ruhigem Wetter geht sehr(!) ruhig. Das ist sehr positiv. Lande-Effekt ist
+> in der jetzigen Version viel besser als vorher. Es ist tatsächlich ein Aufsetzen und kein
+> Aufschlagen mehr. Sowohl bei weicher wie harter Landung.
+
+**Saturation by phase, against the frozen baseline.** The baseline column is the comparable segment
+from `baseline-metrics.md`, not the same flight, so treat it as an order-of-magnitude comparison:
+
+| phase | heave clamp | rot clamp | tilt at limit | envelope | accel limiter | baseline heave |
+|---|---|---|---|---|---|---|
+| Anflug | 0.00 % | 0.00 % | 0.87 % | 0.00 % | 5.32 % | — |
+| Landung 1 | 0.00 % | 0.00 % | 0.00 % | 0.00 % | 7.33 % | — |
+| Start | 0.00 % | 0.00 % | 0.00 % | 0.00 % | 0.00 % | — |
+| Steilkurven | 3.01 % | 1.17 % | 0.00 % | 0.00 % | 7.39 % | **79.66 %** |
+| Steig/Sinkwechsel | 9.60 % | 0.00 % | 0.00 % | 0.00 % | 6.41 % | **88.27 %** |
+| **Cruise** | **0.00 %** | 0.00 % | 0.00 % | 0.00 % | **0.00 %** | **19.92 %** |
+| Alignment | 0.00 % | 0.00 % | 0.00 % | 0.00 % | 0.00 % | — |
+| Final Approach | 0.00 % | 0.00 % | 0.00 % | 0.00 % | 0.00 % | — |
+| Landung 2 + Rollen | 0.00 % | 0.00 % | 8.90 % | 0.00 % | 15.06 % | — |
+
+Every clamp that was pinned at the start of this campaign is now essentially free. `sat_envelope` is
+0.00 % in every phase, so nothing is stealing from anything else. The tilt channel, which sat pinned
+at its limit for 56–63 % of the flight at the shipped settings, now reaches it only on approach
+(0.87 %) and during the braking rollout (8.90 %) — which is where a sustained lean *should* be at
+its limit. `climb_descent` remains the hardest case at 9.60 %, exactly as the design spec predicted.
+
+**Slab joints on a real flight:** 1608 m of ground roll, 160 joints expected, **162 fired, none
+skipped**, step held at the full 2.00 mm. The margin fix works on real data, not only in the test.
+
+**One prediction of mine was wrong, and the pilot's report is what caught it.** I had written that
+the touchdown setting could not matter on a firm landing, because the limiter is already pinned at
+95 % with the effect disabled. It does matter, and the reason is that **a saturated limiter clips
+the rate, not the accumulated position** — the effect still displaces the actuators by 1500–2600
+counts. On the hard landing at t = 878.5 s:
+
+| | peak contribution | when |
+|---|---|---|
+| old, 3.6 / 6 Hz / 0.25 | 2601 counts | **0.25 s after contact** |
+| new, 3.5 / 0.8 / 0.55 | 1600 counts | **1.49 s after contact** |
+
+The old setting dumped its whole contribution into the impact instant; the new one spreads it and
+peaks over a second later. That is "ein Aufsetzen und kein Aufschlagen", measured. This is the
+second time in this campaign I concluded "the limiter is saturated, so this cannot matter" and was
+wrong — the first was claiming the slab effect would never clip.
+
+**A measurement error of mine, worth recording because it produced exactly the hoped-for answer.**
+The first version of this phase table reported **0.00 % saturation in every channel and every
+phase** — a perfect result, and entirely fabricated. `heave_clamped` and `rot_*_clamped` are written
+as `putI(..., flag ? 1 : 0)`; they are booleans, not values. Testing them for `>= 29.99` can only
+ever return zero. The table above is the corrected one. Three of the campaign's eleven documented
+traps were this same shape, and knowing that did not stop me walking into a fourth: **check what a
+column contains before predicating on it, especially when the answer looks like success.**
+
 ### Parked ideas — measured or reasoned, deliberately not pursued
 
 Not rejected, just not worth a rig session yet. Each one has its reasoning here so it does not have

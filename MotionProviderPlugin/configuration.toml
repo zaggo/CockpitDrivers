@@ -1,16 +1,14 @@
 # MotionProviderPlugin configuration (auto-generated with default values).
 # Edit values and click "Reload config" in the status window to apply.
 #
-# State after the 2026-08-30 tuning campaign. Every value marked "adopted" below
-# has a rig verdict behind it, recorded with its measurements in
-# docs/motion-tuning/tuning-log.md -- read that before changing one, several
-# obvious-looking moves have already been tried and rejected.
+# State after the 2026-08-30 tuning campaign, signed off in the acceptance flight
+# of that day (abnahme-motion-20260830-185827.csv). Nothing here is a candidate.
 #
-# TWO EXCEPTIONS, both CANDIDATES for the acceptance flight, neither flown yet:
-#   [effects] slab_*        -- runway slab joints. Revert with slab_spacing_m = 0.
-#   [effects] touchdown_*   -- revert with 3.6 / 6 / 0.25.
-# They show up in different places (touchdown at the moment of contact, slab
-# while rolling), so they can still be judged apart.
+# Every value marked "adopted" has a rig verdict behind it, recorded with its
+# measurements in docs/motion-tuning/tuning-log.md -- read that before changing
+# one. Several obvious-looking moves have already been tried and rejected, and
+# two of the effects were found to demand 14x more acceleration than the
+# hardware can produce, which is not visible from the values alone.
 
 [geometry]
 base_radius_mm = 425
@@ -49,22 +47,22 @@ rot_limit_deg = 7 # adopted 2026-08-30; was 3. Removes clipping in manoeuvring a
 smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, maneuver cues untouched. Next step 0.02; 0.08 was the old laggy tuning.
 
 [effects]
-touchdown_gain = 3.5      # candidate 2026-08-30, unflown: was 3.6/6 Hz/0.25, which was
-touchdown_freq_hz = 0.8   # 14x over the acceleration limit and clipped on 72% of
-touchdown_decay_tau = 0.55 # ticks at a gentle touchdown. Now 10%. Fallback 2.5 / 1.0 / 0.4.
+touchdown_gain = 3.5      # adopted 2026-08-30. Was 3.6/6 Hz/0.25, which was 14x over
+touchdown_freq_hz = 0.8   # the acceleration limit and dumped its whole contribution in the
+touchdown_decay_tau = 0.55 # first 0.25 s -- the impact instant. Now peaks 1.5 s later.
 rumble_gain = 0 # adopted 2026-08-30; was 0.9. 12 Hz is 14x over the acceleration
              # limit, so this only ever produced limiter clipping, felt as ground
              # roughness. See docs/motion-tuning/tuning-log.md.
 rumble_freq_hz = 12
 rumble_speed_ref_mps = 40
 # Runway slab joints: one alternating step per slab, triggered by distance
-# travelled, replacing the rumble above. CANDIDATE, NOT YET FLOWN. 0 disables it.
-# 1 mm is held to ~56 m/s (110 kn); above that the step shrinks itself rather
-# than overrunning the acceleration budget.
-slab_spacing_m = 10      # candidate 2026-08-30, unflown
-slab_step_mm = 2         # 1 mm was barely noticeable at the rig, 3 mm too much
-                         # and irregular. Above ~30 m/s the budget caps the step
-                         # near 1.1 mm whatever this says.
+# travelled, replacing the rumble above. 0 disables it. The step shrinks itself
+# rather than overrunning the acceleration budget once the joints arrive faster
+# than a full-size step can be rendered.
+slab_spacing_m = 10      # adopted 2026-08-30
+slab_step_mm = 2         # adopted. 1 mm was barely noticeable at the rig, 3 mm too
+                         # much and irregular. Above ~30 m/s the budget caps the
+                         # step near 1.1 mm whatever this says.
 slab_accel_mm_s2 = 200   # not the full ~363 mm/s2 ceiling: the washout spends
                          # part of the same budget concurrently. 300 measured
                          # 39% limiter engagement on a ground roll, 200 gave 15%
