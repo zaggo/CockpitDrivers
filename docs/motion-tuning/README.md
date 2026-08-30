@@ -180,6 +180,14 @@ cd MotionProviderPlugin
 ./tools/build/washout_replay --cues motion-20260901-140322.csv --config configuration.toml --verify
 ```
 
+**`--config configuration.toml` means "the config as it is today", not "the config that recording
+was flown with".** Those diverge the moment a value is adopted, so verifying an older recording
+against the live file reports a mismatch that is a config difference, not a defect — reconstruct the
+flown config and verify against that instead. This currently bites every recording made on the
+ground before 2026-08-30: `configuration.toml` now carries `slab_spacing_m = 10`, an unflown
+candidate, so replay them with `--set effects.slab_spacing_m=0` (and `effects.rumble_gain=0.9` for
+anything recorded before the rumble was switched off).
+
 Compares the replay's `live_heave/roll/pitch/yaw` against the recording's, tick for tick, over a
 comparison window that skips a leading warm-up (see below), and reports
 `verify: PASS (within 1e-04 mm/deg floating-point noise floor)` when the max divergence over that

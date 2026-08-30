@@ -1,10 +1,13 @@
 # MotionProviderPlugin configuration (auto-generated with default values).
 # Edit values and click "Reload config" in the status window to apply.
 #
-# Baseline 2026-08-26: all jitter-masking tuning reverted to code defaults
-# (smooth_tau, tilt_rate_limit_dps, effect freqs/taus, accel cap) now that the
-# transport chain is clean (stages 0-3). Only the amplitudes (washout gains +
-# effect gains) are set to 45% of default (60% felt too strong at the rig).
+# State after the 2026-08-30 tuning campaign. Every value marked "adopted" below
+# has a rig verdict behind it, recorded with its measurements in
+# docs/motion-tuning/tuning-log.md -- read that before changing one, several
+# obvious-looking moves have already been tried and rejected.
+#
+# ONE EXCEPTION: slab_spacing_m = 10 is a CANDIDATE and has not been flown yet.
+# Set it back to 0 if the ground feel is worse than with it off.
 
 [geometry]
 base_radius_mm = 425
@@ -52,11 +55,15 @@ rumble_gain = 0 # adopted 2026-08-30; was 0.9. 12 Hz is 14x over the acceleratio
 rumble_freq_hz = 12
 rumble_speed_ref_mps = 40
 # Runway slab joints: one alternating step per slab, triggered by distance
-# travelled. Set slab_spacing_m = 10 to enable; 0 is off. Candidate values for
-# the first rig test are 10 m / 1 mm / 200 mm/s2 -- see docs/motion-tuning/tuning-log.md.
-slab_spacing_m = 0
+# travelled, replacing the rumble above. CANDIDATE, NOT YET FLOWN. 0 disables it.
+# 1 mm is held to ~56 m/s (110 kn); above that the step shrinks itself rather
+# than overrunning the acceleration budget.
+slab_spacing_m = 10      # candidate 2026-08-30, unflown
 slab_step_mm = 1
-slab_accel_mm_s2 = 200
+slab_accel_mm_s2 = 200   # not the full ~363 mm/s2 ceiling: the washout spends
+                         # part of the same budget concurrently. 300 measured
+                         # 39% limiter engagement on a ground roll, 200 gave 15%
+                         # against 14% with no effect at all.
 slab_min_speed_mps = 0.5
 engine_gain = 0
 buffet_gain = 0
@@ -75,3 +82,11 @@ runaway_tilt_deg = 45
 runaway_trans_mm = 500
 runaway_hold_sec = 1
 max_dt_sec = 0.1
+
+[telemetry]
+# Recording is a diagnostic aid and stays off at load, so an unattended flight
+# cannot silently fill a disk -- start it from the status window when you want a
+# recording. This section was missing from the file entirely; it is written out
+# explicitly now so the knob is visible rather than only implied by the default.
+enabled = false
+dir = ""
