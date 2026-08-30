@@ -56,16 +56,21 @@ int main() {
         const size_t dc = split(dataLine).size();
         check(hc == dc, "header and data column counts agree");
         // Exact, not a loose lower bound: this is the one place the schema's
-        // full column count is asserted, and Change 2 added four columns
-        // (eff_prev_onground, eff_td_active, eff_td_t, eff_rumble_phase) on
-        // top of the 57 that came before -- a bound loose enough to survive
-        // that addition silently would also survive one of them going
-        // missing.
-        check(hc == 61, "header has exactly the documented 61-column schema");
+        // full column count is asserted. 57 columns originally, +4 for the
+        // effects state (eff_prev_onground, eff_td_active, eff_td_t,
+        // eff_rumble_phase), +5 for the slab-joint state (eff_slab_dist,
+        // eff_slab_from, eff_slab_to, eff_slab_t, eff_slab_dur) = 66. A bound
+        // loose enough to survive an addition silently would also survive one
+        // of them going missing -- and a missing state column costs a replay
+        // its bit-exactness without any other symptom.
+        check(hc == 66, "header has exactly the documented 66-column schema");
         check(headerLine.rfind("t_sec,", 0) == 0, "header starts with t_sec");
         check(headerLine.find(",eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase")
                   != std::string::npos,
               "the Change-2 effects-state columns are present, in order, at the end");
+        check(headerLine.find(",eff_slab_dist,eff_slab_from,eff_slab_to,eff_slab_t,eff_slab_dur")
+                  != std::string::npos,
+              "the slab-joint state columns are present, in order, at the end");
     }
 
     // Change 2's effects-state columns round-trip exactly, booleans as 0/1

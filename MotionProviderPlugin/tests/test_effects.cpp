@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <utility>
+#include <vector>
 
 static int g_failures = 0, g_checks = 0;
 static void check(bool c, const char* w){ ++g_checks; if(!c){++g_failures; std::printf("  FAIL: %s\n", w);} }
@@ -88,6 +90,103 @@ int main() {
             if (ps.heave != pu.heave) { diverged = true; break; }
         }
         check(diverged, "an unseeded layer does NOT track the source -- the seed matters");
+    }
+
+    // --- Runway slab joints -------------------------------------------------
+    // The whole point of the effect is that it stays inside the platform's
+    // acceleration budget, so that is what these check -- not "does it move".
+
+    auto slabCfg = [](double spacing, double step, double budget) {
+        EffectsConfig c = EffectsConfig::defaults();
+        c.rumbleGain = 0.0; c.touchdownGain = 0.0;   // isolate the slab effect
+        c.slabSpacingM = spacing; c.slabStepMm = step; c.slabAccelMmS2 = budget;
+        return c;
+    };
+
+    // Off by default -- an existing config must not suddenly grow an effect.
+    {
+        check(EffectsConfig::defaults().slabSpacingM == 0.0, "slab joints off by default");
+        EffectsLayer e(EffectsConfig::defaults());
+        MotionCues roll; roll.onGround = true; roll.groundspeed = 20.0f;
+        EffectsConfig noRumble = EffectsConfig::defaults();
+        noRumble.rumbleGain = 0.0; noRumble.touchdownGain = 0.0;
+        EffectsLayer q(noRumble);
+        q.update(MotionCues{}, dt);   // consume the touchdown edge
+        double maxAbs = 0.0;
+        for (int i = 0; i < 600; ++i) maxAbs = std::max(maxAbs, std::fabs((double)q.update(roll, dt).heave));
+        check(maxAbs < 1e-6, "spacing 0 -> no slab output at all");
+    }
+
+    // Sample the effect densely enough to differentiate it twice, and check the
+    // peak acceleration it demands against the configured budget.
+    auto peakAccel = [&](double spacing, double step, double budget, double gs, double seconds) {
+        EffectsLayer e(slabCfg(spacing, step, budget));
+        MotionCues roll; roll.onGround = true; roll.groundspeed = (float)gs;
+        e.update(roll, dt);                    // consume the touchdown edge
+        const double h = 1.0 / 240.0;          // finer than the flight loop
+        std::vector<double> x;
+        for (int i = 0; i < (int)(seconds / h); ++i) x.push_back((double)e.update(roll, h).heave);
+        double worst = 0.0, peak = 0.0;
+        for (size_t i = 2; i < x.size(); ++i) {
+            worst = std::max(worst, std::fabs((x[i] - 2*x[i-1] + x[i-2]) / (h*h)));
+            peak  = std::max(peak, std::fabs(x[i]));
+        }
+        return std::pair<double,double>(worst, peak);
+    };
+
+    {
+        // Taxi: the full step is rendered, well inside the budget.
+        auto r = peakAccel(10.0, 1.0, 300.0, 10.0, 6.0);
+        check(r.first  <= 300.0 * 1.05, "taxi: peak acceleration stays within the budget");
+        check(r.second >= 0.9 && r.second <= 1.1, "taxi: the full 1 mm step is rendered");
+    }
+    {
+        // Takeoff roll: joints arrive far faster; the step must shrink rather
+        // than the budget be exceeded. This is the case the old rumble failed.
+        auto r = peakAccel(5.0, 1.0, 300.0, 60.0, 6.0);
+        check(r.first  <= 300.0 * 1.05, "fast roll: peak acceleration STILL within the budget");
+        check(r.second <  1.0,          "fast roll: the step shrank to fit");
+        check(r.second >  0.0,          "fast roll: something is still rendered");
+    }
+    {
+        // Alternation: the offset must visit both signs, or the platform would
+        // walk away from level one joint at a time.
+        EffectsLayer e(slabCfg(10.0, 1.0, 300.0));
+        MotionCues roll; roll.onGround = true; roll.groundspeed = 10.0f;
+        e.update(roll, dt);
+        double lo = 0.0, hi = 0.0;
+        for (int i = 0; i < 600; ++i) {
+            const double v = (double)e.update(roll, dt).heave;
+            lo = std::min(lo, v); hi = std::max(hi, v);
+        }
+        check(hi > 0.5 && lo < -0.5, "joints alternate up and down");
+    }
+    {
+        // Leaving the ground must return to level, not strand an offset.
+        EffectsLayer e(slabCfg(10.0, 1.0, 300.0));
+        MotionCues roll; roll.onGround = true; roll.groundspeed = 10.0f;
+        e.update(roll, dt);
+        for (int i = 0; i < 200; ++i) e.update(roll, dt);
+        MotionCues air; air.onGround = false; air.groundspeed = 60.0f;
+        double last = 0.0;
+        for (int i = 0; i < 200; ++i) last = (double)e.update(air, dt).heave;
+        check(std::fabs(last) < 1e-6, "airborne again -> slab offset returns to level");
+    }
+    {
+        // State round-trip, same contract as the rumble phase above: the
+        // odometer and the held offset do not decay, so a replay that does not
+        // seed them cannot be bit-exact.
+        EffectsLayer source(slabCfg(10.0, 1.0, 300.0));
+        MotionCues roll; roll.onGround = true; roll.groundspeed = 10.0f;
+        source.update(roll, dt);
+        for (int i = 0; i < 137; ++i) source.update(roll, dt);
+        EffectsLayer seeded(slabCfg(10.0, 1.0, 300.0));
+        seeded.setState(source.state());
+        bool identical = true;
+        for (int i = 0; i < 300; ++i) {
+            if (source.update(roll, dt).heave != seeded.update(roll, dt).heave) { identical = false; break; }
+        }
+        check(identical, "slab state survives setState(state())");
     }
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

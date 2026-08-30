@@ -51,6 +51,13 @@ rumble_gain = 0 # adopted 2026-08-30; was 0.9. 12 Hz is 14x over the acceleratio
              # roughness. See docs/motion-tuning/tuning-log.md.
 rumble_freq_hz = 12
 rumble_speed_ref_mps = 40
+# Runway slab joints: one alternating step per slab, triggered by distance
+# travelled. Set slab_spacing_m = 10 to enable; 0 is off. Candidate values for
+# the first rig test are 10 m / 1 mm / 200 mm/s2 -- see docs/motion-tuning/tuning-log.md.
+slab_spacing_m = 0
+slab_step_mm = 1
+slab_accel_mm_s2 = 200
+slab_min_speed_mps = 0.5
 engine_gain = 0
 buffet_gain = 0
 

@@ -519,6 +519,56 @@ at higher amplitude*, not a smaller gain: a 5 mm bump needs `touchdown_freq_hz �
 363 mm/s², which is a settling cue rather than a thump. Whether that is better is a judgement only
 the rig can make.
 
+### Runway slab joints — new effect, built 2026-08-30, **not yet flown**
+
+The pilot's idea, from the BFF Motion notes: drive ground texture off *distance* instead of a clock,
+the way an unrealistically large wheel radius fakes concrete expansion joints. Then the rate follows
+groundspeed rather than fighting the acceleration limit at a fixed 12 Hz.
+
+**The pilot's refinement is what makes it work, and it corrects a worse design of mine.** My first
+proposal was a bump that returns to zero. The pilot proposed instead that each joint *steps* — up at
+one joint, down at the next, alternating. A bump costs four accelerate/decelerate phases in one
+window; a step costs two, and the return trip is simply the next joint. Same 1 mm, 2.5× less time:
+
+| | amplitude | duration at full budget |
+|---|---|---|
+| bump, out and back | 1 mm | 330 ms |
+| **alternating step** | 1 mm | **132 ms** |
+
+Shape: `x(τ) = from + Δ·(τ − sin(2πτ)/2π)`, `τ = t/T`. Velocity is zero at both ends, peak
+acceleration is `2π|Δ|/T²`, so `T = √(2π|Δ| / budget)` is the fastest move that respects the budget.
+**The effect is specified in acceleration and the displacement follows** — the opposite of the
+rumble, which specified displacement and let the acceleration land wherever it landed (14× over).
+
+Measured on the real ground roll in `rumble0-motion-20260830-170250.csv`, ground ticks only:
+
+| | actuator excursion | `jerk_p95` | acceleration limiter | step delivered |
+|---|---|---|---|---|
+| no effect | 34 930 | 4.81 M | 14.43 % | — |
+| **slab 10 m / 1 mm / 200** | 34 200 | **5.04 M (+5 %)** | **15.11 %** | **1.00 mm** |
+| slab 10 m / 1 mm / 300 | 34 189 | 6.51 M | 38.93 % | 1.00 mm |
+| old rumble 0.9 @ 12 Hz | 34 960 | 11.8 M | 89.61 % | — |
+
+**A prediction of mine was wrong and the measurement caught it.** I claimed the design would never
+clip. At a 300 mm/s² budget it clips on 39 % of ground ticks, because **the budget is shared** — the
+washout is spending part of the same 363 mm/s² at the same time, which my sizing ignored. At 200 the
+effect costs +0.7 pp of limiter engagement over having no effect at all, and still delivers the full
+step. 200 is therefore the default.
+
+Reach, at 10 m spacing and a 200 budget: the full 1 mm holds to ≈56 m/s (110 kn), past the Arrow's
+rotation speed. Above that the step shrinks itself to fit rather than overrunning the budget, and a
+joint arriving while the previous move is still running is skipped — interrupting mid-move would
+restart a zero-start-velocity profile from a moving platform, which is a velocity step and exactly
+what the limiter would then clip.
+
+Off by default (`slab_spacing_m = 0`), five new state columns (66-column telemetry schema), six new
+`test_effects` checks that assert the acceleration budget rather than "does it move". Every earlier
+recording still verifies bit-exact against the config it was flown with.
+
+**To fly it:** `slab_spacing_m = 10` in `configuration.toml`. **This one needs a rebuild on the PC.**
+Judge taxi (distinct thuds), the takeoff roll (they should merge into a fine texture, not a buzz),
+and whether anything is felt in the air — nothing should be.
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,

@@ -131,6 +131,10 @@ EffectsConfig MotionConfig::loadEffects(const std::string& path) {
         getDouble(*t, "rumble_gain", e.rumbleGain);
         getDouble(*t, "rumble_freq_hz", e.rumbleFreqHz);
         getDouble(*t, "rumble_speed_ref_mps", e.rumbleSpeedRefMps);
+        getDouble(*t, "slab_spacing_m", e.slabSpacingM);
+        getDouble(*t, "slab_step_mm", e.slabStepMm);
+        getDouble(*t, "slab_accel_mm_s2", e.slabAccelMmS2);
+        getDouble(*t, "slab_min_speed_mps", e.slabMinSpeedMps);
         getDouble(*t, "engine_gain", e.engineGain);
         getDouble(*t, "buffet_gain", e.buffetGain);
     }
@@ -249,6 +253,10 @@ bool MotionConfig::writeDefaults(const std::string& path) {
     f << "rumble_gain = "          << e.rumbleGain        << "\n";
     f << "rumble_freq_hz = "       << e.rumbleFreqHz      << "\n";
     f << "rumble_speed_ref_mps = " << e.rumbleSpeedRefMps << "\n";
+    f << "slab_spacing_m = "       << e.slabSpacingM      << "\n";
+    f << "slab_step_mm = "         << e.slabStepMm        << "\n";
+    f << "slab_accel_mm_s2 = "     << e.slabAccelMmS2     << "\n";
+    f << "slab_min_speed_mps = "   << e.slabMinSpeedMps   << "\n";
     f << "engine_gain = "          << e.engineGain        << "\n";
     f << "buffet_gain = "          << e.buffetGain        << "\n";
 

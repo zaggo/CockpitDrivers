@@ -48,7 +48,8 @@ const char* Telemetry::header() {
            "sp0,sp1,sp2,sp3,sp4,sp5,"
            "sent0,sent1,sent2,sent3,sent4,sent5,"
            "sl_vel_clip,sl_acc_clip,arm_state,"
-           "eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase";
+           "eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase,"
+           "eff_slab_dist,eff_slab_from,eff_slab_to,eff_slab_t,eff_slab_dur";
 }
 
 bool Telemetry::start(const std::string& path) {
@@ -112,6 +113,11 @@ void Telemetry::write(const TelemetryRow& r) {
     putI(out_, r.effState.tdActive ? 1 : 0);
     putD(out_, r.effState.tdT);
     putD(out_, r.effState.rumblePhase);
+    putD(out_, r.effState.slabDist);
+    putD(out_, r.effState.slabFrom);
+    putD(out_, r.effState.slabTo);
+    putD(out_, r.effState.slabT);
+    putD(out_, r.effState.slabDur);
 
     out_ << '\n';
     ++rows_;

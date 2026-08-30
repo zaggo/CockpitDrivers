@@ -123,6 +123,15 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
     const bool haveEffState =
         idx.find("eff_prev_onground") != idx.end() && idx.find("eff_td_active") != idx.end() &&
         idx.find("eff_td_t") != idx.end() && idx.find("eff_rumble_phase") != idx.end();
+    // The slab-joint state is a second such group, added later still. It is
+    // gated separately so a recording from between the two changes seeds the
+    // columns it does have instead of silently seeding none -- and a zero slab
+    // state is the correct seed for those files, because the effect did not
+    // exist when they were made.
+    const bool haveSlabState =
+        idx.find("eff_slab_dist") != idx.end() && idx.find("eff_slab_from") != idx.end() &&
+        idx.find("eff_slab_to") != idx.end() && idx.find("eff_slab_t") != idx.end() &&
+        idx.find("eff_slab_dur") != idx.end();
 
     const size_t numCols = splitLine(headerLine).size();
     bool warnedRagged = false;
@@ -179,6 +188,14 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
             s.effState.rumblePhase  = col(f, idx, "eff_rumble_phase");
             s.haveEffState          = true;
         }
+        if (haveSlabState) {
+            s.effState.slabDist = col(f, idx, "eff_slab_dist");
+            s.effState.slabFrom = col(f, idx, "eff_slab_from");
+            s.effState.slabTo   = col(f, idx, "eff_slab_to");
+            s.effState.slabT    = col(f, idx, "eff_slab_t");
+            s.effState.slabDur  = col(f, idx, "eff_slab_dur");
+            s.haveEffState      = true;
+        }
         out.push_back(s);
     }
     return true;
@@ -220,6 +237,10 @@ const EffectsKey kEffectsKeys[] = {
     {"effects.rumble_gain",          &EffectsConfig::rumbleGain},
     {"effects.rumble_freq_hz",       &EffectsConfig::rumbleFreqHz},
     {"effects.rumble_speed_ref_mps", &EffectsConfig::rumbleSpeedRefMps},
+    {"effects.slab_spacing_m",       &EffectsConfig::slabSpacingM},
+    {"effects.slab_step_mm",         &EffectsConfig::slabStepMm},
+    {"effects.slab_accel_mm_s2",     &EffectsConfig::slabAccelMmS2},
+    {"effects.slab_min_speed_mps",   &EffectsConfig::slabMinSpeedMps},
 };
 
 bool applyOverride(const std::string& key, double value,
