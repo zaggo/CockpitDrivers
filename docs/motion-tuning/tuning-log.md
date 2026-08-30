@@ -419,6 +419,56 @@ Actuator space, which is what the pilot actually feels, told a completely differ
 segment (+23.6 % vs +1.2 %). **Report a candidate in the space the platform moves in, not only in
 the space the parameter acts on.**
 
+### Ground roughness — diagnosed 2026-08-30: the rumble effect is not physically renderable
+
+The pilot has reported roughness on the ground twice, across settings that fixed roughness in the
+air. Measured on `surgesway-a`, restricted to the 1793 ticks with `onground = 1` and
+`groundspeed > 0.5 m/s` — whole-file metrics are useless here, the airborne portion drowns it out:
+
+| `rumble_gain` | actuator excursion | `jerk_p95` | acceleration limiter active | velocity limiter |
+|---|---|---|---|---|
+| 0.0 (off) | 7887 | 3.3 M | **7.70 %** | 5.97 % |
+| 0.45 | 7902 | 14.1 M (+327 %) | **84.77 %** | 15.11 % |
+| **0.9 (shipped)** | 7879 | **14.5 M (+339 %)** | **92.14 %** | 32.07 % |
+
+**The excursion is identical** (7879 vs 7887). The rumble adds no felt movement whatsoever; it
+quadruples the jerk and pins the acceleration limiter across almost every ground tick. What the
+pilot feels as "rumble" is the limiter clipping a sine it cannot follow.
+
+**Why halving the gain did not help.** Peak acceleration is `(2πf)² · A` — it scales with the
+*square of the frequency*, so amplitude is the weak lever and frequency is the strong one. Scale
+factor taken from the replays themselves (least squares of `sp0..5` against `cmd_heave`; the six
+legs give 304–586 counts/mm, and **the smallest was used, which is the assumption most favourable
+to the rumble**): 330.7 counts/mm, so the 120 000 counts/s² limit is **363 mm/s² of heave**.
+
+| rumble | demanded acceleration | vs. limit |
+|---|---|---|
+| **0.9 mm @ 12 Hz (shipped)** | 5116 mm/s² | **14.1×** |
+| 2.0 mm @ 12 Hz (code default) | 11 370 mm/s² | 31.3× |
+| 0.9 mm @ 3 Hz | 320 mm/s² | 0.9× |
+
+Largest renderable amplitude by frequency: 12 Hz → **0.064 mm**; 8 Hz → 0.144 mm; 6 Hz → 0.255 mm;
+4 Hz → 0.575 mm; 3 Hz → 1.021 mm. At the shipped 12 Hz the platform can render 64 µm. The effect
+has never once produced a rumble on this hardware.
+
+That also explains the frequency sweep, which looked paradoxical: lowering `rumble_freq_hz` to 3 Hz
+still left 69 % acceleration clipping while *raising* velocity clipping 32 → 49 %. The two limiters
+are cascaded — at 12 Hz the acceleration limiter crushes the signal so hard that little is left for
+the velocity limiter to clip.
+
+**The same defect applies to the touchdown bump**, which has not been separately investigated:
+3.6 mm at 6 Hz demands 5117 mm/s², also **14×** the limit, against 0.255 mm renderable. The landing
+thump is clipping too.
+
+**Test, one knob: `rumble_gain = 0`.** If the ground roughness goes away, the diagnosis holds and
+nothing of value was lost — the excursion numbers say the pilot cannot be giving up felt motion,
+only clipping. If it does *not* go away, the cause is elsewhere and this analysis was a dead end;
+the next suspect would be the washout responding to real runway bumps in `g_nrml`.
+
+If the rumble is missed afterwards, the renderable corner is `rumble_freq_hz = 3` at
+`rumble_gain = 0.9`. But 3 Hz is not a rumble — it is a slow wallow, and that is a separate
+judgement to make after the null test, not folded into it.
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,
