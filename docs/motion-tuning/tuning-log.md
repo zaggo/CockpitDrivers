@@ -513,11 +513,31 @@ Two separate things, and they need separating:
    so the amplitude is delivered; it is the 6 Hz rate that cannot be, at 14× the acceleration limit
    against 0.255 mm renderable at that frequency.
 
-**No change made.** The pilot has not reported a problem with landings, and the campaign's stated
-target — roughness — is now addressed. If this is picked up later, the direction is *lower frequency
-at higher amplitude*, not a smaller gain: a 5 mm bump needs `touchdown_freq_hz ≈ 1.4` to stay inside
-363 mm/s², which is a settling cue rather than a thump. Whether that is better is a judgement only
-the rig can make.
+**No change made at the time.** The pilot had not reported a problem with landings. Picked up later
+the same day for the acceptance flight — candidates swept on the two real touchdowns above, gentle
+touch only (the firm landing is 95.38 % saturated with the effect *disabled*, so nothing set here
+changes it):
+
+| gain / freq / tau | delivered | acceleration limiter | `jerk_p95` |
+|---|---|---|---|
+| 3.6 / 6 / 0.25 (shipped) | 3.01 mm | **71.64 %** | 11.4 M |
+| 6.0 / 1.0 / 0.40 | 3.46 mm | 41.79 % | 9.9 M |
+| 4.0 / 1.2 / 0.35 | 2.37 mm | 32.84 % | 10.0 M |
+| **3.5 / 0.8 / 0.55** | **2.11 mm** | **10.45 %** | 4.79 M |
+| 2.5 / 1.0 / 0.40 | 1.44 mm | 7.46 % | 4.26 M |
+| 1.8 / 1.5 / 0.30 | 1.10 mm | 8.96 % | 5.06 M |
+| effect disabled | 0 | 0.00 % | 3.56 M |
+
+**Candidate `3.5 / 0.8 / 0.55`**: 70 % of the displacement the shipped setting delivers at a seventh
+of the clipping. Note that "delivered" is well below `touchdown_gain` because the exponential
+envelope decays before the sine reaches its first peak — at 0.8 Hz and τ = 0.55 the first peak lands
+at ≈0.31 s, by which point the envelope is at 0.57. Fallback if it feels floaty: `2.5 / 1.0 / 0.4`.
+
+This is no longer a thump; it is a settle over roughly a second, which is closer to what an oleo
+strut actually does. Whether that reads as a landing is the rig's call.
+
+`touchdown_freq_hz` accepts fractional values — `getDouble` in `MotionConfig.cpp` tries `double`
+first and falls back to `int64_t`, so both `6` and `0.8` parse.
 
 ### Runway slab joints — new effect, built 2026-08-30, **not yet flown**
 
@@ -616,6 +636,26 @@ joints fire; it was confirmed to fail with the margin removed.
 speed is partly inherent: at 10 m spacing, joints arrive at 3–4.5 per second on the takeoff roll, so
 distinct thuds necessarily blur into texture. Larger `slab_spacing_m` would keep them distinct on
 the roll at the cost of being sparse while taxiing; that is a separate experiment.
+
+### Parked ideas — measured or reasoned, deliberately not pursued
+
+Not rejected, just not worth a rig session yet. Each one has its reasoning here so it does not have
+to be re-derived.
+
+- **`slab_spacing_m` 15–20 m.** At 10 m the joints arrive 3–4.5 per second on the takeoff roll, so
+  distinct thuds necessarily blur into texture — which is what the pilot reported and also what real
+  slab joints do. Wider spacing keeps them distinct at roll speed at the cost of being sparse while
+  taxiing. Try only if the roll ends up feeling like a buzz rather than a surface.
+- **`tilt_limit_deg = 9` at `tilt_rate_limit_dps = 3`.** The tilt channel is structurally maxed out
+  at 7: the gain sweep showed everything above 0.4 buys clipping rather than cue, so more
+  longitudinal/lateral information would have to come from a larger limit. The campaign established
+  that roughness is governed by the *rate* limit and not the limit itself, so 9° at 3 °/s is
+  plausible on paper. It is a large static lean and needs its own rig judgement — do not fold it
+  into another change.
+- **Surge/sway onset cues.** A feature, not a setting: `WashoutFilter::update` hard-zeroes
+  `p.surge` and `p.sway`, so the platform runs 6DOF hardware in 4DOF and renders longitudinal and
+  lateral force only as a sustained lean. Written up as its own ticket:
+  `../superpowers/specs/2026-08-30-surge-sway-onset-cues-ticket.md`.
 
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
