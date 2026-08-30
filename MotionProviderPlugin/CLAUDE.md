@@ -66,17 +66,40 @@ makes it host-testable and offline-replayable.
 - **Output smoothing** — two cascaded one-pole low-passes (`smooth_tau`), currently one shared
   constant for all DOF.
 
-**Known issue: the heave channel saturates permanently at the shipped settings**, which is felt as a
-harsh 4–8 s pumping motion. Diagnosis, the two levers that do *not* fix it (`heave_gain`, the
-actuator-space velocity/acceleration caps), and the staged fix are in
-`../docs/superpowers/specs/2026-08-29-motion-heave-tuning-design.md`. Read that before touching the
-washout parameters. For how to record, replay, sweep and measure a candidate against the harness
-built for that campaign, see `../docs/motion-tuning/README.md`.
+**The washout parameters here are tuned, not defaults.** A 2026-08-30 campaign found four separate
+causes of the roughness the platform used to have — a permanently saturated heave channel (fixed by
+`heave_*_washout_tau = 0.25`), a tilt rate above the ≈3 °/s rotation-detection threshold
+(`tilt_rate_limit_dps = 3`), and two effects that demanded more acceleration than the hardware can
+produce. **Read `../docs/motion-tuning/tuning-log.md` before changing any of them**: every value has
+a recorded rig verdict, and several obvious-looking moves have already been tried and rejected
+(raising `heave_gain`, and the actuator-space velocity/acceleration caps, which add lag by
+construction). Design spec: `../docs/superpowers/specs/2026-08-29-motion-heave-tuning-design.md`.
+Recording, replay, sweep and measurement harness: `../docs/motion-tuning/README.md`.
 
 Two structural notes that matter when changing this file: the limit clamps write back to **integrator
 state** rather than only to the output (windup with no anti-windup), and
 `StewartKinematics::clampToReachable` scales all six DOF together by a bisection factor, so one
 saturating DOF attenuates the others.
+
+## The acceleration budget (`EffectsLayer.cpp`, and anything that adds motion)
+
+`SafetyLimiter` caps the change in actuator velocity per tick at `max_acceleration_cps2 * dt`. At the
+shipped 120 000 counts/s² and the measured 330.7 counts/mm, that is **≈363 mm/s² of heave, hard**.
+
+Peak acceleration of any oscillating or pulsed cue goes as **`(2πf)² · A`** — with the *square* of
+the frequency, so frequency is the strong lever and amplitude the weak one. Largest renderable
+amplitudes: 12 Hz → 0.064 mm, 8 Hz → 0.144, 6 Hz → 0.255, 4 Hz → 0.575, 3 Hz → 1.021.
+
+Two effects were written without checking this and both were 14× over: the 12 Hz ground rumble
+(now `rumble_gain = 0`) and the 6 Hz touchdown bump (still shipped, still clipping). Neither
+produced the motion it was named for — the limiter turned each into a slew-limited zigzag, felt as
+harshness. **Size any new effect against this budget before tuning it**, and remember the washout is
+spending part of the same budget concurrently, so an effect cannot have all of it: the slab-joint
+effect measured 39 % limiter engagement at a 300 mm/s² budget and 15 % at 200.
+
+What the pilot feels is acceleration, not displacement. 363 mm/s² is roughly 25–35× the perception
+threshold for vertical whole-body vibration, so a cue of a few hundredths of a millimetre is still
+clearly felt if it uses the budget. Specify effects in acceleration and let the displacement follow.
 
 ## Timing and dt
 
