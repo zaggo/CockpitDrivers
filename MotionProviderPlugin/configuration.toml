@@ -46,7 +46,9 @@ smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, mane
 touchdown_gain = 3.6 # 45% of default 8.0
 touchdown_freq_hz = 6 # back to default (was 5)
 touchdown_decay_tau = 0.25 # back to default (was 0.35)
-rumble_gain = 0.9 # 45% of default 2.0
+rumble_gain = 0 # adopted 2026-08-30; was 0.9. 12 Hz is 14x over the acceleration
+             # limit, so this only ever produced limiter clipping, felt as ground
+             # roughness. See docs/motion-tuning/tuning-log.md.
 rumble_freq_hz = 12
 rumble_speed_ref_mps = 40
 engine_gain = 0

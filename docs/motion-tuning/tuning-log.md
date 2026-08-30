@@ -469,6 +469,56 @@ If the rumble is missed afterwards, the renderable corner is `rumble_freq_hz = 3
 `rumble_gain = 0.9`. But 3 Hz is not a rumble — it is a slow wallow, and that is a separate
 judgement to make after the null test, not folded into it.
 
+### Ground roughness — flown 2026-08-30, **adopted: `rumble_gain = 0`**
+
+Pilot: *"Ruppigkeit ist weg."* Recording `rumble0-motion-20260830-170250.csv` (landing first, then
+takeoff), bit-exact against a config with `rumble_gain = 0` and 0.879 mm/deg off the 0.9 config, so
+the setting was active.
+
+Replayed at both values on those same cues, ground ticks only:
+
+| `rumble_gain` | actuator excursion | `jerk_p95` | acceleration limiter |
+|---|---|---|---|
+| 0.9 | 34 960 | 11.8 M | **89.61 %** |
+| **0** | **34 930** | **4.81 M (−59 %)** | **14.43 %** |
+
+The prediction from the diagnosis held on an independent recording: the excursion is unchanged to
+0.09 %, so nothing felt was given up, and the limiter engagement collapses. **The effect had never
+rendered as a rumble on this hardware** — it was 14× over the acceleration limit and produced only
+clipping.
+
+**Where the campaign's original complaint now stands.** The pilot named ground roughness twice while
+air roughness was being fixed; it survived every washout change because it was never a washout
+problem. This is the fourth distinct cause found in one campaign, and the second one where the
+symptom was a *limiter* rather than the parameter being tuned.
+
+### Touchdown bump — measured 2026-08-30, **not changed, decision deferred**
+
+Same recording, which contains two `onground` rising edges. Windowed 1.5 s from each edge:
+
+| event | `touchdown_gain` | `jerk_p95` | acceleration limiter |
+|---|---|---|---|
+| firm landing, t = 133.1 s | 3.6 (shipped) | 17.5 M | 98.46 % |
+| firm landing, t = 133.1 s | 0 | 14.9 M | **95.38 %** |
+| gentle touch, t = 186.8 s | 3.6 (shipped) | 11.4 M | **71.64 %** |
+| gentle touch, t = 186.8 s | 0 | 3.56 M | **0.00 %** |
+
+Two separate things, and they need separating:
+
+1. **On the firm landing the limiter is already pinned at 95 % without any effect at all.** That is
+   the washout responding to the real vertical deceleration of a landing, and a 30 mm platform
+   physically cannot render it. Clipping there is arguably the correct behaviour, not a defect.
+2. **On the gentle touch the bump is the entire story** — 0.00 % clipping without it, 71.64 % with.
+   The effect manufactures harshness on an event that should feel soft. Peak `eff_heave` is 3.04 mm,
+   so the amplitude is delivered; it is the 6 Hz rate that cannot be, at 14× the acceleration limit
+   against 0.255 mm renderable at that frequency.
+
+**No change made.** The pilot has not reported a problem with landings, and the campaign's stated
+target — roughness — is now addressed. If this is picked up later, the direction is *lower frequency
+at higher amplitude*, not a smaller gain: a 5 mm bump needs `touchdown_freq_hz ≈ 1.4` to stay inside
+363 mm/s², which is a settling cue rather than a thump. Whether that is better is a judgement only
+the rig can make.
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,
