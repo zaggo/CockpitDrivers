@@ -73,46 +73,77 @@ Metric notes:
               the file) rather than a divide-by-zero or a misleadingly clean
               0%.
 
-  rot_rate_p95, rot_rate_pct_3dps
-              How fast the COMMANDED platform pose (live_roll/live_pitch/
-              live_yaw) rotates -- the full rotation the platform performs,
-              and therefore what a pilot feels. Differentiated against the
-              real time axis built from dt_real (np.gradient with an
-              explicit coordinate array, not an assumed-uniform spacing) --
-              the same approach the heave acceleration derivation above
-              uses, for the same reason.
+  rot_rate_p95, rot_rate_pct_3dps, tilt_rate_p95, tilt_rate_pct_3dps
+              Two pairs, same shape, different channel -- and both are kept
+              because they answer different questions. rot_rate_* is how
+              fast the COMMANDED platform pose (live_roll/live_pitch/
+              live_yaw) rotates: the full rotation the platform performs,
+              and therefore the total rate a pilot's vestibular system
+              feels, regardless of which internal channel produced it.
+              tilt_rate_* is the same computation restricted to the tilt-
+              coordination channel alone (tilt_pitch/tilt_roll): tilt
+              coordination is MEANT to be felt as sustained acceleration (a
+              re-orientation of gravity), not as rotation, so any angular
+              rate that shows up there is a leak of the wrong percept, an
+              artefact -- whereas the rotational channel's whole job is to
+              render the aircraft's own rotation, so supra-threshold rate is
+              its intent, not a defect. Summing the two channels together
+              (as rot_rate_* does, by construction) buries a tilt-channel
+              change under whatever the rotational/effects channels are
+              doing, which is exactly why tilt_rate_* exists as a separate,
+              narrower pair -- see the worked example below.
 
-              rot_rate_p95 is the MAX OVER THE THREE AXES of each axis's own
-              95th-percentile |rate|, matching how jerk_p95 combines its six
-              channels: a per-axis p95, then the worst axis. This is "max of
-              the p95s", not "p95 of the max" -- a different, and usually
-              smaller, number, and the two are easy to conflate.
+              Both pairs are differentiated against the real time axis built
+              from dt_real (np.gradient with an explicit coordinate array,
+              not an assumed-uniform spacing) -- the same approach the heave
+              acceleration derivation above uses, for the same reason.
 
-              rot_rate_pct_3dps is the percentage of ticks in which ANY axis
-              exceeds ROT_RATE_THRESHOLD_DPS (3 deg/s). That threshold is a
-              documented working rule of thumb for ranking candidates
-              against each other, NOT a perceptual constant: published
-              vestibular rotation-detection thresholds vary substantially
-              with axis, waveform and workload, with figures from roughly
-              0.5 to 3 deg/s appearing in the literature. Same disclaiming
-              spirit as wrms's band emphasis not being a conformant ISO-2631
-              weighting.
+              *_p95 is the MAX OVER THE CHANNEL'S AXES (three for rot_rate_*,
+              two for tilt_rate_*) of each axis's own 95th-percentile
+              |rate|, matching how jerk_p95 combines its six channels: a
+              per-axis p95, then the worst axis. This is "max of the p95s",
+              not "p95 of the max" -- a different, and usually smaller,
+              number, and the two are easy to conflate.
 
-              live_roll, live_pitch and live_yaw are required columns, not
-              optional -- a file missing any of them aborts naming the file
-              and the column, same as every other required column. Refuses
-              (NaN, with a stderr warning) when the recording has fewer than
-              ROT_RATE_MIN_SAMPLES rows to differentiate meaningfully, in
-              the same spirit as xcorr_lag_ms's too-short refusal below.
+              *_pct_3dps is the percentage of ticks in which ANY axis of
+              that channel exceeds ROT_RATE_THRESHOLD_DPS (3 deg/s). That
+              threshold is a documented working rule of thumb for ranking
+              candidates against each other, NOT a perceptual constant:
+              published vestibular rotation-detection thresholds vary
+              substantially with axis, waveform and workload, with figures
+              from roughly 0.5 to 3 deg/s appearing in the literature. Same
+              disclaiming spirit as wrms's band emphasis not being a
+              conformant ISO-2631 weighting.
 
-              wrms, band_ratio, jerk_p95, lag_ms, rot_rate_p95 and
-              rot_rate_pct_3dps are deliberately NOT filtered by the sat_*
-              paused mask: they operate on the full time series, and
-              excising scattered paused rows would corrupt the time axis
-              feeding the derivative/FFT/cross-correlation math -- worse
-              than the problem it would solve. So sat_* and this group of
-              metrics are not measured over identical sample sets; that is
-              intentional, not an oversight.
+              live_roll/live_pitch/live_yaw and tilt_pitch/tilt_roll are all
+              required columns, not optional -- a file missing any of them
+              aborts naming the file and the column, same as every other
+              required column. Both pairs refuse (NaN, with a stderr
+              warning) when the recording has fewer than ROT_RATE_MIN_SAMPLES
+              rows to differentiate meaningfully, in the same spirit as
+              xcorr_lag_ms's too-short refusal below.
+
+              Worked example that motivated tilt_rate_* existing at all: on
+              a tilt-rate-limiter sweep (tr_3.csv vs tr_5.csv, tightening the
+              limiter from 5 to 3 deg/s), tilt_rate_pct_3dps drops sharply
+              (the limiter doing its job, measured on its own channel), but
+              rot_rate_pct_3dps does not -- it moves the wrong way, because
+              the rotational/effects channels dominate the combined pose and
+              the tilt channel's improvement is too small a slice of the
+              total to show through. Use rot_rate_* to judge whether the
+              platform as a whole is rotating more than it should; use
+              tilt_rate_* to judge whether tilt coordination specifically is
+              leaking rotation.
+
+              wrms, band_ratio, jerk_p95, lag_ms, rot_rate_p95,
+              rot_rate_pct_3dps, tilt_rate_p95 and tilt_rate_pct_3dps are
+              deliberately NOT filtered by the sat_* paused mask: they
+              operate on the full time series, and excising scattered
+              paused rows would corrupt the time axis feeding the
+              derivative/FFT/cross-correlation math -- worse than the
+              problem it would solve. So sat_* and this group of metrics are
+              not measured over identical sample sets; that is intentional,
+              not an oversight.
 """
 import argparse
 import csv
@@ -393,6 +424,29 @@ def metrics(path):
                     | (yaw_rate > ROT_RATE_THRESHOLD_DPS))
         rot_rate_pct_3dps = 100.0 * float(np.mean(any_over))
 
+    # Same computation, restricted to the tilt-coordination channel alone --
+    # see the module docstring for why this is a separate metric rather than
+    # a subset already covered by rot_rate_*: tilt coordination is meant to
+    # be felt as acceleration, so any supra-threshold rate here is a leak of
+    # the wrong percept, not the intended one. tilt_pitch/tilt_roll are
+    # required columns, same as live_roll/pitch/yaw above.
+    tilt_pitch = column(cols, arr, "tilt_pitch", path=path)
+    tilt_roll = column(cols, arr, "tilt_roll", path=path)
+
+    if n < ROT_RATE_MIN_SAMPLES:
+        print(f"{path}: only {n} rows (< {ROT_RATE_MIN_SAMPLES}); refusing "
+              f"to report tilt_rate_p95/tilt_rate_pct_3dps for a recording "
+              f"too short to differentiate meaningfully", file=sys.stderr)
+        tilt_rate_p95 = float("nan")
+        tilt_rate_pct_3dps = float("nan")
+    else:
+        tp_rate = np.abs(np.gradient(tilt_pitch, t))
+        tr_rate = np.abs(np.gradient(tilt_roll, t))
+        tilt_rate_p95 = float(max(np.percentile(tp_rate, 95),
+                                   np.percentile(tr_rate, 95)))
+        tilt_over = (tp_rate > ROT_RATE_THRESHOLD_DPS) | (tr_rate > ROT_RATE_THRESHOLD_DPS)
+        tilt_rate_pct_3dps = 100.0 * float(np.mean(tilt_over))
+
     return {
         "file": path,
         "rows": n,
@@ -411,6 +465,8 @@ def metrics(path):
         "jerk_p95": jerk_p95,
         "rot_rate_p95": rot_rate_p95,
         "rot_rate_pct_3dps": rot_rate_pct_3dps,
+        "tilt_rate_p95": tilt_rate_p95,
+        "tilt_rate_pct_3dps": tilt_rate_pct_3dps,
         "lag_ms": xcorr_lag_ms(g_cue, heave_mm, fs),
         "peak_raw_mm": peak_raw,
         "peak_out_mm": peak_out_mm,
@@ -446,6 +502,8 @@ HEADERS = [
     ("jerk_p95", ">", "{:.1f}"),
     ("rot_rate_p95", ">", "{:.2f}"),
     ("rot_rate_pct_3dps", ">", "{:.2f}"),
+    ("tilt_rate_p95", ">", "{:.2f}"),
+    ("tilt_rate_pct_3dps", ">", "{:.2f}"),
     ("lag_ms", ">", "{:.1f}"),
     ("peak_raw_mm", ">", "{:.1f}"),
     ("peak_out_mm", ">", "{:.1f}"),
