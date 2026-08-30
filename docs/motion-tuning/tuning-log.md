@@ -265,6 +265,36 @@ lateral information. At 7° the platform leans back noticeably. Whether that rea
 merely as "tilted" depends on whether the visual agrees. **Judge it on takeoff and approach**, where
 the sustained longitudinal accelerations are.
 
+### Why the gains are at 30–60 % of their defaults — history, from the pilot
+
+The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,
+`tilt_surge/sway_gain` 0.3 of 1.0) were **not** a considered amplitude choice. They were an attempt
+to get the platform's harshness under control. Damping every channel was a reasonable response to a
+real symptom; it simply acted on the wrong quantity, because the cause — channels pinned at
+arbitrary clamps — was not visible without measurement.
+
+That explains a contradiction in the original complaint: the platform felt harsh **and** too weak at
+the same time. Reducing a gain into a clamped channel does not unclamp it. It only makes everything
+smaller while the clipping, and therefore the harshness, stays.
+
+**Consequence for the remaining stages: limit before gain, always.** Raising a gain on a channel
+that is still clipping buys nothing but more clipping — literally what happened when `heave_gain`
+went 0.5 → 0.15 and the pumping did not change.
+
+**The gains are not equally expensive**, and this is structural rather than empirical:
+
+| gain | status | cost in `jerk_p95` |
+|---|---|---|
+| `heave_gain` | tested at the rig, **rejected** | +15–24 % |
+| `rot_*_gain` | swept offline | +21–68 % |
+| `tilt_surge_gain` / `tilt_sway_gain` | **untested** | expected small |
+
+A gain scales everything passing through its channel, including the fast content — which is why the
+heave and rotational gains buy amplitude with harshness. The tilt channel is low-passed and
+rate-limited, so it carries no fast content to amplify. That is the same reason raising
+`tilt_limit_deg` cost only 1.6 % jerk, and it is why the tilt gain is the one worth trying once its
+limit no longer clips.
+
 ### Stage 3 sweep — the other segments
 
 The rows above use `cruise_calm`, the log's default segment. The same sweep across the other
