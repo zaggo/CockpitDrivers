@@ -30,8 +30,10 @@ heave_limit_mm = 30
 tilt_surge_gain = 0.3 # 30% of default 1.0
 tilt_sway_gain = 0.3 # 30% of default 1.0
 tilt_lp_tau = 1.5
-tilt_limit_deg = 3
-tilt_rate_limit_dps = 5 # back to default (was 3, jitter-masking)
+tilt_limit_deg = 7 # adopted 2026-08-30 after rig session; was 3
+tilt_rate_limit_dps = 3 # adopted 2026-08-30 with limit 7: keeps the tilt below the ~3 deg/s
+                        # rotation-detection threshold. Was 3 before, raised to 5 believing it
+                        # masked jitter; the jitter was the saturated heave, not the tilt rate.
 rot_roll_gain = 0.42 # 60% of default 0.7
 rot_pitch_gain = 0.42 # 60% of default 0.7
 rot_yaw_gain = 0.42 # 60% of default 0.7

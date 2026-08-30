@@ -265,6 +265,74 @@ lateral information. At 7° the platform leans back noticeably. Whether that rea
 merely as "tilted" depends on whether the visual agrees. **Judge it on takeoff and approach**, where
 the sustained longitudinal accelerations are.
 
+### Tilt limit + rate limit — flown 2026-08-30, **adopted: `tilt_limit_deg = 7`, `tilt_rate_limit_dps = 3`**
+
+Three rig flights, in order.
+
+**Flight 1, `tilt_limit_deg = 5`.** Pilot: *"5 ist gut."*
+
+**Flight 2, `tilt_limit_deg = 7`.** Pilot: *"Bei 7 kommt definitiv wieder mehr Ruppigkeit ins Spiel.
+Der erhöhte Tilt fühlt sich aber definitiv gut an, z.B. beim Setzen der Flaps, fühlt sich das
+wirklich wie eine Bremswirkung an (nicht nur ein Tilt). Bei 7 mehr als bei 5. Wenn sich irgendwie
+die zusätzliche Ruppigkeit verhindern liese, definitiv 7."*
+
+That is the trade the section above predicted, plus the qualitative answer the offline sweep could
+not give: the extra tilt **does** read as acceleration rather than as "tilted" — the flap-extension
+cue was felt as braking. The cost was roughness.
+
+**Hypothesis for the roughness.** A larger clamp means the tilt travels further, so for the same
+low-pass it travels *faster*. Above roughly 3 °/s the vestibular system detects the motion as
+rotation instead of interpreting it as gravity — the cue stops being a substitute for acceleration
+and becomes a felt lean. `tilt_rate_limit_dps` bounds exactly that rate, and it was sitting at 5.
+
+**This hypothesis was weak on the evidence available when it was made, and that was said before the
+flight.** The two flown recordings showed `tilt_rate_pct_3dps` of 0.94 (limit 5) and 0.93 (limit 7)
+— indistinguishable, because they were different flights with different cues. The commitment made
+to the pilot was: if `tilt_rate_limit_dps = 3` does not remove the roughness, the rotation rate was
+not the cause and the search continues elsewhere.
+
+**Flight 3, `tilt_limit_deg = 7` + `tilt_rate_limit_dps = 3`.** Pilot: *"Voller Erfolg: Viel Tilt,
+Ruppigkeit bleibt gering."*
+
+**Isolated afterwards on that flight's own cues** (`tilt7-ratelimit3-motion-20260830-143423.csv`),
+all four combinations replayed from one identical cue stream:
+
+| limit / rate | `tilt_rate_pct_3dps` | `tilt_rate_p95` | `jerk_p95` | `sat_sl_acc` | `lag_ms` |
+|---|---|---|---|---|---|
+| 5 / 5 | 1.53 % | 1.06 | 22.21 M | 27.10 % | 226.3 |
+| 5 / 3 | 0.51 % | 1.07 | 22.21 M | 26.99 % | 226.3 |
+| **7 / 5** | **1.80 %** | 1.12 | 22.21 M | 27.32 % | 226.3 |
+| **7 / 3** | **0.58 %** | 1.15 | 22.21 M | 27.23 % | 226.3 |
+
+Both halves of the hypothesis hold once the cues are held fixed: raising the limit 5 → 7
+**increases** the supra-threshold fraction (1.53 → 1.80 %), and tightening the rate limit 5 → 3 cuts
+it by about two thirds at either limit. The effect two separate flights could not resolve is plainly
+visible on one cue stream — which is the entire reason for the replay method.
+
+**And it costs no amplitude:**
+
+| limit / rate | max `tilt_pitch` | p95 | max `tilt_roll` | p95 |
+|---|---|---|---|---|
+| 5 / 5 | 5.00° | 2.97 | 5.00° | 4.85 |
+| 7 / 5 | 5.55° | 2.97 | **7.00°** | 4.85 |
+| **7 / 3** | 5.49° | 2.97 | **7.00°** | 4.82 |
+
+The full 7° is still reached with the rate limit at 3; only the flanks are slower. `jerk_p95`,
+`sat_sl_acc` and `lag_ms` are unchanged to three digits — the rate limit acts on a channel the
+heave-derived `lag_ms` does not see, so **the pilot's judgement was the only instrument that could
+have caught a delay here.** The warning given before the flight was explicit: 7° at 3 °/s takes
+≈2.3 s instead of ≈1.4 s, and the pilot was asked to check that the braking cue still arrives *in
+time*. It does.
+
+**Note on the history of this parameter.** `tilt_rate_limit_dps` had already been 3 once and was
+raised to 5 in the belief that it was masking jitter. It was not — the jitter was the saturated
+heave channel, fixed in Stage 3. This is the third instance of the same pattern in this campaign
+(see the next section): a parameter moved to suppress a symptom whose cause lay in a different
+channel. With the cause removed, the parameter could go back.
+
+Verified bit-exact against the adopted `configuration.toml`: `max |replay − recorded| = 0 mm/deg`
+over 10 939 compared samples — the flown settings and the committed settings are the same settings.
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,
