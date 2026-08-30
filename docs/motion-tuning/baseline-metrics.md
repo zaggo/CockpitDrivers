@@ -31,8 +31,9 @@ acceptance flight) should share one environment.
     the exact wind/turbulence values were not noted at capture time and cannot be recovered.
     Treat these four as reproducible only approximately: their cue files remain exact, but a rig
     session cannot recreate the flight condition they were flown in.
-- **Machine (model, OS version):** sim-PC (Windows). *(model/OS to fill)* — all seven files are
-  CRLF and carry `arm_state = 0` throughout: the rig was switched off, so the plugin never armed.
+- **Machine:** sim-PC — AMD Ryzen 7 5700X, 8 cores / 16 threads, 3.4 GHz, Windows 11. GPU not
+  recorded, which matters only for the framerate figure below. All seven files are CRLF and carry
+  `arm_state = 0` throughout: the rig was switched off, so the plugin never armed.
 - **Framerate** (median `1/dt_real`): **45.2 fps** across the set; per segment 30.7 / 45.2 / 47.4 /
   47.9 / 43.8 / 43.9 / 50.9. `cruise_calm` at 30.7 is the outlier — worth knowing before comparing
   its `jerk_p95` against another segment's.
