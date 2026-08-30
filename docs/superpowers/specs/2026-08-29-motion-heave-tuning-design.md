@@ -267,7 +267,7 @@ cues are identical either way).
 - **One continuous 8–10 min mixed flight** as the acceptance case, catching interactions and
   slowly accumulating state that the short segments miss.
 
-**Aircraft: Piper Arrow III (PA28-201R), the vFlightAir custom add-on.** Not a stock X-Plane
+**Aircraft: Piper Arrow III (PA28-201R), the vFlyteAir custom add-on.** Not a stock X-Plane
 model, so the cue characteristics come from a third-party flight model. Every baseline number
 in this campaign is therefore valid *for this aircraft*; a different type would need its own
 baseline before its numbers mean anything. Weather preset and X-Plane version are recorded in

@@ -17,17 +17,20 @@ each one.
 Fill in at the moment the reference set is captured; all seven files (six segments plus the
 acceptance flight) should share one environment.
 
-- **Aircraft:** Piper Arrow III (vFlightAir custom PA28-201R add-on) — not a stock X-Plane
+- **Aircraft:** Piper Arrow III (vFlyteAir custom PA28-201R add-on) — not a stock X-Plane
   model. Every number in this file, and everything measured against it, is valid for this
   aircraft only; a different type needs its own baseline before its numbers mean anything.
-- **X-Plane version:** *(to fill — recorded 2026-08-29 on the sim-PC)*
+- **X-Plane version:** 12.4.3
 - **Weather preset:** per segment, not one setting for the whole set:
   - `cruise_calm` — clear, wind speed 2 kt, everything else 0
   - `turbulence` — wind 4 kt, gusts 7 kt, shear 4 kt, turbulence **severe**
   - `acceptance` — **real weather** (downloaded). This is the one file that cannot be
     re-flown to the same conditions. As a recorded cue stream it stays fully usable; only a
     rig session trying to reproduce the *flight* cannot match it.
-  - `steep_turns`, `climb_descent`, `ground_takeoff`, `approach_landing` — *(to fill)*
+  - `steep_turns`, `climb_descent`, `ground_takeoff`, `approach_landing` — recorded as "calm";
+    the exact wind/turbulence values were not noted at capture time and cannot be recovered.
+    Treat these four as reproducible only approximately: their cue files remain exact, but a rig
+    session cannot recreate the flight condition they were flown in.
 - **Machine (model, OS version):** sim-PC (Windows). *(model/OS to fill)* — all seven files are
   CRLF and carry `arm_state = 0` throughout: the rig was switched off, so the plugin never armed.
 - **Framerate** (median `1/dt_real`): **45.2 fps** across the set; per segment 30.7 / 45.2 / 47.4 /

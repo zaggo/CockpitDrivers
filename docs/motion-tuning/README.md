@@ -52,7 +52,7 @@ change up through Stage 4 (TOML-only stages); Stages 5+ add code and extend this
 
 ## 1. Recording in X-Plane
 
-- Load the aircraft the campaign's baseline is built on: **Piper Arrow III (vFlightAir
+- Load the aircraft the campaign's baseline is built on: **Piper Arrow III (vFlyteAir
   PA28-201R)**. Every number this campaign produces is valid for this aircraft only — a
   different flight model needs its own baseline before its numbers mean anything.
 - Start recording with the **Record** button in the plugin's Status window, or set

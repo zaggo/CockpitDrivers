@@ -18,7 +18,7 @@
 - **Additive only in Part A.** Tasks 1–9 must not change any filter's numerical behaviour. The ten existing suites in `MotionProviderPlugin/tests/` staying green is the proof.
 - **No behaviour change without its own stage.** One knob per change, counter-tested immediately. The single deliberate exception is Stage 3, which moves `heave_vel_washout_tau` and `heave_pos_washout_tau` together because they are the two poles of one washout.
 - **Lag budget: `lag_ms` ≤ baseline + 15 ms.** A candidate breaking it is never flown.
-- **Reference aircraft: Piper Arrow III (PA28-201R), vFlightAir custom add-on.** All baseline numbers are valid for this aircraft only.
+- **Reference aircraft: Piper Arrow III (PA28-201R), vFlyteAir custom add-on.** All baseline numbers are valid for this aircraft only.
 - **Harness sources stay X-Plane-SDK-free.** `WashoutFilter`, `EffectsLayer`, `StewartKinematics`, `SafetyLimiter`, `MotionConfig` and the new `Telemetry` must remain host-linkable, or the replay tool and the tests cannot build.
 - **Float formatting for round-trip exactness:** floats `%.9g`, doubles `%.17g`. The bit-exact self-test depends on this.
 - Commit after every task. Branch: `feature/motion-heave-tuning`.
@@ -1994,7 +1994,7 @@ One row per change. Append, never rewrite. Offline metrics come from
 
 - [ ] **Step 3: Create the baseline placeholder**
 
-Create `docs/motion-tuning/baseline-metrics.md` stating that it is filled by Stage 2 and must not be edited afterwards, with the recording environment fields to capture: aircraft (Piper Arrow III, vFlightAir PA28-201R), X-Plane version, weather preset, machine, framerate, and the `configuration.toml` git revision.
+Create `docs/motion-tuning/baseline-metrics.md` stating that it is filled by Stage 2 and must not be edited afterwards, with the recording environment fields to capture: aircraft (Piper Arrow III, vFlyteAir PA28-201R), X-Plane version, weather preset, machine, framerate, and the `configuration.toml` git revision.
 
 - [ ] **Step 4: Commit**
 
