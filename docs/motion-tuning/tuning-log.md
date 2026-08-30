@@ -378,6 +378,47 @@ the gain test.
 "Reload config", no rebuild. Judge takeoff, flap extension and approach — the sustained longitudinal
 accelerations — and whether turbulence brings roughness back.
 
+### Tilt gain — flown 2026-08-30, **adopted at 0.4, but on weak evidence**
+
+Pilot: *"War soweit ok. Nicht großartig anders wie vorher."* No roughness complaint.
+
+Three recordings, `surgesway-a/b/c`. All three verify **bit-exact** against a config with the gains
+at 0.4 and differ by 0.47–1.27 mm/deg against 0.3, so the setting was genuinely active — the first
+thing to rule out when a change is not felt. `arm_state = 2` throughout; the rig was live.
+
+**Which recording is which** (the pilot was unsure): `a` is calm end to end. Its `|g_nrml − 1|` RMS
+per 20 s block runs 0.004 → 0.043 → 0.112 → 0.124 → 0.173 → 0.099 → 0.034 → 0.026 — it rises and
+comes back down, which is takeoff, rotation and initial climb, not weather. `b` and `c` sit at
+0.12–0.32 throughout: turbulence was on for **both**. The break falls between `a` and `b`.
+
+**Why it was not felt:**
+
+| | tilt p95 | actuator p95 excursion | 0.3→0.4 difference signal vs. what was already moving |
+|---|---|---|---|
+| `a` (calm, 144 s, 36 % on ground) | +33.4 % | **+23.6 %** | **55.8 %** |
+| `b` (turbulent) | +33.4 % | +1.2 % | 23.6 % |
+| `c` (turbulent) | +33.4 % | +3.9 % | 15.5 % |
+
+**The extra tilt is not being clamped away.** `sat_envelope` is 0.00 % on all six replays,
+`sat_heave` and `sat_rot` essentially 0, and `sat_sl_acc` moves by 0.2–2 pp. The difference signal
+is physically present: 2600–5200 counts p95 per leg, 4–8 % of full stroke. It is simply **masked**.
+In turbulence the legs already travel about three times as far, and a slow lean added to fast
+turbulence content is perceptually hopeless.
+
+And the pilot judged mostly in turbulence. The calm recording covers only takeoff and initial climb
+— the flap-extension and approach cues, where the tilt channel had previously been unmistakable,
+were never flown at this setting.
+
+**Adopted anyway**, because it costs nothing measurable (no clipping, `sat_sl_acc` +0.2 pp, no
+roughness reported) and is measurably larger in calm air. **The rig verdict behind this row is weak
+and should not be cited as confirmation** — it establishes that 0.4 does no harm, not that it helps.
+If a later stage wants to revisit the tilt channel, fly the calm-air flap/approach case first.
+
+**Method note.** The sweep reported tilt-space p95 and the change looked uniform at +33 % everywhere.
+Actuator space, which is what the pilot actually feels, told a completely different story per
+segment (+23.6 % vs +1.2 %). **Report a candidate in the space the platform moves in, not only in
+the space the parameter acts on.**
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,
