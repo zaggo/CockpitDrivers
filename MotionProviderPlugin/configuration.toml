@@ -59,7 +59,9 @@ rumble_speed_ref_mps = 40
 # 1 mm is held to ~56 m/s (110 kn); above that the step shrinks itself rather
 # than overrunning the acceleration budget.
 slab_spacing_m = 10      # candidate 2026-08-30, unflown
-slab_step_mm = 1
+slab_step_mm = 2         # 1 mm was barely noticeable at the rig, 3 mm too much
+                         # and irregular. Above ~30 m/s the budget caps the step
+                         # near 1.1 mm whatever this says.
 slab_accel_mm_s2 = 200   # not the full ~363 mm/s2 ceiling: the washout spends
                          # part of the same budget concurrently. 300 measured
                          # 39% limiter engagement on a ground roll, 200 gave 15%

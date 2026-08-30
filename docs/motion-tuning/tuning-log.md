@@ -569,6 +569,54 @@ recording still verifies bit-exact against the config it was flown with.
 Judge taxi (distinct thuds), the takeoff roll (they should merge into a fine texture, not a buzz),
 and whether anything is felt in the air — nothing should be.
 
+#### First rig session, 2026-08-30 — step raised to 2 mm, and a defect found
+
+Pilot, on `Slab1-motion-20260830-174216.csv` (1 mm, bit-exact against the shipped config, so the
+effect ran exactly as built): *"Mit 1 mm war so gut wie nichts zu bemerken."* Then, unrecorded,
+3 mm — *"sehr gut zu merken aber zu viel und fühlte sich seltsam an"* — and 2 mm: *"bei manchen
+Geschwindigkeiten ganz gut, bei schnelleren geht es im allgemeinen Movement unter (muss nicht der
+schlechteste Ausgang sein)."*
+
+Measured on that recording's cues, replayed at each step size, ground ticks only, excluding
+touchdown-active ticks (the limiter is saturated there, which inflates the comparison for reasons
+unrelated to the slab). The share column is the slab's contribution as a fraction of what the
+actuators were already doing:
+
+| speed | step 1 mm | step 2 mm | step 3 mm |
+|---|---|---|---|
+| 0.5–5 m/s | 1.9 % | 3.8 % | 5.5 % |
+| 10–15 m/s | 4.7 % | 9.4 % | 14.1 % |
+| 20–30 m/s | 13.0 % | 17.7 % | 17.7 % |
+| 30–45 m/s | 8.4 % | 13.8 % | 15.4 % |
+
+**A defect, found while explaining "seltsam".** Joints were being silently dropped:
+
+| step | joints expected | fired | skipped |
+|---|---|---|---|
+| 1 mm | 155 | 148 | 5 % |
+| 2 mm | 155 | 134 | **14 %** |
+| 3 mm | 155 | 127 | **18 %** |
+
+The move's duration is fitted to `spacing / groundspeed` measured **at the moment the joint fires**,
+but on a takeoff roll the aircraft is accelerating, so the next joint arrives sooner than that
+estimate and gets skipped because the previous move is still running. A bigger step means a longer
+move means more skips — which is a stuttering rhythm, and a plausible part of why 3 mm felt strange
+rather than merely strong.
+
+Fixed by fitting the move into 80 % of the estimated gap (`kSlabDuty`). That fires essentially every
+joint at every step size, at the cost of a smaller step where the budget was already binding: above
+30 m/s, 2 mm goes from 1.78 to 1.14 mm. Above ~30 m/s the step size setting stops mattering anyway —
+the acceleration budget caps it near 1.1 mm whether it is set to 2 or 3.
+
+A `test_effects` case now flies a simulated accelerating roll and asserts that ≥ 95 % of expected
+joints fire; it was confirmed to fail with the margin removed.
+
+**`slab_step_mm = 2` adopted as the candidate**, still unflown *with the skip fix in place* — the
+2 mm the pilot judged was the stuttering version. **Needs another rebuild on the PC.** The fade at
+speed is partly inherent: at 10 m spacing, joints arrive at 3–4.5 per second on the takeoff roll, so
+distinct thuds necessarily blur into texture. Larger `slab_spacing_m` would keep them distinct on
+the roll at the cost of being sparse while taxiing; that is a separate experiment.
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,

@@ -149,6 +149,27 @@ int main() {
         check(r.second >  0.0,          "fast roll: something is still rendered");
     }
     {
+        // Joints must not be dropped while accelerating. The gap to the next
+        // joint is estimated from the current speed, so on a takeoff roll the
+        // next joint arrives sooner than estimated; without a margin the move
+        // is still running and the joint is skipped, which stutters the rhythm.
+        EffectsLayer e(slabCfg(10.0, 2.0, 200.0));
+        MotionCues roll; roll.onGround = true; roll.groundspeed = 5.0f;
+        e.update(roll, dt);
+        double dist = 0.0, prevTo = 0.0;
+        int joints = 0;
+        for (int i = 0; i < 3000; ++i) {
+            roll.groundspeed = (float)std::min(60.0, 5.0 + 0.02 * i);   // ~1 m/s^2
+            dist += (double)roll.groundspeed * dt;
+            e.update(roll, dt);
+            const double to = e.state().slabTo;
+            if (to != prevTo) { ++joints; prevTo = to; }
+        }
+        const double expected = dist / 10.0;
+        check(joints >= 0.95 * expected,
+              "accelerating roll fires essentially every joint, none skipped");
+    }
+    {
         // Alternation: the offset must visit both signs, or the platform would
         // walk away from level one joint at a time.
         EffectsLayer e(slabCfg(10.0, 1.0, 300.0));
