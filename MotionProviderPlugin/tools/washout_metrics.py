@@ -73,13 +73,46 @@ Metric notes:
               the file) rather than a divide-by-zero or a misleadingly clean
               0%.
 
-              wrms, band_ratio, jerk_p95, and lag_ms are deliberately NOT
-              filtered this way: they operate on the full time series, and
+  rot_rate_p95, rot_rate_pct_3dps
+              How fast the COMMANDED platform pose (live_roll/live_pitch/
+              live_yaw) rotates -- the full rotation the platform performs,
+              and therefore what a pilot feels. Differentiated against the
+              real time axis built from dt_real (np.gradient with an
+              explicit coordinate array, not an assumed-uniform spacing) --
+              the same approach the heave acceleration derivation above
+              uses, for the same reason.
+
+              rot_rate_p95 is the MAX OVER THE THREE AXES of each axis's own
+              95th-percentile |rate|, matching how jerk_p95 combines its six
+              channels: a per-axis p95, then the worst axis. This is "max of
+              the p95s", not "p95 of the max" -- a different, and usually
+              smaller, number, and the two are easy to conflate.
+
+              rot_rate_pct_3dps is the percentage of ticks in which ANY axis
+              exceeds ROT_RATE_THRESHOLD_DPS (3 deg/s). That threshold is a
+              documented working rule of thumb for ranking candidates
+              against each other, NOT a perceptual constant: published
+              vestibular rotation-detection thresholds vary substantially
+              with axis, waveform and workload, with figures from roughly
+              0.5 to 3 deg/s appearing in the literature. Same disclaiming
+              spirit as wrms's band emphasis not being a conformant ISO-2631
+              weighting.
+
+              live_roll, live_pitch and live_yaw are required columns, not
+              optional -- a file missing any of them aborts naming the file
+              and the column, same as every other required column. Refuses
+              (NaN, with a stderr warning) when the recording has fewer than
+              ROT_RATE_MIN_SAMPLES rows to differentiate meaningfully, in
+              the same spirit as xcorr_lag_ms's too-short refusal below.
+
+              wrms, band_ratio, jerk_p95, lag_ms, rot_rate_p95 and
+              rot_rate_pct_3dps are deliberately NOT filtered by the sat_*
+              paused mask: they operate on the full time series, and
               excising scattered paused rows would corrupt the time axis
               feeding the derivative/FFT/cross-correlation math -- worse
-              than the problem it would solve. So sat_* and the
-              spectral/lag metrics are not measured over identical sample
-              sets; that is intentional, not an oversight.
+              than the problem it would solve. So sat_* and this group of
+              metrics are not measured over identical sample sets; that is
+              intentional, not an oversight.
 """
 import argparse
 import csv
@@ -98,6 +131,18 @@ BAND_HI_HZ = 0.63
 LAG_LO_HZ = 0.3
 LAG_HI_HZ = 1.0
 LAG_MIN_PERIODS = 8
+
+# Rule-of-thumb rotation-rate threshold for rot_rate_pct_3dps, chosen for
+# ranking candidates against each other -- NOT a conformant perceptual
+# constant. Published vestibular rotation-detection thresholds vary
+# substantially with axis, waveform and workload; figures from roughly 0.5
+# to 3 deg/s appear in the literature. See the module docstring.
+ROT_RATE_THRESHOLD_DPS = 3.0
+
+# Below this many rows, a rotation-rate percentile/percentage is not a
+# meaningful statistic (echoes the harness's own "fewer than 100 samples"
+# refusal for --verify in docs/motion-tuning/README.md).
+ROT_RATE_MIN_SAMPLES = 100
 
 # Columns allowed to fall back to a default when absent from a CSV. Every
 # other column is required -- see column() and the module docstring.
@@ -317,6 +362,37 @@ def metrics(path):
 
     peak_raw = float(np.max(np.abs(column(cols, arr, "heave_pos_raw", path=path))))
 
+    # Rotation rate of the COMMANDED pose -- see the module docstring for why
+    # live_roll/pitch/yaw (not cmd_*) and why differentiated against the real
+    # `t` axis rather than an assumed-uniform spacing. live_roll/pitch/yaw
+    # are required columns (no default=): a file missing any of them aborts
+    # via column() the same as every other required column, rather than
+    # silently reporting a favourable (zero) rotation rate.
+    live_roll = column(cols, arr, "live_roll", path=path)
+    live_pitch = column(cols, arr, "live_pitch", path=path)
+    live_yaw = column(cols, arr, "live_yaw", path=path)
+
+    if n < ROT_RATE_MIN_SAMPLES:
+        print(f"{path}: only {n} rows (< {ROT_RATE_MIN_SAMPLES}); refusing "
+              f"to report rot_rate_p95/rot_rate_pct_3dps for a recording "
+              f"too short to differentiate meaningfully", file=sys.stderr)
+        rot_rate_p95 = float("nan")
+        rot_rate_pct_3dps = float("nan")
+    else:
+        roll_rate = np.abs(np.gradient(live_roll, t))
+        pitch_rate = np.abs(np.gradient(live_pitch, t))
+        yaw_rate = np.abs(np.gradient(live_yaw, t))
+        # Max over the three axes of each axis's OWN p95 -- "max of the
+        # p95s", matching how jerk_p95 combines its six channels, not a p95
+        # pooled across axes (which would be a different, smaller number).
+        rot_rate_p95 = float(max(np.percentile(roll_rate, 95),
+                                  np.percentile(pitch_rate, 95),
+                                  np.percentile(yaw_rate, 95)))
+        any_over = ((roll_rate > ROT_RATE_THRESHOLD_DPS)
+                    | (pitch_rate > ROT_RATE_THRESHOLD_DPS)
+                    | (yaw_rate > ROT_RATE_THRESHOLD_DPS))
+        rot_rate_pct_3dps = 100.0 * float(np.mean(any_over))
+
     return {
         "file": path,
         "rows": n,
@@ -333,6 +409,8 @@ def metrics(path):
         "band_ratio": (float("nan") if heave_dead
                        else band_ratio(accel, fs, BAND_LO_HZ, BAND_HI_HZ)),
         "jerk_p95": jerk_p95,
+        "rot_rate_p95": rot_rate_p95,
+        "rot_rate_pct_3dps": rot_rate_pct_3dps,
         "lag_ms": xcorr_lag_ms(g_cue, heave_mm, fs),
         "peak_raw_mm": peak_raw,
         "peak_out_mm": peak_out_mm,
@@ -366,6 +444,8 @@ HEADERS = [
     ("wrms", ">", "{:.4f}"),
     ("band_ratio", ">", "{:.3f}"),
     ("jerk_p95", ">", "{:.1f}"),
+    ("rot_rate_p95", ">", "{:.2f}"),
+    ("rot_rate_pct_3dps", ">", "{:.2f}"),
     ("lag_ms", ">", "{:.1f}"),
     ("peak_raw_mm", ">", "{:.1f}"),
     ("peak_out_mm", ">", "{:.1f}"),
