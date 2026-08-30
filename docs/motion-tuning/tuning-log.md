@@ -18,6 +18,92 @@ place as documentation; real entries follow after it.
 | 2026-08-29 | 3 | `washout.heave_vel_washout_tau` + `washout.heave_pos_washout_tau` | 2.0 → 0.4 | 19.92 → 0.00 | 0.0067 → 0.0026 | 6969988 → 2332930 | **−326.2** | not yet flown | **Finalist 2.** Second choice for the first rig session. |
 | 2026-08-29 | 3 | `washout.heave_vel_washout_tau` + `washout.heave_pos_washout_tau` | 2.0 → 0.25 | 19.92 → 0.00 | 0.0067 → 0.0017 | 6969988 → 1785700 | **−489.3** | not yet flown | **Finalist 1.** Strongest de-saturation and lowest lag; first candidate to fly. |
 
+### Stage 3 — flown at the rig 2026-08-30, **adopted**
+
+Two flights, same session, same conditions (clear, 2 kt wind, 3 kt gust), runway takeoff then level
+flight with a few turns; recording stopped, turbulence set to medium mid-flight, second recording
+started. Four files in `MotionProviderPlugin/measurementCSVs/heave-washout/`. Rig armed
+(`arm_state = 2` throughout), plugin rebuilt from `9369a3f`, so all four carry the effects-state
+columns and **all four verify bit-exactly** — the first recordings for which that holds on ground
+segments too.
+
+| | base (τ=2.0) | **0.25** | | base turb | **0.25 turb** |
+|---|---|---|---|---|---|
+| sat_heave | 49.72 % | **0.00 %** | | 75.77 % | **1.19 %** |
+| sat_sl_acc | 31.91 % | 21.31 % | | 49.60 % | **28.35 %** |
+| wrms | 0.0401 | 0.0153 | | 0.0789 | 0.0554 |
+| jerk_p95 | 45.6 M | 20.4 M | | 28.1 M | 19.3 M |
+| lag_ms | 641.2 | **261.8** | | 863.5 | **358.5** |
+| peak_out_mm | 30.0 (pinned) | **27.0** (free) | | 30.0 | 30.0 |
+
+**Rig verdict (pilot, before seeing any number):** *"base ruppig wie immer, Flugzeug kaum zu
+kontrollieren mit dem ganzen Gewackel. 0.25 — plötzlich ist die Motion so smooth wie es sein
+sollte. Kein Problem mehr das Flugzeug beim Cruise ruhig zu halten. Wenn es was auszusetzen gäbe,
+dann eher, dass die Amplituden wieder etwas größer sein könnten. Und auf dem Ground scheint es
+immer noch etwas ruppig, aber nicht unhandlebar."*
+
+**Decision: adopted.** τ = 0.25 for both `heave_vel_washout_tau` and `heave_pos_washout_tau`.
+
+**Two findings from this session worth carrying forward:**
+
+1. **A prediction of mine was wrong.** The offline sweep warned that `sat_sl_acc` would *rise* in
+   turbulence (86.19 → 93.85 % on the `turbulence` reference segment). At the rig it *fell*
+   (49.60 → 28.35 %). The reason: the clamped square wave is itself the largest acceleration
+   demand, and removing it outweighs the higher corner frequency. The offline segment used
+   **severe** turbulence, where the limiter saturates either way; this flight used **medium**. The
+   caution may still hold at severe — untested.
+2. **The pilot is in the loop, and the offline replay cannot see it.** In the turbulence pair the
+   *input* was rougher for the 0.25 flight (mean |g−1| 0.2572 vs 0.2244 g, peak 1.073 vs 0.814 g),
+   yet mean pitch rate dropped from 5.972 to 3.713 °/s — the aircraft was flown 38 % more calmly
+   because the platform allowed it. Replay works from recorded cues and therefore *understates* the
+   real improvement.
+
+### Stage 8 candidate — `heave_gain` sweep on the new rig recordings
+
+Swept against `0.25_noTurb` and `0.25_turb` with τ = 0.25 fixed:
+
+| gain | noTurb sat_heave | noTurb peak_out | turb sat_heave | **turb sat_sl_acc** |
+|---|---|---|---|---|
+| 0.15 (current) | 0.00 | 27.0 mm | 1.19 | 32.79 % |
+| **0.20** | 0.42 | **30.0 mm** | 5.69 | 59.14 % |
+| 0.25 | 1.28 | 30.0 mm | 15.33 | 66.08 % |
+| 0.30 | 2.56 | 30.0 mm | 23.34 | 81.04 % |
+| 0.40 | 5.90 | 30.0 mm | 35.79 | 82.48 % |
+
+The binding constraint is the acceleration limiter in turbulence, not the heave clamp. `0.20` fills
+the ±30 mm envelope in cruise at negligible saturation; `0.25` starts bringing the pumping back in
+turbulence and is the stretch candidate to feel against it.
+
+`lag_ms` varies across this sweep (261.8 → 221.6 ms) — that is **not** physical. Gain is a linear
+scalar and cannot change a linear filter's phase; the steps are exactly 20.1 ms, one sample bin at
+49.6 fps. Estimator quantisation, not an improvement.
+
+### Rotational amplitude — measured, not yet a candidate
+
+The pilot's "amplitudes could be bigger" was mainly about roll/pitch/yaw, not heave. Measured on
+`0.25_noTurb`, the rotational channel is **not saturated** (`sat_rot` 0.00 %), which is why gain
+works there and did not for heave:
+
+| `rot_*_gain` | roll | pitch | yaw | rot clamped |
+|---|---|---|---|---|
+| 0.42 (current) | 3.04° | 4.63° | 2.32° | 0.00 % |
+| 0.60 | 3.45° | 5.47° | **3.00°** | 4.11 % |
+| 0.70 (code default) | 3.75° | 5.74° | **3.00°** | 8.21 % |
+| 0.90 | 3.85° | 6.00° | **3.00°** | 15.90 % |
+
+Yaw pins at `rot_limit_deg = 3` from gain 0.60 on, so gain and limit have to rise together — two
+halves of one intent, like the coupled washout pair. Raising the limit alone gains almost nothing
+(pitch 4.63 → 5.51° at limit 5, nothing beyond; roll and yaw unchanged), because the signal never
+reaches 3° at the current gain. `sat_envelope` stays 0.00 % even at a 12° limit, so the kinematics
+are not the constraint — but that only proves the pose is *reachable*, not that it is mechanically
+sensible at speed. This needs its own stage and its own rig session.
+
+Also recorded while looking: `WashoutFilter::update` sets `p.surge = 0` and `p.sway = 0`
+unconditionally. The platform is a 6DOF machine driven in 4 DOF; longitudinal and lateral
+accelerations are rendered as tilt coordination, never as translation. That explains the pilot
+never consciously noticing sway or surge — they do not exist. Adding translational onset cues would
+be a feature, not tuning.
+
 ### Stage 3 sweep — the other segments
 
 The rows above use `cruise_calm`, the log's default segment. The same sweep across the other

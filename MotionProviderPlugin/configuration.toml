@@ -24,8 +24,8 @@ demand_max = 65280
 [washout]
 heave_gain = 0.15 # 30% of default 0.5
 heave_hp_tau = 1
-heave_vel_washout_tau = 2
-heave_pos_washout_tau = 2
+heave_vel_washout_tau = 0.25 # adopted 2026-08-30 after rig session; was 2 (see docs/motion-tuning/tuning-log.md)
+heave_pos_washout_tau = 0.25 # adopted 2026-08-30 after rig session; was 2
 heave_limit_mm = 30
 tilt_surge_gain = 0.3 # 30% of default 1.0
 tilt_sway_gain = 0.3 # 30% of default 1.0
