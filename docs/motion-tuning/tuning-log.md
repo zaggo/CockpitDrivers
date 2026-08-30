@@ -333,6 +333,51 @@ channel. With the cause removed, the parameter could go back.
 Verified bit-exact against the adopted `configuration.toml`: `max |replay − recorded| = 0 mm/deg`
 over 10 939 compared samples — the flown settings and the committed settings are the same settings.
 
+### Tilt gain — swept 2026-08-30, **candidate `tilt_surge_gain` / `tilt_sway_gain` = 0.4, not yet flown**
+
+Swept together (they are the same channel on two axes: surge → pitch, sway → roll) on three cue
+sets, replayed from the adopted `configuration.toml`. `at_limit` is the share of pitch and roll
+samples within 0.01° of the 7° clamp; `pinned%` is the share of ticks with either axis at the clamp.
+
+| gain | `rot7-noTurb` pitch p95 | `rot7-turb` pitch p95 | `tilt7-r3` roll p95 | `rot7-turb` pinned | `rot7-turb` jerk_p95 | `rot7-turb` sat_sl_acc |
+|---|---|---|---|---|---|---|
+| 0.30 (current) | 5.88° | 4.40° | 4.82° | **0.00 %** | 32.5 M | 37.77 % |
+| **0.40** | 7.00° | **5.87° (+34 %)** | **6.15° (+28 %)** | **0.00 %** | **34.6 M (+6 %)** | **37.92 %** |
+| 0.50 | 7.00° | 7.00° | 7.00° | 10.87 % | **46.6 M (+43 %)** | **48.07 %** |
+| 0.60 | 7.00° | 7.00° | 7.00° | 44.32 % | 41.4 M | 45.26 % |
+| 0.70 | 7.00° | 7.00° | 7.00° | 54.98 % | 38.7 M | 44.47 % |
+| 1.00 | 7.00° | 7.00° | 7.00° | 77.03 % | 39.6 M | 46.51 % |
+
+**The expectation stated in the section below — that the tilt gain would be the one cheap gain —
+holds only up to 0.4, and is wrong above it.** Between 0.4 and 0.5 the turbulence cue set goes from
+no clipping at all to 10.87 % pinned, and `jerk_p95` jumps 34.6 → 46.6 M (+35 %) with `sat_sl_acc`
++10 pp. That is the same order of cost that got `heave_gain = 0.20` rejected.
+
+**The mechanism is not established, and one obvious explanation was tested and failed.** The natural
+guess was that entering and leaving the clamp creates corners, so the cost should scale with clamp
+*entries*. Counted, it does not: `rot7-turb` has 0 entries at 0.4 and only **2** at 0.5, 2 at 0.6,
+3 at 0.7. Few long excursions, not many corners. What does track the cost is **time spent pinned**,
+and that is also why `jerk_p95` *falls* again above 0.5 (46.6 → 41.4 → 38.7 M): with the channel
+pinned 44–55 % of the time it simply moves less. **A lower `jerk_p95` at a higher gain is not a
+better setting here — it is a more thoroughly clipped one.** The metric can be gamed by clipping
+harder, which is worth remembering before reading any jerk number in isolation.
+
+**Why 0.4 and not more.** It is the largest value with zero clipping on the turbulence set, and it
+costs +6 % jerk and +0.15 pp acceleration-limiter load for +28–34 % of the amplitude that is
+actually felt (p95, not peak). Above it, the binding constraint stops being the gain and becomes the
+7° clamp again — limit before gain, for the fourth time in this campaign.
+
+**Consequence for later.** The tilt channel is close to structurally maxed out at
+`tilt_limit_deg = 7`. If more longitudinal/lateral cue is wanted after 0.4 has been flown, the next
+lever is a *higher* `tilt_limit_deg`, not a higher gain — and the previous section established that
+the roughness is governed by `tilt_rate_limit_dps`, not by the limit, so a 9° limit at 3 °/s is
+plausible on paper. It is a large static lean and needs its own rig judgement; do not fold it into
+the gain test.
+
+**To fly it:** set `tilt_surge_gain = 0.4` and `tilt_sway_gain = 0.4` in `configuration.toml`,
+"Reload config", no rebuild. Judge takeoff, flap extension and approach — the sustained longitudinal
+accelerations — and whether turbulence brings roughness back.
+
 ### Why the gains are at 30–60 % of their defaults — history, from the pilot
 
 The reduced amplitudes in `configuration.toml` (`heave_gain` 0.15 of 0.5, `rot_*_gain` 0.42 of 0.7,
