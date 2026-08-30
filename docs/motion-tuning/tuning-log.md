@@ -156,6 +156,54 @@ accelerations are rendered as tilt coordination, never as translation. That expl
 never consciously noticing sway or surge — they do not exist. Adding translational onset cues would
 be a feature, not tuning.
 
+### Rotational amplitude — candidate prepared 2026-08-30, **not yet flown**
+
+Swept offline against `reference/steep_turns` (the segment with the most rotational content) and
+the armed `heave-gain/0.15-noTurb` recording, at the adopted τ = 0.25 / `heave_gain` 0.15.
+
+Where each knob binds depends on the flight condition, which is why one probe was not enough:
+
+- **Steep turns:** the rotational channel is saturated. `rot_roll` reaches 3.13° and `rot_yaw`
+  3.02° against `rot_limit_deg = 3`, so both are clipped. Yaw has no tilt contribution at all, so
+  `live_yaw` sits at exactly 3.00.
+- **Calm cruise:** the rotational channel is *not* saturated (`sat_rot` 0.31 %), but the tilt
+  channel is — `tilt_pitch` sits at exactly 3.00 against `tilt_limit_deg = 3`.
+
+**2D sweep on `steep_turns`** (`rot_*_gain` × `rot_limit_deg`):
+
+| gain | limit | roll | pitch | yaw | sat_rot | sat_envelope | jerk_p95 |
+|---|---|---|---|---|---|---|---|
+| 0.42 | 3 (current) | 4.41° | 3.03° | 3.00° | 20.02 % | 0.00 % | 1.76 M |
+| 0.42 | 5 | 6.41° | 3.03° | 3.88° | 6.98 % | 0.00 % | 1.94 M (+11 %) |
+| **0.42** | **7** | **7.50°** | 3.03° | **3.88°** | **0.69 %** | **0.00 %** | **1.94 M (+11 %)** |
+| 0.60 | 3 | 4.41° | 3.79° | 3.00° | 31.77 % | 0.00 % | 2.13 M (+21 %) |
+| 0.60 | 5 | 6.41° | 4.12° | 5.00° | 13.45 % | 0.75 % | 2.41 M (+37 %) |
+| 0.60 | 7 | 8.41° | 4.12° | 5.54° | 7.47 % | 3.27 % | 2.68 M (+53 %) |
+| 0.70 | 3 | 4.41° | 3.89° | 3.00° | 35.38 % | 0.00 % | 2.47 M (+40 %) |
+| 0.70 | 5 | 6.41° | 4.73° | 5.00° | 20.02 % | 1.62 % | 2.56 M (+46 %) |
+| 0.70 | 7 | 8.41° | 4.73° | 6.47° | 9.69 % | 4.73 % | 2.96 M (+68 %) |
+
+**Candidate: `rot_limit_deg = 7`, gains unchanged at 0.42.** Roll 4.41 → 7.50°, yaw 3.00 → 3.88°,
+and saturation *falls* from 20.02 % to 0.69 % — more amplitude and less clipping from one knob, the
+same shape of fix as the heave one. Cost: +11 % `jerk_p95` in turns, +0.4 % in cruise; `sat_envelope`
+stays 0.00 %. Conservative fallback `rot_limit_deg = 5` (roll 6.41°, sat_rot 6.98 %, identical jerk)
+if 7.5° of roll feels excessive — the only question the metrics cannot answer.
+
+**The gains are deliberately not touched**, applying the Stage 8 lesson. Raising them costs 21–68 %
+`jerk_p95`, which is what the pilot perceives as harshness, and at gain ≥ 0.60 with limit ≥ 5
+`sat_envelope` leaves zero (0.75–4.73 %). Because `StewartKinematics::clampToReachable` scales all
+six DOF together, envelope clipping would attenuate the just-repaired heave channel as a side
+effect. At limit 3 more gain buys no roll amplitude at all (stays 4.41°, clipped) and only raises
+clipping to 48.55 % — the heave mistake repeated.
+
+**Held back for a separate step:** `tilt_limit_deg` 3 → 5 raises cruise pitch from 6.00 to 7.79° and
+`tilt_roll` from 3.00 to 4.95° (nothing further above 5; the tilt naturally caps near 5.4°, and the
+rate limiter never engages). It is a different sensation from the rotational cue — tilt coordination
+renders *sustained* acceleration as a steady lean rather than a motion onset, and since
+`WashoutFilter` zeroes surge and sway it is the only longitudinal and lateral information the
+platform gives. Whether 5° of sustained lean reads as acceleration or merely as "tilted" is a
+question for its own test.
+
 ### Stage 3 sweep — the other segments
 
 The rows above use `cruise_calm`, the log's default segment. The same sweep across the other
