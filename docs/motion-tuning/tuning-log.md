@@ -204,6 +204,67 @@ renders *sustained* acceleration as a steady lean rather than a motion onset, an
 platform gives. Whether 5° of sustained lean reads as acceleration or merely as "tilted" is a
 question for its own test.
 
+### Rotational limit — flown 2026-08-30, **adopted, but the verdict carries almost no evidence**
+
+Two recordings in `measurementCSVs/rotation-limit/` at `rot_limit_deg = 7`, both verifying
+bit-exactly. `rot7-turb`: takeoff, climb and cruise with turbulence. `rot7-noTurb`: cruise and
+landing after turbulence was switched off mid-flight.
+
+**Rig verdict:** *"Fühlte sich mit 7 rund an. Kein Problem."*
+
+**That verdict is about a change which did essentially nothing in these two flights.** Replaying
+both recordings at limit 3 and limit 7 on identical cues:
+
+| | limit 3 | limit 7 |
+|---|---|---|
+| `rot7-turb` | roll 2.96° pitch 4.19° yaw 1.75° | roll 2.95° pitch 4.19° yaw 1.75° |
+| `rot7-noTurb` | roll 3.50° pitch 4.37° yaw 2.85° | roll 3.55° pitch 4.37° yaw 2.85° |
+
+The rotational channel peaked at 3.44–3.45° raw, so it crossed the old 3° limit only barely and
+rarely: `sat_rot` was 0.55 % and 0.98 % at limit 3, and 0.00 % at limit 7, with jerk unchanged
+(+1.7 % / −0.7 %). The large gain measured in the sweep (roll 4.41 → 7.50°) came from
+`reference/steep_turns`; these flights contained no steep turns, so nothing exercised it.
+
+**Decision: adopted.** It removes real clipping in manoeuvring at no measurable cost, and it is
+demonstrably harmless in normal flight. But "no problem" here means "no effect", not "an
+improvement felt" — the amplitude benefit remains untested until a flight with steep turns.
+
+### The tilt channel is saturated 56–63 % of the time — the real amplitude constraint
+
+Looking at the same two recordings for why normal flight felt unchanged:
+
+| | max `tilt_pitch` | ticks at the 3° tilt limit |
+|---|---|---|
+| `rot7-turb` | 3.00° | **56.05 %** |
+| `rot7-noTurb` | 3.00° | **62.68 %** |
+
+`tilt_pitch` sits pinned at exactly `tilt_limit_deg` for the majority of the flight. This is the
+heave pattern found again in a different channel — and it is two orders of magnitude more binding
+than the rotational limit that was just changed (0.5–1 %). The amplitude the pilot is missing in
+normal flight was never in the rotational channel; it is here.
+
+`tilt_limit_deg` swept on the same recordings:
+
+| tilt_limit | live pitch (`noTurb`) | ticks at limit | jerk_p95 | sat_envelope | sat_sl_acc |
+|---|---|---|---|---|---|
+| 3 (current) | 4.37° | 58.83 % | 18.36 M | 0.00 % | 15.07 % |
+| **5** | **5.58° (+28 %)** | 6.16 % | 18.52 M (**+1.6 %**) | 0.00 % | 15.35 % |
+| 7 | 7.26° (+66 %) | 1.56 % | 18.65 M (+1.6 %) | 0.00 % | 15.74 % |
+
+On `rot7-turb` the tilt caps naturally at 4.63°, so limits 5 and 7 are identical there.
+
+**+28 % pitch amplitude for +1.6 % jerk** — an order of magnitude better trade than `heave_gain`,
+which wanted 15–24 % jerk for its amplitude and was rejected for exactly that. The reason is
+structural: tilt is a low-passed, rate-limited channel that changes slowly by construction, so
+raising its clamp adds no high-frequency content. A gain, by contrast, scales the fast content too.
+
+**Candidate: `tilt_limit_deg = 5`, stretch `7`.** The open question is qualitative and only the rig
+can answer it: tilt coordination renders *sustained* acceleration as a steady lean, not a motion
+onset, and since `WashoutFilter` zeroes surge and sway it is the platform's only longitudinal and
+lateral information. At 7° the platform leans back noticeably. Whether that reads as acceleration or
+merely as "tilted" depends on whether the visual agrees. **Judge it on takeoff and approach**, where
+the sustained longitudinal accelerations are.
+
 ### Stage 3 sweep — the other segments
 
 The rows above use `cruise_calm`, the log's default segment. The same sweep across the other

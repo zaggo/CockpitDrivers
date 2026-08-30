@@ -37,7 +37,7 @@ rot_pitch_gain = 0.42 # 60% of default 0.7
 rot_yaw_gain = 0.42 # 60% of default 0.7
 rot_hp_tau = 1
 rot_washout_tau = 3
-rot_limit_deg = 3
+rot_limit_deg = 7 # adopted 2026-08-30; was 3. Removes clipping in manoeuvring at no measurable cost; inert in normal flight
 smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, maneuver cues untouched. Next step 0.02; 0.08 was the old laggy tuning.
 
 [effects]
