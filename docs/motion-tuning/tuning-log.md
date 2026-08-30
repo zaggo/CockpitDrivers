@@ -78,6 +78,58 @@ turbulence and is the stretch candidate to feel against it.
 scalar and cannot change a linear filter's phase; the steps are exactly 20.1 ms, one sample bin at
 49.6 fps. Estimator quantisation, not an improvement.
 
+### Stage 8 — flown at the rig 2026-08-30, **rejected: `heave_gain` stays 0.15**
+
+Four recordings in `MotionProviderPlugin/measurementCSVs/heave-gain/`: 0.15 and 0.20, each without
+and with medium turbulence, τ = 0.25 throughout.
+
+**Rig verdict (pilot, before seeing any number):** *"0.15 im Start und Cruise sehr smooth. Cruise
+mit 0.2 brachte eine Ruppigkeit zurück. Definitiv 0.15 ist besser. Bei Turbulenzen fühlte sich der
+0.2 gain überraschenderweise nicht schlechter an als 0.15. Overall würde ich aber den 0.15 für
+normale Flüge bevorzugen."* 0.25 was not flown.
+
+**The four flights are not comparable to each other.** The 0.20 flights carried roughly three times
+the mean g excursion of the 0.15 flights (0.1839 vs 0.0596 g without turbulence; 0.4068 vs 0.1477 g
+with), and `0.15-noTurb` was 36 % ground roll — it contained the takeoff — while `0.2-noTurb` was
+entirely airborne. A raw side-by-side of their metrics attributes to the gain what was mostly the
+air and the flying.
+
+**Isolated by replaying every recording at both gains**, which is what the harness exists for:
+
+| cues @ gain | sat_heave | sat_sl_acc | wrms | jerk_p95 | peak_out |
+|---|---|---|---|---|---|
+| `0.15-noTurb` @ 0.15 | 0.00 | 24.80 | 0.0310 | 33.4 M | 22.9 |
+| `0.15-noTurb` @ 0.20 | 0.13 | 25.06 | 0.0367 | **38.5 M (+15 %)** | 30.0 |
+| `0.15-turb` @ 0.15 | 0.00 | 52.92 | 0.0663 | 27.2 M | 25.8 |
+| `0.15-turb` @ 0.20 | 0.55 | 74.45 | 0.0883 | **28.2 M (+4 %)** | 30.0 |
+| `0.2-noTurb` @ 0.15 | 3.03 | 2.87 | 0.0156 | 29.7 M | 30.0 |
+| `0.2-noTurb` @ 0.20 | 3.93 | 4.27 | 0.0196 | **35.7 M (+20 %)** | 30.0 |
+| `0.2-turb` @ 0.15 | 0.19 | 80.96 | 0.0454 | 89.3 M | 30.0 |
+| `0.2-turb` @ 0.20 | 3.15 | 87.57 | 0.0588 | **110.5 M (+24 %)** | 30.0 |
+
+On identical cues, gain 0.20 raises `jerk_p95` by 4–24 % in every case, and `wrms` by 18–30 %.
+`jerk_p95` is the mechanical-harshness measure, and harshness is exactly what the pilot reported
+returning. **The rig verdict is confirmed by the isolated comparison, not merely respected.**
+
+**A weighting error on my part, recorded because it changed a recommendation.** The +18 % rise in
+`jerk_p95` was already visible in the Stage 8 sweep table above. I recommended 0.20 anyway, because
+I weighted `sat_heave` staying near zero and `peak_out` reaching the full 30 mm. Amplitude and
+saturation were the wrong things to weight; jerk was the one that mattered. The gates say
+"`sat_heave`, `wrms` and `jerk_p95` must all fall" — `wrms` and `jerk_p95` both *rose*, so the
+candidate should never have been recommended on the metrics either.
+
+**Turbulence:** the pilot found 0.20 no worse there. The milder turbulence cue set agrees (+4 %
+jerk), the rougher one does not (+24 %). No clean "turbulence masks it" rule; the perception matches
+the case actually flown and should not be generalised.
+
+**Method, adopted from here on.** Matched flights are not required and should not be attempted. The
+rig session produces the *feel*; the numbers come from replaying each recording at every candidate
+setting, so the comparison runs on identical cues. This was the first session where that separation
+was actually needed, and it turned an unusable A/B into a clean one.
+
+**Decision: rejected. `heave_gain` stays 0.15.** Stage 8 closes with "no change", which is a result.
+The pilot's amplitude wish was about roll/pitch/yaw, not heave — that moves to the rotational stage.
+
 ### Rotational amplitude — measured, not yet a candidate
 
 The pilot's "amplitudes could be bigger" was mainly about roll/pitch/yaw, not heave. Measured on
