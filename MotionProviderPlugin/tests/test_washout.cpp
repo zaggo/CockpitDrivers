@@ -165,6 +165,32 @@ int main() {
               "tau 2.0 -> 0.3 cuts the raw heave excursion by more than 4x (clamp disabled)");
     }
 
+    // Restructure regression. Drives a deterministic mixed cue sequence through
+    // the shipped defaults and pins the four output DOF. Task 3 moves the tilt
+    // low-pass from the gained signal to the raw one -- algebraically identical,
+    // so these numbers must not move.
+    {
+        constexpr double kPi = 3.14159265358979323846;
+        WashoutConfig cfg = WashoutConfig::defaults();
+        WashoutFilter f(cfg);
+        Pose p;
+        for (int i = 0; i < 600; ++i) {
+            const double t = i / 60.0;
+            MotionCues c = level();
+            c.heaveG    = 1.0f + 0.3f * static_cast<float>(std::sin(2 * kPi * 0.4 * t));
+            c.surgeG    = 0.25f * static_cast<float>(std::sin(2 * kPi * 0.13 * t));
+            c.swayG     = 0.18f * static_cast<float>(std::cos(2 * kPi * 0.21 * t));
+            c.rollRate  = 6.0f * static_cast<float>(std::sin(2 * kPi * 0.7 * t));
+            c.pitchRate = 4.0f * static_cast<float>(std::cos(2 * kPi * 0.5 * t));
+            c.yawRate   = 2.0f * static_cast<float>(std::sin(2 * kPi * 0.3 * t));
+            p = f.update(c, 1.0 / 60.0);
+        }
+        check(std::fabs(p.heave - -30.000000000000) < 1e-9, "restructure keeps heave bit-stable");
+        check(std::fabs(p.roll  -   2.095232009888) < 1e-9, "restructure keeps roll bit-stable");
+        check(std::fabs(p.pitch -   3.315368652344) < 1e-9, "restructure keeps pitch bit-stable");
+        check(std::fabs(p.yaw   -  -0.524945855141) < 1e-9, "restructure keeps yaw bit-stable");
+    }
+
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }
