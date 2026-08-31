@@ -53,6 +53,10 @@ struct CueSample {
     MotionCues cues;
     // Recorded outputs, kept for --verify.
     float recLiveHeave = 0.0f, recLiveRoll = 0.0f, recLivePitch = 0.0f, recLiveYaw = 0.0f;
+    // Recorded by the 78-column schema onward. A recording that predates those
+    // columns reads them as 0, which matches what the filter produced then:
+    // the channel did not exist, so live surge/sway were 0.
+    float recLiveSurge = 0.0f, recLiveSway = 0.0f;
     bool  haveRecorded = false;
     // Recorded ArmState (0 Disarmed, 1 Arming, 2 Armed, 3 Disarming). Needed
     // because MotionProvider resets the stateful filters on the rising edge
@@ -175,6 +179,8 @@ bool loadCues(const std::string& path, std::vector<CueSample>& out, std::string&
             s.recLiveRoll  = static_cast<float>(col(f, idx, "live_roll"));
             s.recLivePitch = static_cast<float>(col(f, idx, "live_pitch"));
             s.recLiveYaw   = static_cast<float>(col(f, idx, "live_yaw"));
+            s.recLiveSurge = static_cast<float>(col(f, idx, "live_surge", 0.0));
+            s.recLiveSway  = static_cast<float>(col(f, idx, "live_sway",  0.0));
             s.haveRecorded = true;
         }
         if (haveArm) {
@@ -218,6 +224,12 @@ const WashoutKey kWashoutKeys[] = {
     {"washout.tilt_lp_tau",             &WashoutConfig::tiltLpTau},
     {"washout.tilt_limit_deg",          &WashoutConfig::tiltLimitDeg},
     {"washout.tilt_rate_limit_dps",     &WashoutConfig::tiltRateLimitDps},
+    {"washout.surge_gain",              &WashoutConfig::surgeGain},
+    {"washout.sway_gain",               &WashoutConfig::swayGain},
+    {"washout.trans_vel_washout_tau",   &WashoutConfig::transVelWashoutTau},
+    {"washout.trans_pos_washout_tau",   &WashoutConfig::transPosWashoutTau},
+    {"washout.surge_limit_mm",          &WashoutConfig::surgeLimitMm},
+    {"washout.sway_limit_mm",           &WashoutConfig::swayLimitMm},
     {"washout.rot_roll_gain",           &WashoutConfig::rotRollGain},
     {"washout.rot_pitch_gain",          &WashoutConfig::rotPitchGain},
     {"washout.rot_yaw_gain",            &WashoutConfig::rotYawGain},
@@ -438,11 +450,13 @@ RunResult runChain(const std::vector<CueSample>& samples,
         if (raw > res.peakHeaveRawMm) res.peakHeaveRawMm = raw;
 
         if (s.haveRecorded) {
-            const double d[4] = {
+            const double d[6] = {
                 std::fabs(static_cast<double>(live.heave) - s.recLiveHeave),
                 std::fabs(static_cast<double>(live.roll)  - s.recLiveRoll),
                 std::fabs(static_cast<double>(live.pitch) - s.recLivePitch),
-                std::fabs(static_cast<double>(live.yaw)   - s.recLiveYaw)};
+                std::fabs(static_cast<double>(live.yaw)   - s.recLiveYaw),
+                std::fabs(static_cast<double>(live.surge) - s.recLiveSurge),
+                std::fabs(static_cast<double>(live.sway)  - s.recLiveSway)};
             // fabs(NaN) is NaN, and "NaN > sampleErr" is false by IEEE-754, so
             // a naive max-tracking comparison silently drops a NaN divergence
             // instead of ever seeing it. Latch a sentinel (+inf) instead --
