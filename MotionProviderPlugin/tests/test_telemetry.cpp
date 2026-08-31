@@ -63,7 +63,12 @@ int main() {
         // loose enough to survive an addition silently would also survive one
         // of them going missing -- and a missing state column costs a replay
         // its bit-exactness without any other symptom.
-        check(hc == 66, "header has exactly the documented 66-column schema");
+        // 66 columns through the slab-joint work; +12 for the surge/sway onset
+        // channel (8 trace, live_surge/live_sway, cmd_surge/cmd_sway) = 78.
+        // Appended, never inserted: docs/motion-tuning/README.md section 2
+        // exports cues with a position-based cut, which inserting breaks
+        // silently.
+        check(hc == 78, "header has exactly the documented 78-column schema");
         check(headerLine.rfind("t_sec,", 0) == 0, "header starts with t_sec");
         check(headerLine.find(",eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase")
                   != std::string::npos,
@@ -71,6 +76,13 @@ int main() {
         check(headerLine.find(",eff_slab_dist,eff_slab_from,eff_slab_to,eff_slab_t,eff_slab_dur")
                   != std::string::npos,
               "the slab-joint state columns are present, in order, at the end");
+        check(headerLine.find(",surge_a_hp,surge_vel,surge_pos_raw,surge_clamped,"
+                              "sway_a_hp,sway_vel,sway_pos_raw,sway_clamped")
+                  != std::string::npos, "onset trace columns present, in order");
+        check(headerLine.find(",live_surge,live_sway,cmd_surge,cmd_sway")
+                  != std::string::npos, "onset pose columns present, in order");
+        check(headerLine.find(",eff_slab_dur,surge_a_hp") != std::string::npos,
+              "new columns are appended after the effects state block");
     }
 
     // Change 2's effects-state columns round-trip exactly, booleans as 0/1

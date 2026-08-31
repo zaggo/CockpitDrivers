@@ -49,7 +49,10 @@ const char* Telemetry::header() {
            "sent0,sent1,sent2,sent3,sent4,sent5,"
            "sl_vel_clip,sl_acc_clip,arm_state,"
            "eff_prev_onground,eff_td_active,eff_td_t,eff_rumble_phase,"
-           "eff_slab_dist,eff_slab_from,eff_slab_to,eff_slab_t,eff_slab_dur";
+           "eff_slab_dist,eff_slab_from,eff_slab_to,eff_slab_t,eff_slab_dur"
+           ",surge_a_hp,surge_vel,surge_pos_raw,surge_clamped"
+           ",sway_a_hp,sway_vel,sway_pos_raw,sway_clamped"
+           ",live_surge,live_sway,cmd_surge,cmd_sway";
 }
 
 bool Telemetry::start(const std::string& path) {
@@ -118,6 +121,15 @@ void Telemetry::write(const TelemetryRow& r) {
     putD(out_, r.effState.slabTo);
     putD(out_, r.effState.slabT);
     putD(out_, r.effState.slabDur);
+
+    // No eff_surge/eff_sway: EffectsLayer produces no horizontal component,
+    // so the eff_* group stays four wide while live_*/cmd_* below go to six.
+    putD(out_, r.trace.surgeAHp); putD(out_, r.trace.surgeVel);
+    putD(out_, r.trace.surgePosRaw); putI(out_, r.trace.surgeClamped ? 1 : 0);
+    putD(out_, r.trace.swayAHp);  putD(out_, r.trace.swayVel);
+    putD(out_, r.trace.swayPosRaw);  putI(out_, r.trace.swayClamped ? 1 : 0);
+    putF(out_, r.live.surge);      putF(out_, r.live.sway);
+    putF(out_, r.commanded.surge); putF(out_, r.commanded.sway);
 
     out_ << '\n';
     ++rows_;
