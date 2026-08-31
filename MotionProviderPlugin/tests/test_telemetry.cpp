@@ -85,6 +85,61 @@ int main() {
               "new columns are appended after the effects state block");
     }
 
+    // A transposition inside write() -- e.g. two swapped putD calls -- emits
+    // the right NUMBER of values under the wrong headings. Neither the
+    // header/data column-count check above nor the header-string order
+    // checks catch that: both only look at the header text or at counts,
+    // never at which value landed under which name. Give every field a
+    // distinct, unmistakable value and look each one up by NAME so a
+    // transposition fails here, naming the swapped column, instead of
+    // surfacing several replays later as inexplicable numbers.
+    {
+        Telemetry t;
+        t.start(path);
+        TelemetryRow r;
+        r.trace.surgeAHp     = 101.0;
+        r.trace.surgeVel     = 102.0;
+        r.trace.surgePosRaw  = 103.0;
+        r.trace.surgeClamped = true;    // opposite of swayClamped below --
+        r.trace.swayAHp      = 105.0;   // catches a swap of exactly the pair
+        r.trace.swayVel      = 106.0;   // most likely to be swapped.
+        r.trace.swayPosRaw   = 107.0;
+        r.trace.swayClamped  = false;
+        r.live.surge         = 109.0f;
+        r.live.sway          = 110.0f;
+        r.commanded.surge    = 111.0f;
+        r.commanded.sway     = 112.0f;
+        // live_heave/cmd_heave are the nearest neighbours of the new pose
+        // columns and the likeliest partners in a live/commanded mix-up.
+        r.live.heave         = 200.0f;
+        r.commanded.heave    = 201.0f;
+        t.write(r);
+        t.stop();
+
+        std::ifstream in(path);
+        std::string headerLine, dataLine;
+        std::getline(in, headerLine);
+        std::getline(in, dataLine);
+        const std::vector<std::string> h = split(headerLine);
+        const std::vector<std::string> d = split(dataLine);
+
+        const std::vector<std::pair<std::string, std::string>> expected = {
+            {"surge_a_hp", "101"},   {"surge_vel", "102"},
+            {"surge_pos_raw", "103"}, {"surge_clamped", "1"},
+            {"sway_a_hp", "105"},    {"sway_vel", "106"},
+            {"sway_pos_raw", "107"}, {"sway_clamped", "0"},
+            {"live_surge", "109"},  {"live_sway", "110"},
+            {"cmd_surge", "111"},   {"cmd_sway", "112"},
+            {"live_heave", "200"},  {"cmd_heave", "201"},
+        };
+        for (const auto& kv : expected) {
+            size_t idx = h.size();
+            for (size_t i = 0; i < h.size(); ++i) if (h[i] == kv.first) idx = i;
+            const std::string msg = kv.first + " column exists and carries its own value (no transposition)";
+            check(idx < h.size() && idx < d.size() && d[idx] == kv.second, msg.c_str());
+        }
+    }
+
     // Change 2's effects-state columns round-trip exactly, booleans as 0/1
     // and doubles at full precision -- washout_replay's seeding depends on
     // reading back exactly what was recorded, particularly rumblePhase
