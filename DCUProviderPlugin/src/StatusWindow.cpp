@@ -319,7 +319,7 @@ void StatusWindow::drawText(int x, int y) {
     const int gap = cw * 2;
 
     // Title
-    drawString(x, y, "DCU Provider Status v0.3", 0.8f, 1.0f, 0.8f);
+    drawString(x, y, "DCU Provider Status v0.4", 0.8f, 1.0f, 0.8f);
     y -= 20;
 
     // Connection status (cached in rebuildCachedLines(), ~1 Hz) + disconnect.

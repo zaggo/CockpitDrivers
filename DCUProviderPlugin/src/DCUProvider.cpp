@@ -358,6 +358,27 @@ void DCUProvider::updateDownlink(float dt)
         rpmAccumulator_ = 0.0f;
     }
 
+    // ============ Airspeed Data (50 Hz) ============
+    airspeedAccumulator_ += dt;
+    float airspeedRate = 1.0f / AIRSPEED_RATE;
+
+    if (airspeedAccumulator_ >= airspeedRate)
+    {
+        struct AirspeedData
+        {
+            float ias;
+            float tas;
+        };
+
+        AirspeedData airspeed;
+        airspeed.ias = dataRefMgr_->getIas();
+        airspeed.tas = dataRefMgr_->getTas();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageAirspeed, &airspeed, sizeof(airspeed));
+
+        airspeedAccumulator_ = 0.0f;
+    }
+
     // ============ Odometer Data (10 Hz) ============
     odometerAccumulator_ += dt;
     float odometerRate = 1.0f / ODOMETER_RATE;

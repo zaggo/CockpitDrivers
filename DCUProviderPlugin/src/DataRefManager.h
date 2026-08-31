@@ -42,6 +42,10 @@ public:
     float getTachHoursTenths() const;
     float getTachHoursHundredths() const;  // 0.0-1.0 fraction, *1000 on the wire
 
+    // Airspeed indicator (ASI)
+    float getIas() const;  // knots, indicated
+    float getTas() const;  // knots, true
+
     // Transponder
     uint16_t getTransponderCode() const;
     uint8_t getTransponderMode() const;
@@ -118,6 +122,9 @@ private:
     mutable XPLMDataRef dr_tachHrs1 = nullptr;
     mutable XPLMDataRef dr_tachHrsTenths = nullptr;
     mutable XPLMDataRef dr_tachHrsHundredths = nullptr;
+
+    XPLMDataRef dr_ias = nullptr;
+    XPLMDataRef dr_tas = nullptr;
 
     XPLMCommandRef cr_TransponderIdent = nullptr;
 };

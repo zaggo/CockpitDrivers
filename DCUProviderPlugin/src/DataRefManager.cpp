@@ -66,6 +66,10 @@ void DataRefManager::onAircraftLoaded()
     dr_tachHrs1 = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHrs1");
     dr_tachHrsTenths = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeTenths");
     dr_tachHrsHundredths = XPLMFindDataRef("VFLYTEAIR/tach/TachTimeHundredths");
+
+    // Airspeed indicator (ASI)
+    dr_ias = XPLMFindDataRef("sim/cockpit2/gauges/indicators/airspeed_kts_pilot");
+    dr_tas = XPLMFindDataRef("sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot");
 }
 
 // Fuel
@@ -126,6 +130,17 @@ float DataRefManager::getTachHoursTenths() const
 float DataRefManager::getTachHoursHundredths() const
 {
     return readFloat(resolveLazy(dr_tachHrsHundredths, "VFLYTEAIR/tach/TachTimeHundredths"), 0.0f);
+}
+
+// Airspeed indicator (ASI)
+float DataRefManager::getIas() const
+{
+    return readFloat(dr_ias, 0.0f);
+}
+
+float DataRefManager::getTas() const
+{
+    return readFloat(dr_tas, 0.0f);
 }
 
 // Altimeter
