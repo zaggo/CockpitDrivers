@@ -61,7 +61,16 @@ makes it host-testable and offline-replayable.
 
 - **Heave** — `(g_nrml − 1)` high-passed, then leaky double integration to mm.
 - **Tilt coordination** — sustained surge/sway specific force low-passed into a rate-limited pitch/roll
-  tilt, using gravity to sustain a translational cue the platform cannot otherwise produce.
+  tilt, using gravity to sustain a translational cue the platform cannot otherwise produce. The
+  low-pass now runs on the raw surge/sway specific force, with the tilt gain applied outside it —
+  so the same filtered signal feeds both tilt and the translational onset channel below without
+  the gain baking itself into the corner frequency.
+- **Translational onset** — the complement of the tilt-coordination low-pass, leaky
+  double-integrated to mm and clamped per axis. Renders the onset of a longitudinal or
+  lateral acceleration, which tilt coordination cannot: it is low-passed and rate-limited
+  by design. Crossover constant is `tilt_lp_tau`, shared with the tilt half, so the two
+  cannot double-count. Off by default (`surge_gain`/`sway_gain` = 0). Design:
+  `../docs/superpowers/specs/2026-08-31-surge-sway-onset-cues-design.md`.
 - **Rotational** — body rates high-passed, integrated, then leaked back toward centre.
 - **Output smoothing** — two cascaded one-pole low-passes (`smooth_tau`), currently one shared
   constant for all DOF.
@@ -79,7 +88,10 @@ Recording, replay, sweep and measurement harness: `../docs/motion-tuning/README.
 Two structural notes that matter when changing this file: the limit clamps write back to **integrator
 state** rather than only to the output (windup with no anti-windup), and
 `StewartKinematics::clampToReachable` scales all six DOF together by a bisection factor, so one
-saturating DOF attenuates the others.
+saturating DOF attenuates the others. `surge_limit_mm`/`sway_limit_mm` exist for exactly that
+reason: they keep the translational onset channel's own per-axis clamp (`sat_surge`/`sat_sway` in
+the tuning harness) as the thing that engages, so `clampToReachable`'s all-DOF bisection — which
+would also eat into heave and tilt — never has to.
 
 ## The acceleration budget (`EffectsLayer.cpp`, and anything that adds motion)
 

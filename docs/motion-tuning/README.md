@@ -111,6 +111,15 @@ input to `--verify` on a recording that spans an arm edge (§1, §5). If
 `Telemetry::header()` ever changes column order, regenerate this `cut` invocation from the
 new header before trusting it — it is a position-based cut, not a name-based one.
 
+The schema is now 78 columns: the translational surge/sway onset channel appended twelve —
+`surge_a_hp`, `surge_vel`, `surge_pos_raw`, `surge_clamped`, the same four for sway, then
+`live_surge`, `live_sway`, `cmd_surge`, `cmd_sway` — after every column this `cut` already
+selects, which is exactly why the `cut` above stays valid unchanged: it names fields up to 16
+plus 58–61, none of which moved. `--verify` also still works against a recording made *before*
+this change: the recorded `live_surge`/`live_sway` it compares against default to 0 when those
+two columns are absent from the file, the same tolerance `dt_real`/`g_nrml` already get, rather
+than aborting on an older recording that predates the onset channel.
+
 ## 3. Running a single replay
 
 ```bash
@@ -411,7 +420,8 @@ offset, is what makes a dead or never-armed run obvious in the table itself.
 |---|---|---|
 | `sat_heave` | % of unpaused ticks with the heave clamp engaged | **The primary diagnostic.** Target for the diagnosis stage: under 2% in calm cruise. Today's expectation there is 80–100%. |
 | `sat_rot`, `sat_tilt_rate`, `sat_sl_vel`, `sat_sl_acc` | same idea for the rotational clamp, the tilt-rate limiter, and the `SafetyLimiter`'s velocity/acceleration clips | Secondary diagnostics — same "must fall" gate as `sat_heave` unless a stage says otherwise. |
-| `sat_envelope` (from `reach_scale`) | % of unpaused ticks where the **pre-blend** envelope bisection engaged (`reach_scale < 1.0`) | See "Why `sat_envelope` only sees one of two clamps" below — it is blind to the second, post-blend clamp by design, not by omission. |
+| `sat_envelope` (from `reach_scale`) | % of unpaused ticks where the **pre-blend** envelope bisection engaged (`reach_scale < 1.0`) | See "Why `sat_envelope` only sees one of two clamps" below — it is blind to the second, post-blend clamp by design, not by omission. **Gate: must not exceed its own cue-off baseline, per reference file** — see below. |
+| `sat_surge`, `sat_sway` | % of unpaused ticks with the translational onset clamp engaged | Same reading as `sat_heave`. A high value means the onset channel is running into its per-axis limit and the cue is being flattened rather than shaped — lower the gain before raising the limit, because the limit is what keeps `sat_envelope` at zero. |
 | `wrms` | RMS of heave acceleration, band-limited to 0.1–0.63 Hz with a Hann window (RMS-corrected for the window's power loss) | A documented band emphasis, **not a conformant ISO-2631 Wk weighting**. Ranks candidates against each other only — never quote it as a comfort figure. Returns `nan` (stderr warning) when `live_heave` has no variation at all — see below. |
 | `band_ratio` | fraction of heave-acceleration spectral power inside that same 0.1–0.63 Hz band | States directly whether motion sits in the motion-sickness band. Stage 8's inverted gate depends on this: `wrms` may rise as amplitude comes back, but `band_ratio` must not. Same `nan` refusal as `wrms`. |
 | `jerk_p95` | the **max over the six** streamed BFF demand channels of that channel's 95th-percentile \|third difference\| — a per-channel p95, then the worst channel; not a p95 pooled across channels. Normalised to counts/s³ via the file's own sampling rate | Comparative only — actuator counts, no counts-to-mm conversion exists. Runs at different framerates are still comparable because of the normalisation. **Only meaningful on replay output** (a disarmed live recording pins `sent*` and reports ≈ 0), and fictional across an arm/disarm — see §5. |
@@ -515,6 +525,23 @@ recording *that* scale would pin `sat_envelope` at 0% forever, regardless of wha
 actually did. The second clamp stays in the code as a guard; its scale is deliberately never
 written to telemetry. Don't read a low `sat_envelope` as "the envelope is never a constraint
 anywhere in the chain" — it can only ever tell you about the first clamp.
+
+**The `sat_envelope` gate is not a flat 0.00 %.** With the onset channel switched off,
+`steep_turns` already measures `sat_envelope = 0.34 %` (its `reach_scale` dips to 0.9968 over
+one 0.24 s window of hard manoeuvring); the other six reference recordings all measure
+`0.00 %` — see `docs/motion-tuning/baseline-metrics.md`'s "`sat_envelope` gate — correction for
+later tasks" section for the measurement. A flat "`sat_envelope` must stay 0.00 %" gate is
+therefore one reference file cannot meet even with the feature disabled — run it once against
+`steep_turns` and it either gets ignored as a known exception or misread as a regression the
+first time someone runs the campaign, neither of which is what a gate is for. The correct gate
+is **`sat_envelope` must not exceed its own cue-off baseline, per reference file** — 0.34 % for
+`steep_turns`, 0.00 % for the other six.
+
+With the onset channel enabled, `sat_envelope` becoming non-zero on a file that scored 0.00 %
+with the channel off means surge and sway are stealing reachable travel from heave and tilt —
+the one failure mode of this feature that no per-channel metric (`sat_surge`, `sat_sway`) can
+show, because each of those only sees its own axis hitting its own configured limit, not the
+combined pose becoming unreachable.
 
 **Missing columns are treated as a safety issue, not a formatting one.** Only `dt_real` and
 `g_nrml` may fall back to a default when absent from a CSV. Every other column — most

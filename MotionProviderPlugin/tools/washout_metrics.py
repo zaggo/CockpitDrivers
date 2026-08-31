@@ -71,7 +71,10 @@ Metric notes:
               number. If a file is paused throughout, the unpaused-row count
               is zero and every sat_* is NaN (with a stderr warning naming
               the file) rather than a divide-by-zero or a misleadingly clean
-              0%.
+              0%. sat_surge and sat_sway follow the same rule, reading
+              surge_clamped/sway_clamped -- the translational onset
+              channel's own per-axis clamp, distinct from sat_envelope's
+              reach-scale bisection below.
 
   rot_rate_p95, rot_rate_pct_3dps, tilt_rate_p95, tilt_rate_pct_3dps
               Two pairs, same shape, different channel -- and both are kept
@@ -363,6 +366,11 @@ def metrics(path):
         "envelope": sat_pct(column(cols, arr, "reach_scale", 1.0, path=path) < 1.0),
         "sl_vel": sat_pct(column(cols, arr, "sl_vel_clip", path=path) > 0),
         "sl_acc": sat_pct(column(cols, arr, "sl_acc_clip", path=path) > 0),
+        # No default= here, like heave_clamped above: a missing column could
+        # manufacture a favourable 0 %, which is exactly the value the
+        # campaign is trying to reach.
+        "surge": sat_pct(column(cols, arr, "surge_clamped", path=path)),
+        "sway": sat_pct(column(cols, arr, "sway_clamped", path=path)),
     }
 
     # A disarmed or never-armed recording holds sent0..sent5 pinned to the
@@ -458,6 +466,8 @@ def metrics(path):
         "sat_envelope": sat["envelope"],
         "sat_sl_vel": sat["sl_vel"],
         "sat_sl_acc": sat["sl_acc"],
+        "sat_surge": sat["surge"],
+        "sat_sway": sat["sway"],
         "wrms": (float("nan") if heave_dead
                  else band_limited_rms(accel, fs, BAND_LO_HZ, BAND_HI_HZ)),
         "band_ratio": (float("nan") if heave_dead
@@ -497,6 +507,8 @@ HEADERS = [
     ("sat_rot", ">", "{:.2f}"),
     ("sat_envelope", ">", "{:.2f}"),
     ("sat_sl_acc", ">", "{:.2f}"),
+    ("sat_surge", ">", "{:.2f}"),
+    ("sat_sway", ">", "{:.2f}"),
     ("wrms", ">", "{:.4f}"),
     ("band_ratio", ">", "{:.3f}"),
     ("jerk_p95", ">", "{:.1f}"),
