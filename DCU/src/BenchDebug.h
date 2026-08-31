@@ -22,6 +22,7 @@ class BenchDebug {
         void sendCockpitLightLevel();
         void sendRpm();
         void sendOdometer();
+        void sendAirspeed();
 
         void startRudderWatch();
         void stopRudderWatch();
@@ -36,6 +37,8 @@ class BenchDebug {
 
         uint16_t rpmValue = 0;
         float odometerHours = 0.;
+
+        float iasKnots = 0.;
 
         // Rudder watch: prints incoming 0x303 frames until any key is pressed.
         bool rudderWatchActive = false;

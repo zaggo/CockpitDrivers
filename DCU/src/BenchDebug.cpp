@@ -45,6 +45,17 @@ void BenchDebug::sendCockpitLightLevel() {
     canBus->sendMessage(CanMessageId::lights, 8, data);
 }
 
+void BenchDebug::sendAirspeed() {
+    byte data[4] = {0};
+    // [0..1] IAS knots*10. [2..3] TAS stays 0 - the ASI's TAS ring is mechanical,
+    // so AirspeedCAN ignores those bytes anyway.
+    packBE16(data + 0, static_cast<uint16_t>(iasKnots * 10. + 0.5));
+
+    Serial.println(String(F("Send Airspeed: ")) + iasKnots + F(" kts"));
+
+    canBus->sendMessage(CanMessageId::airspeed, 4, data);
+}
+
 void BenchDebug::sendRpm() {
     byte data[2] = {0};
     packBE16(data + 0, rpmValue);
@@ -128,6 +139,13 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Odometer hours set to "))+odometerHours);
         sendOdometer();
         return true;
+    } else if (command.startsWith("as")) {
+        String rString = command.substring(2);
+        rString.trim();
+        iasKnots = rString.toFloat();
+        Serial.println(String(F("Airspeed set to "))+iasKnots+F(" kts"));
+        sendAirspeed();
+        return true;
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
@@ -138,6 +156,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("cl<0..255>: set light brightness"));
         Serial.println(F("rp<rpm>: set RPM gauge value"));
         Serial.println(F("oh<hours>: set odometer total hours"));
+        Serial.println(F("as<knots>: set airspeed indicator (IAS)"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         return true;
     }

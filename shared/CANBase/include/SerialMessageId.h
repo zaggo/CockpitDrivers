@@ -15,6 +15,10 @@ enum class MessageType : uint8_t {
     SerialMessageRPM = 0x05,
     SerialMessageOdometer = 0x06,
     SerialMessageRudder = 0x07,
+    // Plugin -> DCU. Payload: float ias, float tas (8 bytes, host order), both in knots.
+    // TAS is plumbed through for completeness; the ASI's TAS ring is mechanical,
+    // so AirspeedCAN ignores it.
+    SerialMessageAirspeed = 0x08,
 };
 
 // Message Payload for Transponder > DCU

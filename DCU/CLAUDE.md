@@ -49,7 +49,7 @@ gateway, so it implements the other half of the heartbeat protocol described in 
   `unpackBE16` instead of reinterpret_cast'ing the CAN buffer (unlike `updateTransponder`).
 - CAN alarm LED (`kCANAlarmPin`) lights if CAN isn't started, or if any tracked CAN ID has an
   outstanding TX/RX/heartbeat-timeout error — tracked in the fixed-size `canIdErrors[]`
-  (`kMaxCanIdErrors = 8`, linear scan, no dynamic allocation per Arduino convention).
+  (`kMaxCanIdErrors = 12`, linear scan, no dynamic allocation per Arduino convention).
 - `MASK_EXACT`/`CAN_STD_ID` filter setup in `CAN::begin()` must stay in sync with any new message IDs
   added to `CanMessageId.h`.
 
@@ -60,7 +60,7 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
 
 - **`DCUReceiver`**: byte state machine (via `SerialFrameParser`) parsing frames from the plugin
   (`SerialMessageFuel`, `SerialMessageLights`, `SerialMessageTransponder`, `SerialMessageHandbrake`,
-  `SerialMessageRPM`, `SerialMessageOdometer`), converts them to CAN messages and sends them
+  `SerialMessageRPM`, `SerialMessageOdometer`, `SerialMessageAirspeed`), converts them to CAN messages and sends them
   onward to instruments via `CAN::sendMessage`. Caches last-sent values per message type and resends on
   a 5000ms max-age timer (`checkMaxAgeResync`) even without new plugin input, so instruments recover
   after a dropped frame or a restart.
@@ -87,8 +87,9 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
 ## BenchDebug mode
 
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
-serial-console simulator that drives fuel/light CAN messages directly, for testing instruments on the
-CAN bus without the plugin/X-Plane attached.
+serial-console simulator that drives fuel/light/RPM/odometer/airspeed CAN messages directly, for
+testing instruments on the CAN bus without the plugin/X-Plane attached. `?` lists the commands
+(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`rw`); `as<knots>` sends an `airspeed` (0x100) frame to AirspeedCAN.
 
 Because no `DCUSender` exists in bench builds, instrument→plugin frames decoded by `CAN` have no sink.
 For rudder input the `rw` console command works around that: `CAN` keeps the last decoded

@@ -17,6 +17,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   transponderMeta = {0, 5000};
   rpmMeta = {0, 5000};
   odometerMeta = {0, 5000};
+  airspeedMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -185,6 +186,37 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageAirspeed:
+  {
+    // Payload: float ias, float tas (8 bytes), both in knots
+    if (len != 8)
+      return;
+
+    float ias;
+    float tas;
+    memcpy(&ias, payload + 0, 4);
+    memcpy(&tas, payload + 4, 4);
+
+    // airspeed_kts_pilot can report small negative noise while parked; clamp
+    // before casting to avoid wrapping to 65535.
+    if (ias < 0.)
+      ias = 0.;
+    if (tas < 0.)
+      tas = 0.;
+
+    uint16_t ias10 = static_cast<uint16_t>(ias * 10. + 0.5);
+    uint16_t tas10 = static_cast<uint16_t>(tas * 10. + 0.5);
+
+    if (ias10 != iasKts10 || tas10 != tasKts10)
+    {
+      iasKts10 = ias10;
+      tasKts10 = tas10;
+      DEBUGLOG_PRINTLN(String(F("Received MSG_AIRSPEED Datagram ias*10: ")) + String(ias10) + String(F(" tas*10: ")) + String(tas10));
+      sendAirspeed();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -268,6 +300,20 @@ void DCUReceiver::sendOdometer()
   odometerMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendAirspeed()
+{
+  byte data[4] = {0};
+
+  // [0..1] IAS knots*10, [2..3] TAS knots*10 (AirspeedCAN reads IAS only)
+  packBE16(data + 0, iasKts10);
+  packBE16(data + 2, tasKts10);
+
+  canBus->sendMessage(CanMessageId::airspeed, 4, data);
+
+  // Update last send timestamp for maxAge resync
+  airspeedMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -305,5 +351,12 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for odometer")));
     sendOdometer();
+  }
+
+  // Check airspeed message
+  if (isStale(airspeedMeta.lastSendTimestamp, now, airspeedMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for airspeed")));
+    sendAirspeed();
   }
 }

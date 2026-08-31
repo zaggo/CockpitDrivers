@@ -29,6 +29,7 @@ class DCUReceiver {
         void sendTransponder();
         void sendRpm();
         void sendOdometer();
+        void sendAirspeed();
 
         // RX state machine
         // Fuel Gauge
@@ -56,13 +57,18 @@ class DCUReceiver {
         uint8_t tachHrsTenths = 0;
         uint16_t tachHrsHundredths100 = 0;
 
+        // Airspeed Indicator (ASI)
+        uint16_t iasKts10 = 0;
+        uint16_t tasKts10 = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
         MessageMeta transponderMeta;
         MessageMeta rpmMeta;
         MessageMeta odometerMeta;
-        
+        MessageMeta airspeedMeta;
+
         // Reference to CAN bus
         CAN* canBus;
         
