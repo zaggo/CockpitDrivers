@@ -88,10 +88,12 @@ Recording, replay, sweep and measurement harness: `../docs/motion-tuning/README.
 Two structural notes that matter when changing this file: the limit clamps write back to **integrator
 state** rather than only to the output (windup with no anti-windup), and
 `StewartKinematics::clampToReachable` scales all six DOF together by a bisection factor, so one
-saturating DOF attenuates the others. `surge_limit_mm`/`sway_limit_mm` exist for exactly that
-reason: they keep the translational onset channel's own per-axis clamp (`sat_surge`/`sat_sway` in
-the tuning harness) as the thing that engages, so `clampToReachable`'s all-DOF bisection — which
-would also eat into heave and tilt — never has to.
+saturating DOF attenuates the others. `surge_limit_mm`/`sway_limit_mm` bound the translational onset
+channel's own contribution (`sat_surge`/`sat_sway` in the tuning harness), but they are sized from
+typical (1st-percentile) headroom, not the worst case — measured near-worst-case headroom can fall
+below the limit (see `docs/motion-tuning/baseline-metrics.md`) — so with the channel enabled,
+`clampToReachable`'s all-DOF bisection can still engage and scale heave and tilt down with it.
+`sat_envelope` is what detects that case; it is not guaranteed to stay at zero.
 
 ## The acceleration budget (`EffectsLayer.cpp`, and anything that adds motion)
 

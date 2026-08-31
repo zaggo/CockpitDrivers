@@ -182,6 +182,11 @@ double percentile(std::vector<TravelSample>& sorted, double p) {
 // Prints min (with its file/row/t_sec so the worst case is locatable), the 1st
 // percentile, and the median for one axis's samples. Sorts `samples` in place.
 void printAxisStats(const char* axisLabel, std::vector<TravelSample>& samples) {
+    if (samples.empty()) {
+        std::printf("  %-7s no samples -- nothing loaded (empty CSV, all rows too short, "
+                    "or every input failed to load)\n", axisLabel);
+        return;
+    }
     std::sort(samples.begin(), samples.end(),
               [](const TravelSample& a, const TravelSample& b) { return a.val < b.val; });
     const TravelSample& mn = samples.front();

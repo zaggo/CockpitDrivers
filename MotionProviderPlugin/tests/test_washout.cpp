@@ -126,6 +126,10 @@ int main() {
         // padding, not the fields, and failed spuriously. Compare fields instead.
         check(t.heaveAHp == fresh.heaveAHp && t.heaveVel == fresh.heaveVel &&
               t.heavePosRaw == fresh.heavePosRaw && t.heaveClamped == fresh.heaveClamped &&
+              t.surgeAHp == fresh.surgeAHp && t.surgeVel == fresh.surgeVel &&
+              t.surgePosRaw == fresh.surgePosRaw && t.surgeClamped == fresh.surgeClamped &&
+              t.swayAHp == fresh.swayAHp && t.swayVel == fresh.swayVel &&
+              t.swayPosRaw == fresh.swayPosRaw && t.swayClamped == fresh.swayClamped &&
               t.tiltPitch == fresh.tiltPitch && t.tiltRoll == fresh.tiltRoll &&
               t.tiltRateActive == fresh.tiltRateActive &&
               t.rotRollRaw == fresh.rotRollRaw && t.rotPitchRaw == fresh.rotPitchRaw &&
@@ -361,6 +365,56 @@ int main() {
         check(std::fabs(p600.roll  -   2.095232009888) < 1e-9, "restructure keeps t600 roll bit-stable");
         check(std::fabs(p600.pitch -   3.315368652344) < 1e-9, "restructure keeps t600 pitch bit-stable");
         check(std::fabs(p600.yaw   -  -0.524945855141) < 1e-9, "restructure keeps t600 yaw bit-stable");
+    }
+
+    // Same golden run as above, but with the SHIPPED tilt gains (configuration.toml
+    // ships tilt_surge_gain = tilt_sway_gain = 0.4, not the WashoutConfig::defaults()
+    // 1.0 the block above uses). At gain 1.0 the tilt gain factor is invisible: it
+    // multiplies by exactly 1, so deleting `cfg_.tiltSurgeGain` from the tgtPitch
+    // computation in WashoutFilter.cpp leaves every literal above passing unchanged.
+    // This block exists so a regression in how the tilt gain is applied has
+    // somewhere to show up.
+    //
+    // tiltLimitDeg is held inert here (the shipped/default 3 deg limit is left
+    // alone in the block above). At that limit, gain 1.0 and gain 0.4 both drive
+    // tgtPitch past the clamp and saturate at the *same* +/-3 deg ceiling at t120
+    // and t600, so the two configs land on identical pitch values regardless of
+    // the gain -- blind to the gain in the same way as the block above, just via
+    // clamp saturation instead of gain=1 identity. Freeing the clamp here is what
+    // makes this block's pitch checks actually depend on tiltSurgeGain.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();
+        cfg.tiltSurgeGain = 0.4;
+        cfg.tiltSwayGain  = 0.4;
+        cfg.tiltLimitDeg  = 1.0e9;   // clamp inert: see comment above
+        WashoutFilter f(cfg);
+        Pose p120, p600;
+        bool heaveEverClamped = false;
+        for (int i = 0; i < 600; ++i) {
+            const double t = i / 60.0;
+            MotionCues c = level();
+            c.heaveG    = 1.0f + 0.02f * static_cast<float>(std::sin(2 * kPi * 0.4 * t));
+            c.surgeG    = 0.25f * static_cast<float>(std::sin(2 * kPi * 0.13 * t));
+            c.swayG     = 0.18f * static_cast<float>(std::cos(2 * kPi * 0.21 * t));
+            c.rollRate  = 6.0f * static_cast<float>(std::sin(2 * kPi * 0.7 * t));
+            c.pitchRate = 4.0f * static_cast<float>(std::cos(2 * kPi * 0.5 * t));
+            c.yawRate   = 2.0f * static_cast<float>(std::sin(2 * kPi * 0.3 * t));
+            Pose p = f.update(c, 1.0 / 60.0);
+            heaveEverClamped |= f.trace().heaveClamped;
+            if (i == 119) p120 = p;
+            if (i == 599) p600 = p;
+        }
+        check(!heaveEverClamped, "restructure golden run (tilt gain 0.4) stays off the heave clamp");
+
+        check(std::fabs(p120.heave -  13.876955986023) < 1e-9, "restructure keeps t120 heave bit-stable (tilt gain 0.4)");
+        check(std::fabs(p120.roll  -   0.673518538475) < 1e-9, "restructure keeps t120 roll bit-stable (tilt gain 0.4)");
+        check(std::fabs(p120.pitch -   3.463330030441) < 1e-9, "restructure keeps t120 pitch bit-stable (tilt gain 0.4)");
+        check(std::fabs(p120.yaw   -   0.123054608703) < 1e-9, "restructure keeps t120 yaw bit-stable (tilt gain 0.4)");
+
+        check(std::fabs(p600.heave - -11.237508773804) < 1e-9, "restructure keeps t600 heave bit-stable (tilt gain 0.4)");
+        check(std::fabs(p600.roll  -   0.730485379696) < 1e-9, "restructure keeps t600 roll bit-stable (tilt gain 0.4)");
+        check(std::fabs(p600.pitch -   3.337597608566) < 1e-9, "restructure keeps t600 pitch bit-stable (tilt gain 0.4)");
+        check(std::fabs(p600.yaw   -  -0.524945855141) < 1e-9, "restructure keeps t600 yaw bit-stable (tilt gain 0.4)");
     }
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);

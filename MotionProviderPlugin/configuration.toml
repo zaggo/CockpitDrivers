@@ -50,6 +50,14 @@ smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, mane
 # tilt renders the sustained part, this renders the onset, crossover at
 # tilt_lp_tau. OFF until a rig verdict adopts values -- see
 # docs/superpowers/specs/2026-08-31-surge-sway-onset-cues-design.md.
+#
+# Tuning note: tilt renders 0.4 * LP(a) (tilt_surge_gain/tilt_sway_gain =
+# 0.4), but onset renders surge_gain/sway_gain * HP(a) off the *ungained*
+# low-pass -- so surge_gain = 1.0 makes the onset transient 2.5x the scale
+# of the sustained cue it hands over to, front-running the open handover
+# question (one cue or two felt as separate?) toward "two". The first rig
+# candidate should start near tilt_surge_gain/tilt_sway_gain, i.e. ~0.4,
+# not 1.0.
 surge_gain = 0
 sway_gain = 0
 trans_vel_washout_tau = 0.25

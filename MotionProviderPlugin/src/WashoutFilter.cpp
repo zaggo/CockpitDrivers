@@ -133,8 +133,10 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
 
     Pose p;
     // Sign convention: +X forward, so a forward specific force commands a
-    // forward platform translation. Confirmed against the tilt axis by bench
-    // jog in Task 8 -- do not flip it on reasoning alone.
+    // forward platform translation. PROVISIONAL -- this is not yet confirmed
+    // against the tilt axis. It must be settled by a bench jog against the
+    // tilt axis (Task 8) before this channel is flown -- do not flip it on
+    // reasoning alone, but do not fly it unverified either.
     p.surge = static_cast<float>(out[0]);
     p.sway  = static_cast<float>(out[1]);
     p.heave = static_cast<float>(out[2]);
