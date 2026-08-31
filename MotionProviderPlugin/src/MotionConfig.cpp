@@ -109,6 +109,12 @@ WashoutConfig MotionConfig::loadWashout(const std::string& path) {
         getDouble(*t, "tilt_lp_tau", w.tiltLpTau);
         getDouble(*t, "tilt_limit_deg", w.tiltLimitDeg);
         getDouble(*t, "tilt_rate_limit_dps", w.tiltRateLimitDps);
+        getDouble(*t, "surge_gain", w.surgeGain);
+        getDouble(*t, "sway_gain", w.swayGain);
+        getDouble(*t, "trans_vel_washout_tau", w.transVelWashoutTau);
+        getDouble(*t, "trans_pos_washout_tau", w.transPosWashoutTau);
+        getDouble(*t, "surge_limit_mm", w.surgeLimitMm);
+        getDouble(*t, "sway_limit_mm", w.swayLimitMm);
         getDouble(*t, "rot_roll_gain", w.rotRollGain);
         getDouble(*t, "rot_pitch_gain", w.rotPitchGain);
         getDouble(*t, "rot_yaw_gain", w.rotYawGain);
@@ -238,6 +244,12 @@ bool MotionConfig::writeDefaults(const std::string& path) {
     f << "tilt_lp_tau = "           << w.tiltLpTau          << "\n";
     f << "tilt_limit_deg = "        << w.tiltLimitDeg       << "\n";
     f << "tilt_rate_limit_dps = "   << w.tiltRateLimitDps   << "\n";
+    f << "surge_gain = "             << w.surgeGain          << "\n";
+    f << "sway_gain = "              << w.swayGain           << "\n";
+    f << "trans_vel_washout_tau = "  << w.transVelWashoutTau << "\n";
+    f << "trans_pos_washout_tau = "  << w.transPosWashoutTau << "\n";
+    f << "surge_limit_mm = "         << w.surgeLimitMm       << "\n";
+    f << "sway_limit_mm = "          << w.swayLimitMm        << "\n";
     f << "rot_roll_gain = "         << w.rotRollGain        << "\n";
     f << "rot_pitch_gain = "        << w.rotPitchGain       << "\n";
     f << "rot_yaw_gain = "          << w.rotYawGain         << "\n";

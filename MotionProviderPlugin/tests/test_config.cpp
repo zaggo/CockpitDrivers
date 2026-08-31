@@ -112,6 +112,46 @@ int main() {
         std::remove(tmp.c_str());
     }
 
+    // The onset-channel keys parse, and absent keys keep their defaults.
+    {
+        std::string tmp = tmpPath();
+        { std::ofstream f(tmp);
+          f << "[washout]\n"
+               "surge_gain = 0.6\n"
+               "sway_gain = 0.45\n"
+               "trans_vel_washout_tau = 0.4\n"
+               "surge_limit_mm = 12\n"; }
+        WashoutConfig w = MotionConfig::loadWashout(tmp);
+        WashoutConfig d = WashoutConfig::defaults();
+        near(w.surgeGain, 0.6, "surge_gain parsed");
+        near(w.swayGain, 0.45, "sway_gain parsed");
+        near(w.transVelWashoutTau, 0.4, "trans_vel_washout_tau parsed");
+        near(w.surgeLimitMm, 12.0, "surge_limit_mm parsed (int literal)");
+        near(w.transPosWashoutTau, d.transPosWashoutTau, "absent trans_pos tau keeps default");
+        near(w.swayLimitMm, d.swayLimitMm, "absent sway_limit_mm keeps default");
+        std::remove(tmp.c_str());
+    }
+
+    // Onset gains are off in a freshly seeded file, and every key round-trips.
+    // The two limits round-trip to the exact Task 1 measurements, not just to
+    // "whatever the default currently is" -- that catches WashoutConfig.h and
+    // this seeded file drifting apart from each other later.
+    {
+        std::string tmp = tmpPath();
+        check(MotionConfig::writeDefaults(tmp), "writeDefaults succeeds");
+        WashoutConfig w = MotionConfig::loadWashout(tmp);
+        near(w.surgeGain, 0.0, "seeded surge_gain is 0");
+        near(w.swayGain, 0.0, "seeded sway_gain is 0");
+        WashoutConfig d = WashoutConfig::defaults();
+        near(w.transVelWashoutTau, d.transVelWashoutTau, "trans_vel tau round-trips");
+        near(w.transPosWashoutTau, d.transPosWashoutTau, "trans_pos tau round-trips");
+        near(w.surgeLimitMm, d.surgeLimitMm, "surge_limit_mm round-trips");
+        near(w.swayLimitMm, d.swayLimitMm, "sway_limit_mm round-trips");
+        near(w.surgeLimitMm, 43.0, "surge_limit_mm round-trips to the Task 1 measurement (43)");
+        near(w.swayLimitMm, 41.0, "sway_limit_mm round-trips to the Task 1 measurement (41)");
+        std::remove(tmp.c_str());
+    }
+
     // [telemetry] loads, and absent keys fall back to defaults.
     {
         const std::string p = "test_config_telemetry.toml";
