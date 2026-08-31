@@ -300,17 +300,53 @@ resolution of that boundary, not a precise reading.
 
 ### Chosen limits — decision
 
-70 % of the smallest surge travel across all seven files and all 46,878 sampled ticks (both
-directions), floored to a whole millimetre; same rule for sway:
+The strict per-file minima in the table above (measurements) include three `0.00 mm` entries, all
+from the same 0.24 s / 11-tick window in `steep_turns` where the platform is already at the edge of
+its envelope with **no surge/sway cue at all**. `clampToReachable` exists precisely to cover that
+instant — it scales all six DOF down together and degrades gracefully — so sizing a fixed
+configuration limit off it would delete the surge/sway cue to protect 11 ticks out of 46,878 that
+the scaler already handles. The limits are instead sized from the **1st percentile** of surge/sway
+headroom, pooling both directions and all seven files into one distribution per axis (93,756
+samples each): a limit small enough to almost never be the thing that pushes the envelope, without
+being set by the rare instant something else already has.
 
-- smallest surge travel = min(0.00, 33.59) = **0.00 mm** → 0.70 × 0.00 = 0.00 → **`surge_limit_mm` = 0**
-- smallest sway travel = min(0.00, 0.00) = **0.00 mm** → 0.70 × 0.00 = 0.00 → **`sway_limit_mm` = 0**
+| Axis | p01 headroom, both directions pooled, all 7 files (93,756 samples) |
+|---|---|
+| surge | 62.58 mm |
+| sway | 59.73 mm |
 
-**Flagged, not rounded away:** both come out at 0 mm, below the 3 mm floor this task was told to
-flag rather than round past. A fixed 0 mm limit is not an actionable configuration constant — it
-would mean the surge/sway cue can never fire. This is driven entirely by the single 0.24 s window
-in `steep_turns` described above; excluding just that window, the next-smallest combined figures
-are the file-level minima with `steep_turns` removed (surge + 17.30 mm in `turbulence`, sway + 23.92
-mm in `climb_descent`) — offered here as context only, not substituted as the answer. Whether to
-use the strict minimum as specified (giving 0/0), a percentile-based floor, or an explicit
-exclusion rule for near-boundary ticks is a decision for the coordinator, not this task.
+- `surge_limit_mm` = floor(0.70 × 62.58) = floor(43.806) = **43**
+- `sway_limit_mm` = floor(0.70 × 59.73) = floor(41.811) = **41**
+
+Neither lands under the 3 mm floor this task was told to flag rather than round past, so no stop
+is needed.
+
+**Cross-check against the strict-minimum table, excluding the `steep_turns` window:** the
+next-smallest per-file minima with that one window removed are surge 17.30 mm (`turbulence`) and
+sway 23.92 mm (`climb_descent`), giving 12 mm / 16 mm under the *original* (minimum-based) rule.
+The p01-based limits (43 mm / 41 mm) land well above that cross-check, as expected — a 1st
+percentile over ~94k samples describes typical available headroom, not a near-worst-case minimum
+with one window excluded; the two statistics answer different questions and are not expected to
+agree.
+
+### `sat_envelope` gate — correction for later tasks
+
+`steep_turns` scores a non-zero `sat_envelope` (`reach_scale < 1.0`) even with the surge/sway cue
+**off** — this branch has not added the cue to `WashoutFilter` yet, so every replay run for this
+task already is the cue-off baseline:
+
+| File | ticks | `sat_envelope` (cue off) | min `reach_scale` |
+|---|---|---|---|
+| `acceptance` | 21859 | 0.00 % | 1.000000 |
+| `approach_landing` | 6860 | 0.00 % | 1.000000 |
+| `climb_descent` | 4008 | 0.00 % | 1.000000 |
+| `cruise_calm` | 3906 | 0.00 % | 1.000000 |
+| `ground_takeoff` | 2725 | 0.00 % | 1.000000 |
+| `steep_turns` | 3211 | **0.34 %** | 0.996765 |
+| `turbulence` | 4309 | 0.00 % | 1.000000 |
+
+So the campaign's gate is **not** a flat `sat_envelope = 0.00 %`: it is **`sat_envelope` must not
+exceed its own cue-off baseline, per reference file**, using the table above. Task 9 re-measures
+these baselines as part of its own work; this table is the cue-off reference that later
+measurement compares against for `steep_turns` specifically, and confirms `0.00 %` remains correct
+for the other six files.

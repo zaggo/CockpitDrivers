@@ -45,7 +45,7 @@ double maxTravel(const StewartKinematics& k, const Pose& base,
 // diagnostic on the theoretical clamp corner (roll/pitch at their combined
 // per-axis maximum) -- report only, not an input to the chosen limits.
 double maxSymmetricRollPitch(const StewartKinematics& k, double hi) {
-    auto reachableAt = [&](double x) {
+    auto reachableAt = [&](double x) -> bool {
         Pose p;
         p.roll = static_cast<float>(x);
         p.pitch = static_cast<float>(x);
@@ -323,6 +323,16 @@ int main(int argc, char** argv) {
         printAxisStats("surge-", allSNeg);
         printAxisStats("sway+",  allYPos);
         printAxisStats("sway-",  allYNeg);
+
+        // Both directions pooled into one distribution per axis -- what a
+        // symmetric surge_limit_mm/sway_limit_mm is actually sized against.
+        std::vector<TravelSample> allSurge = allSPos;
+        allSurge.insert(allSurge.end(), allSNeg.begin(), allSNeg.end());
+        std::vector<TravelSample> allSway = allYPos;
+        allSway.insert(allSway.end(), allYNeg.begin(), allYNeg.end());
+        std::printf("\ncombined, both directions pooled (%zu samples each axis)\n", allSurge.size());
+        printAxisStats("surge", allSurge);
+        printAxisStats("sway",  allSway);
     }
     return 0;
 }
