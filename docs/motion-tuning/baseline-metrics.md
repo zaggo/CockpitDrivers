@@ -224,39 +224,21 @@ is confirmed and the direction is right; the specific 80–100 % figure was an o
 
 ## Reachable surge/sway envelope (2026-08-31, `tools/envelope_probe`)
 
-Measured on the shipped `[geometry]`, with the real `StewartKinematics::solve`. This section was
-revised after fix round 1 (below, "Fix round 1"): the corner definition in the first pass was the
-per-axis *theoretical* clamp maximum, not an operating point, and the shipped config never gets
-near it in flight. It stays in this section as a documented, deferred defect (Ruling 2), and the
-per-axis limits are now derived from the *measured* operating envelope instead (Ruling 1).
+Measured on the shipped `[geometry]`, with the real `StewartKinematics::solve`.
 
 ### Home pose — measurement
 
 Bare upper bound, never available in flight (heave/tilt/rotational all zero):
 
-```
-home pose                    surge + 141.14 / - 174.41    sway + 146.89 / - 146.89  (mm)
-```
-
 | Base pose | surge + | surge − | sway + | sway − |
 |---|---|---|---|---|
 | home | 141.14 | −174.41 | 146.89 | −146.89 |
 
-### Theoretical clamp corner — measurement, kept as a documented defect (Ruling 2)
+### Theoretical clamp corner — measurement; documented, not fixed here
 
 Heave at its configured limit, tilt-coordination and rotational stacked at their combined
 per-axis limit (`tilt_limit_deg = 7` + `rot_limit_deg = 7` = 14° combined roll/pitch,
-`rot_limit_deg = 7` yaw alone) — the theoretical maximum two independently-clamped channels can
-reach together, not a pose ever measured in a recording:
-
-```
-corner h+30 r/p+14 y+7       BASE POSE UNREACHABLE
-corner h+30 r/p-14 y-7       BASE POSE UNREACHABLE
-corner h-30 r/p+14 y+7       BASE POSE UNREACHABLE
-corner h-30 r/p-14 y-7       BASE POSE UNREACHABLE
-
-largest symmetric reachable roll=pitch (all else zero): 6.62 deg
-```
+`rot_limit_deg = 7` yaw alone):
 
 | Base pose | surge + | surge − | sway + | sway − |
 |---|---|---|---|---|
@@ -264,110 +246,71 @@ largest symmetric reachable roll=pitch (all else zero): 6.62 deg
 | corner heave +30, roll/pitch −14, yaw −7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
 | corner heave −30, roll/pitch +14, yaw +7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
 | corner heave −30, roll/pitch −14, yaw −7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
+| largest symmetric reachable `roll = pitch` (all else zero) | — | — | — | **6.62°** |
 
-All four corner base poses are unreachable with zero surge/sway added. Confirmed with an ad-hoc
-leg-level dump (not committed) against the same linked `StewartKinematics`: `roll=+14, pitch=+14`
-alone (no heave, no yaw, no surge/sway) already leaves legs 1 and 2 unreachable. `heave=±30` alone
-and `yaw=±7` alone are each independently reachable; the combined `roll+pitch = ±14°` is what
-exceeds the geometry — the platform can hold at most `roll=pitch=6.62°` symmetrically, less than
-half the theoretical 14° two independently-clamped channels are allowed to sum to.
+All four corners are unreachable — `roll=+14, pitch=+14` alone (no heave, no yaw, no surge/sway)
+already leaves two legs unreachable, and the platform holds at most `roll=pitch=6.62°`
+symmetrically, less than half the theoretical 14°. This is a real, latent defect in the shipped
+`configuration.toml`: `WashoutFilter.cpp:87-88` sums the tilt-coordination and rotational channels
+(`tilt_limit_deg = 7`, `rot_limit_deg = 7`, each tuned and flown in isolation on 2026-08-30 per
+`tuning-log.md`) onto the same pose fields, so the config allows commanding a pose the geometry
+cannot reach. `clampToReachable` makes it a graceful scale-down rather than a fault in production.
+It is not this campaign's to fix, and the limits below are not derived from it.
 
-That 14° figure is not a probe assumption: `WashoutFilter.cpp:87-88` sums the tilt-coordination
-and rotational channels onto the same pose fields (`tiltRoll_ + rollAngle_`,
-`tiltPitch_ + pitchAngle_`) after each is independently clamped to its own limit, so the *config*
-allows commanding it — it is a real latent defect in the shipped `configuration.toml`
-(`tilt_limit_deg = 7` and `rot_limit_deg = 7`, each tuned and flown in isolation on 2026-08-30 per
-`tuning-log.md`, with nothing in that campaign checking their combined worst case against the
-physical envelope). `clampToReachable` means it is not a crash risk in production — the platform
-degrades gracefully by scaling all six DOF down together — but per Ruling 2 this defect is not
-this campaign's to fix, and it is not what the limits below are derived from.
+A corner built from the four measured per-axis maxima (heave 30, roll 8, pitch 10, yaw 7 — see the
+next section) was tried and rejected the same way: those maxima never co-occur in any of the seven
+recordings (`reach_scale` stays ≥ 0.9968 throughout all of them), and probing that corner directly
+returns `UNREACHABLE` in all four sign combinations, for the same reason as the theoretical one —
+summing independently-timed per-axis peaks lands outside the 6.62° reachable diagonal regardless of
+whether the peaks come from a clamp constant or a measurement.
 
-### Measured operating envelope, all seven reference recordings — measurement
+### Per-tick surge/sway headroom, all seven reference recordings — measurement
 
-`max |live_heave|` (mm) and `max |live_roll|`, `|live_pitch|`, `|live_yaw|` (deg), over the full
-duration of each `washout_replay` run against `configuration.toml` (the shipped, adopted config):
+`envelope_probe --from-replay <file> --config configuration.toml`, stride 1 (full 46,878 ticks;
+fast enough — 5 s total — that no subsampling was needed). For every recorded tick, the tick's own
+`(live_heave, live_roll, live_pitch, live_yaw)` is used as the base pose (surge/sway left at 0),
+and `maxTravel` measures how much surge/sway travel is still available on top of it — this is
+headroom on poses the platform actually held, not a constructed corner.
 
-| File | rows | max \|live_heave\| | max \|live_roll\| | max \|live_pitch\| | max \|live_yaw\| |
+| File | ticks | min surge + | min surge − | min sway + | min sway − |
 |---|---|---|---|---|---|
-| `acceptance` | 21859 | 22.04 | 7.29 | 5.52 | **7.00** |
-| `approach_landing` | 6860 | 27.51 | 3.03 | 7.64 | 1.82 |
-| `climb_descent` | 4008 | **30.00** | 2.98 | **9.10** | 1.51 |
-| `cruise_calm` | 3906 | 6.50 | 0.92 | 0.85 | 0.42 |
-| `ground_takeoff` | 2725 | 11.74 | 2.21 | 6.38 | 0.86 |
-| `steep_turns` | 3211 | **30.00** | **7.68** | 3.19 | 3.88 |
-| `turbulence` | 4309 | **30.00** | 5.98 | 3.86 | 3.90 |
-| **overall max** | | **30.00** | **7.68** | **9.10** | **7.00** |
+| `acceptance` | 21859 | 31.44 | 63.94 | 45.87 | 56.62 |
+| `approach_landing` | 6860 | 84.34 | 79.80 | 53.79 | 69.98 |
+| `climb_descent` | 4008 | 51.92 | **33.59** | 23.92 | 32.07 |
+| `cruise_calm` | 3906 | 131.52 | 162.55 | 137.51 | 142.62 |
+| `ground_takeoff` | 2725 | 132.50 | 72.16 | 59.29 | 56.76 |
+| `steep_turns` | 3211 | **0.00** | 86.53 | **0.00** | **0.00** |
+| `turbulence` | 4309 | 17.30 | 59.20 | 43.98 | 34.57 |
+| **combined (all 7, 46878 ticks)** | | **0.00** | **33.59** | **0.00** | **0.00** |
 
-All seven files replayed cleanly (`washout_replay --cues ... --config configuration.toml --out
-...`, exit 0 on each); none needed to be dropped. The `live_heave` maxima of exactly 30.00 mm
-(`climb_descent`, `steep_turns`, `turbulence`) are the configured `heave_limit_mm` clamp, genuinely
-reached and held, not a search-ceiling artifact — same for `live_yaw`'s 7.00° in `acceptance`
-against `rot_limit_deg = 7`.
+Combined 1st percentile / median, for scale against the minima above:
 
-**These four per-axis maxima never co-occur.** The `reach_scale` column (`clampToReachable`'s own
-diagnostic scale factor, computed live inside the real replayed chain) stays at exactly `1.0` for
-six of the seven files throughout, and dips only to `0.9968` in `steep_turns` — i.e. across
-41,878 replayed ticks spanning every phase of flight this campaign recorded, the plugin's actual
-commanded pose was, at its closest, 0.32 % away from needing any clamping at all. The shipped
-config has never come anywhere near demanding an unreachable pose in flight.
+| | surge + | surge − | sway + | sway − |
+|---|---|---|---|---|
+| p01 | 54.24 | 81.12 | 57.48 | 66.67 |
+| median | 137.99 | 156.56 | 136.08 | 136.27 |
 
-### Empirical corner — attempted, found unreachable (second blocking finding)
+The three `0.00` minima all occur in `steep_turns`, in the same 11 consecutive ticks (rows
+2783–2793, t = 62.011–62.252 s, 0.24 s), the file's own `reach_scale` dips to 0.9968–0.9997 there
+— i.e. the real chain's own clamp engages by a few tenths of a percent at that instant, the
+recording's most demanding moment (roll ≈ −7.4 to −7.6°, near this file's own 7.68° roll peak).
+Re-solving that exact tick as a base pose lands it right on the reachability boundary, so the
+measured headroom there is genuinely ≈ 0 mm, not a distinct value; the specific `0.00` is at the
+resolution of that boundary, not a precise reading.
 
-Per Ruling 4, the empirical corner is each of the four maxima above, independently rounded up to
-the next whole unit, combined into one pose and probed with `envelope_probe --pose`, in the same
-four sign combinations the theoretical corner used (heave sign independent, roll/pitch/yaw sharing
-a sign):
+### Chosen limits — decision
 
-heave = 30, roll = 8, pitch = 10, yaw = 7 (ceil of 7.6778 → 8, 9.0986 → 10; 30.00 and 7.00 already
-whole).
+70 % of the smallest surge travel across all seven files and all 46,878 sampled ticks (both
+directions), floored to a whole millimetre; same rule for sway:
 
-```
-$ ./tools/build/envelope_probe --config configuration.toml --pose 30,8,10,7
-pose h+30.00 r+8.00 p+10.00 y+7.00 BASE POSE UNREACHABLE
-$ ./tools/build/envelope_probe --config configuration.toml --pose 30,-8,-10,-7
-pose h+30.00 r-8.00 p-10.00 y-7.00 BASE POSE UNREACHABLE
-$ ./tools/build/envelope_probe --config configuration.toml --pose -30,8,10,7
-pose h-30.00 r+8.00 p+10.00 y+7.00 BASE POSE UNREACHABLE
-$ ./tools/build/envelope_probe --config configuration.toml --pose -30,-8,-10,-7
-pose h-30.00 r-8.00 p-10.00 y-7.00 BASE POSE UNREACHABLE
-```
+- smallest surge travel = min(0.00, 33.59) = **0.00 mm** → 0.70 × 0.00 = 0.00 → **`surge_limit_mm` = 0**
+- smallest sway travel = min(0.00, 0.00) = **0.00 mm** → 0.70 × 0.00 = 0.00 → **`sway_limit_mm` = 0**
 
-All four sign combinations of the empirical corner are unreachable too — down to `roll=+8,
-pitch=+10` alone (no heave, no yaw), confirmed by the same leg-level dump used above (legs 1 and 2
-fail). This matches the "largest symmetric reachable roll=pitch = 6.62°" figure directly: 8° and
-10° both individually exceed it, and Ruling 2's finding is that even the *smaller*, tuned
-`tilt_limit_deg`/`rot_limit_deg` values already exceed the physical envelope on the roll/pitch
-diagonal, so any corner built by summing independent per-axis peaks — theoretical or measured — on
-that diagonal is at risk of landing outside it.
-
-**This is not, however, the "shipped config cannot hold a pose it demonstrably reached"
-finding Ruling 4 was checking for.** The `reach_scale` evidence in the section above rules that
-out directly: no single recorded tick in any of the seven files ever asked for anything close to
-this combination — `max |live_roll| = 7.68°` happened in `steep_turns`, `max |live_pitch| = 9.10°`
-happened in `climb_descent`, at different moments, in different flights. The empirical corner as
-constructed unions each channel's own independent peak the same way the theoretical corner did,
-just with tuned/measured numbers instead of configured clamp values — it inherits the same
-"never actually co-occurs" structure Ruling 1 was correcting for, one level down. Building a
-corner that is both empirically grounded *and* jointly reachable (e.g. from the actual joint
-extreme of a chosen metric across ticks, rather than the union of four independently-timed
-per-axis peaks) is a decision beyond this task's brief and is not made here.
-
-### Chosen limits: still not determined — second blocking finding, needs a ruling
-
-`surge_limit_mm` and `sway_limit_mm` cannot be computed as 70 % of the smallest surge/sway travel
-across the empirical-corner rows, because none of those rows solve. Tasks 2 and 3 remain blocked
-on a decision this task cannot make on its own: how to construct a corner that is simultaneously
-(a) grounded in the measured operating envelope, per Ruling 1, and (b) actually jointly reachable —
-options include a per-tick joint extreme (e.g. the recorded tick with the largest
-`|roll|+|pitch|` or largest `reach_scale`-adjacent margin) rather than a per-axis-peak union, or a
-smaller, explicitly conservative fraction of the four measured maxima chosen to land inside the
-6.62° symmetric limit.
-
-### Fix round 1 (2026-08-31)
-
-The above supersedes the original write-up, which used only the theoretical clamp corner and
-concluded "chosen limits: not determined" for that reason (Ruling 1: the corner definition was
-wrong, not the geometry — every recording in this campaign measures `sat_envelope = 0.00 %` /
-`reach_scale ≈ 1.0`, so flight never approaches the theoretical clamp corner). This round's
-operating-envelope measurement and empirical-corner attempt are new; the theoretical corner and
-its finding are retained per Ruling 2, unchanged from the original pass.
+**Flagged, not rounded away:** both come out at 0 mm, below the 3 mm floor this task was told to
+flag rather than round past. A fixed 0 mm limit is not an actionable configuration constant — it
+would mean the surge/sway cue can never fire. This is driven entirely by the single 0.24 s window
+in `steep_turns` described above; excluding just that window, the next-smallest combined figures
+are the file-level minima with `steep_turns` removed (surge + 17.30 mm in `turbulence`, sway + 23.92
+mm in `climb_descent`) — offered here as context only, not substituted as the answer. Whether to
+use the strict minimum as specified (giving 0/0), a percentile-based floor, or an explicit
+exclusion rule for near-boundary ticks is a decision for the coordinator, not this task.
