@@ -221,3 +221,60 @@ was flown deliberately calm (clear, 2 kt wind). It reached `mean |Δg| = 0.043 g
 is confirmed and the direction is right; the specific 80–100 % figure was an overestimate for
 *this* flight condition. The manoeuvring segments land in the predicted band: 79.66 % and
 88.27 %.
+
+## Reachable surge/sway envelope (2026-08-31, `tools/envelope_probe`)
+
+Measured on the shipped `[geometry]`, with the real `StewartKinematics::solve`.
+
+```
+config: configuration.toml (loaded)
+home height: 456.34 mm
+
+home pose                    surge + 141.14 / - 174.41    sway + 146.89 / - 146.89  (mm)
+corner h+30 r/p+14 y+7       BASE POSE UNREACHABLE
+corner h+30 r/p-14 y-7       BASE POSE UNREACHABLE
+corner h-30 r/p+14 y+7       BASE POSE UNREACHABLE
+corner h-30 r/p-14 y-7       BASE POSE UNREACHABLE
+```
+
+| Base pose | surge + | surge − | sway + | sway − |
+|---|---|---|---|---|
+| home | 141.14 | −174.41 | 146.89 | −146.89 |
+| corner heave +30, roll/pitch +14, yaw +7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
+| corner heave +30, roll/pitch −14, yaw −7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
+| corner heave −30, roll/pitch +14, yaw +7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
+| corner heave −30, roll/pitch −14, yaw −7 | UNREACHABLE | UNREACHABLE | UNREACHABLE | UNREACHABLE |
+
+**Finding: all four corner base poses are unreachable, with zero surge/sway added.** This is
+the Step 4 gate in `task-1-brief.md` firing, not a probe bug — confirmed with an ad-hoc leg-level
+dump (not committed) run against the same linked `StewartKinematics`: `roll=+14, pitch=+14` alone
+(no heave, no yaw, no surge/sway) already leaves legs 1 and 2 unreachable; the negative diagonal
+(`roll=-14, pitch=-14`) leaves legs 0, 1, 2 and 5 unreachable. `heave=±30` alone and `yaw=±7` alone
+are each independently reachable; the combined `roll+pitch = ±14°` is what exceeds the geometry.
+
+That combined figure is not a probe assumption — `WashoutFilter.cpp` sums the tilt-coordination and
+rotational channels onto the same pose fields (`tiltRoll_ + rollAngle_`, `tiltPitch_ + pitchAngle_`,
+`WashoutFilter.cpp:87-88`) after each is independently clamped to its own limit
+(`tilt_limit_deg = 7`, `rot_limit_deg = 7` in the shipped `configuration.toml`), so ±14° combined
+roll/pitch is a pose the plugin can actually command in flight (e.g. a steep turn with simultaneous
+pitch-rate cueing), not a corner this probe invented.
+
+This is not a crash risk — `clampToReachable` scales all six DOF down together whenever the raw
+pose is unreachable, so the platform degrades gracefully rather than faulting. But it means the
+"corner" this task was supposed to measure surge/sway against does not exist as a solvable pose:
+there is no room left for *any* surge/sway once heave and the combined tilt/rotational channels are
+both near their configured limits at the same time. The per-axis limits recorded in
+`docs/motion-tuning/tuning-log.md` (`tilt_limit_deg = 7`, `rot_limit_deg = 7`, adopted 2026-08-30)
+were each tuned and flown in isolation; nothing in that campaign checked their *combined* worst
+case against the physical envelope.
+
+**Chosen limits: not determined.** Per the brief's Step 4 gate, an unreachable corner base pose
+must stop this task rather than have a number written into this table. `surge_limit_mm` and
+`sway_limit_mm` cannot be computed as "70 % of the smallest corner value" because no corner value
+exists — the corner poses do not solve at all. The home-pose row above (surge +141.14/−174.41 mm,
+sway ±146.89 mm) is a valid measurement but is explicitly the *bare* upper bound the brief warns is
+"never available in flight"; using it as a stand-in for the corner figure would defeat the reason
+this task exists. Tasks 2 and 3, which consume `surge_limit_mm`/`sway_limit_mm`, are blocked on a
+decision about how to handle this — options include shrinking the corner's assumed simultaneous
+tilt/rotational occupancy, or accepting a data-dependent (rather than fixed) reachable margin — that
+is outside this task's scope to make.

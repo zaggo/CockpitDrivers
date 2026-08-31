@@ -15,3 +15,11 @@ add_executable(washout_replay
     ../src/MotionConfig.cpp
     ../src/Telemetry.cpp)
 target_include_directories(washout_replay PRIVATE ../src ../third_party/tomlplusplus)
+
+# Reachable-envelope measurement. Same rule as washout_replay: links the real
+# StewartKinematics, no second copy of the geometry.
+add_executable(envelope_probe
+    envelope_probe.cpp
+    ../src/StewartKinematics.cpp
+    ../src/MotionConfig.cpp)
+target_include_directories(envelope_probe PRIVATE ../src ../third_party/tomlplusplus)
