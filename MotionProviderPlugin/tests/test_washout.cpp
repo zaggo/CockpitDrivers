@@ -165,6 +165,74 @@ int main() {
               "tau 2.0 -> 0.3 cuts the raw heave excursion by more than 4x (clamp disabled)");
     }
 
+    // Complementarity: the low-pass the tilt path consumes and the high-pass the
+    // translation path consumes must sum back to the raw input, at every tick.
+    // This is what makes double-counting structurally impossible; it is the
+    // reason the crossover reuses tilt_lp_tau instead of adding a constant.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();
+        cfg.surgeGain     = 1.0;
+        cfg.surgeLimitMm  = 1.0e9;    // clamp inert: this is about the split, not the limit
+        WashoutFilter f(cfg);
+        const double dt = 1.0 / 60.0;
+        const double G  = 9.80665;
+        double lpRef = 0.0;                       // the same one-pole, recomputed here
+        bool ok = true;
+        for (int i = 0; i < 300; ++i) {
+            MotionCues c = level();
+            c.surgeG = 0.2f * static_cast<float>(std::sin(2 * M_PI * 0.3 * (i / 60.0)));
+            const double aRaw = static_cast<double>(c.surgeG) * G;
+            const double alpha = dt / (cfg.tiltLpTau + dt);
+            lpRef += alpha * (aRaw - lpRef);
+            f.update(c, dt);
+            const double hp = f.trace().surgeAHp / cfg.surgeGain;
+            if (std::fabs((lpRef + hp) - aRaw) > 1e-12) ok = false;
+        }
+        check(ok, "surge LP + HP reconstructs the raw input every tick");
+    }
+
+    // Zero gain (the shipped configuration) produces no translation at all.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();   // surgeGain/swayGain default to 0
+        WashoutFilter f(cfg);
+        MotionCues c = level(); c.surgeG = 0.4f; c.swayG = 0.3f;
+        Pose p = run(f, c, 600);
+        check(p.surge == 0.0f, "zero surge gain -> no surge output");
+        check(p.sway  == 0.0f, "zero sway gain -> no sway output");
+    }
+
+    // The per-axis clamp holds and writes back into the integrator state.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();
+        cfg.surgeGain    = 4.0;
+        cfg.surgeLimitMm = 5.0;
+        WashoutFilter f(cfg);
+        MotionCues c = level(); c.surgeG = 0.6f;
+        bool sawClamp = false, everOver = false;
+        for (int i = 0; i < 600; ++i) {
+            Pose p = f.update(c, 1.0 / 60.0);
+            if (f.trace().surgeClamped) sawClamp = true;
+            if (std::fabs(p.surge) > cfg.surgeLimitMm + 1e-6) everOver = true;
+        }
+        check(sawClamp,  "sustained surge engages the surge clamp");
+        check(!everOver, "surge output never exceeds surge_limit_mm");
+    }
+
+    // reset() clears the new state: a fresh filter and a reset one agree.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();
+        cfg.surgeGain = 1.0; cfg.swayGain = 1.0;
+        WashoutFilter a(cfg), b(cfg);
+        MotionCues c = level(); c.surgeG = 0.3f; c.swayG = 0.2f;
+        run(b, c, 400);
+        b.reset();
+        MotionCues probe = level(); probe.surgeG = 0.1f; probe.swayG = 0.05f;
+        Pose pa = run(a, probe, 50);
+        Pose pb = run(b, probe, 50);
+        check(std::fabs(pa.surge - pb.surge) < 1e-12, "reset clears surge state");
+        check(std::fabs(pa.sway  - pb.sway)  < 1e-12, "reset clears sway state");
+    }
+
     // Restructure regression. Drives a deterministic mixed cue sequence through
     // the shipped defaults and pins the output DOF at two points in the run.
     // Task 3 moves the tilt low-pass from the gained signal to the raw one --

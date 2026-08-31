@@ -17,6 +17,20 @@ struct WashoutConfig {
     double tiltLimitDeg    = 3.0;      // tilt + rotational sum on one axis stays in envelope
     double tiltRateLimitDps = 5.0;     // max tilt-coordination rate
 
+    // Translational onset cue: the complement of the tilt low-pass, leaky
+    // double-integrated to mm. Renders the first fraction of a second of a
+    // longitudinal/lateral acceleration, which tilt coordination cannot --
+    // it is low-passed and rate-limited by design. The crossover constant is
+    // tiltLpTau above, shared by both halves, so LP + HP = 1 and the same
+    // acceleration is never counted twice.
+    // Gains ship at 0: the channel is off until a rig verdict adopts values.
+    double surgeGain           = 0.0;
+    double swayGain            = 0.0;
+    double transVelWashoutTau  = 0.25;   // shared by surge and sway
+    double transPosWashoutTau  = 0.25;
+    double surgeLimitMm        = 43.0;   // Task 1 measurement
+    double swayLimitMm         = 41.0;   // Task 1 measurement
+
     // Rotational: angular rate -> angle (high-pass + washout)
     double rotRollGain   = 0.7;
     double rotPitchGain  = 0.7;

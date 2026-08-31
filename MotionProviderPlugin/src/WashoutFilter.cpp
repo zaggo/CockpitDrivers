@@ -22,10 +22,11 @@ WashoutFilter::WashoutFilter(const WashoutConfig& cfg) : cfg_(cfg) {}
 
 void WashoutFilter::reset() {
     heaveAccelLp_ = heaveVel_ = heavePos_ = 0.0;
-    surgeLp_ = swayLp_ = tiltPitch_ = tiltRoll_ = 0.0;
+    surgeLpRaw_ = swayLpRaw_ = tiltPitch_ = tiltRoll_ = 0.0;
+    surgeVel_ = surgePos_ = swayVel_ = swayPos_ = 0.0;
     rollRateLp_ = pitchRateLp_ = yawRateLp_ = 0.0;
     rollAngle_ = pitchAngle_ = yawAngle_ = 0.0;
-    for (int i = 0; i < 4; ++i) { sm1_[i] = 0.0; sm2_[i] = 0.0; }
+    for (int i = 0; i < 6; ++i) { sm1_[i] = 0.0; sm2_[i] = 0.0; }
     trace_ = WashoutTrace{};
 }
 
@@ -45,13 +46,17 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     trace_.heaveClamped = (heaveLimited != heavePos_);
     heavePos_ = heaveLimited;
 
-    // --- Tilt-coordination: sustained horizontal accel -> rate-limited tilt ---
-    const double aX = cfg_.tiltSurgeGain * static_cast<double>(c.surgeG) * G;
-    const double aY = cfg_.tiltSwayGain  * static_cast<double>(c.swayG)  * G;
-    surgeLp_ += lpAlpha(dt, cfg_.tiltLpTau) * (aX - surgeLp_);
-    swayLp_  += lpAlpha(dt, cfg_.tiltLpTau) * (aY - swayLp_);
-    double tgtPitch = std::asin(clampd(surgeLp_ / G, -1.0, 1.0)) * kRad2Deg;
-    double tgtRoll  = std::asin(clampd(swayLp_  / G, -1.0, 1.0)) * kRad2Deg;
+    // --- Horizontal specific force: one low-pass, two consumers ---
+    // Tilt coordination takes the low-passed (sustained) part; the onset
+    // channel takes the complement. The gains sit outside the filter so both
+    // can be scaled independently without the split stopping being a split.
+    const double aRawX = static_cast<double>(c.surgeG) * G;
+    const double aRawY = static_cast<double>(c.swayG)  * G;
+    surgeLpRaw_ += lpAlpha(dt, cfg_.tiltLpTau) * (aRawX - surgeLpRaw_);
+    swayLpRaw_  += lpAlpha(dt, cfg_.tiltLpTau) * (aRawY - swayLpRaw_);
+
+    double tgtPitch = std::asin(clampd(cfg_.tiltSurgeGain * surgeLpRaw_ / G, -1.0, 1.0)) * kRad2Deg;
+    double tgtRoll  = std::asin(clampd(cfg_.tiltSwayGain  * swayLpRaw_  / G, -1.0, 1.0)) * kRad2Deg;
     tgtPitch = clampd(tgtPitch, -cfg_.tiltLimitDeg, cfg_.tiltLimitDeg);
     tgtRoll  = clampd(tgtRoll,  -cfg_.tiltLimitDeg, cfg_.tiltLimitDeg);
     bool tiltLimited = false;
@@ -60,6 +65,30 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     trace_.tiltPitch      = tiltPitch_;
     trace_.tiltRoll       = tiltRoll_;
     trace_.tiltRateActive = tiltLimited;
+
+    // --- Translational onset: HP(accel) -> leaky double-integrate -> mm ---
+    // Same shape as the heave channel, including the clamp writing back into
+    // the integrator state (windup with no anti-windup -- consistent with
+    // heave, deliberately).
+    auto transChan = [&](double gain, double aLp, double aRaw, double limitMm,
+                         double& vel, double& pos,
+                         double& aHpOut, double& velOut, double& rawOut, bool& clampedOut) {
+        const double aHp = gain * (aRaw - aLp);
+        vel = vel * leak(dt, cfg_.transVelWashoutTau) + aHp * dt;
+        pos = pos * leak(dt, cfg_.transPosWashoutTau) + vel * dt * 1000.0;
+        aHpOut = aHp;
+        velOut = vel;
+        rawOut = pos;
+        const double limited = clampd(pos, -limitMm, limitMm);
+        clampedOut = (limited != pos);
+        pos = limited;
+    };
+    transChan(cfg_.surgeGain, surgeLpRaw_, aRawX, cfg_.surgeLimitMm,
+              surgeVel_, surgePos_,
+              trace_.surgeAHp, trace_.surgeVel, trace_.surgePosRaw, trace_.surgeClamped);
+    transChan(cfg_.swayGain, swayLpRaw_, aRawY, cfg_.swayLimitMm,
+              swayVel_, swayPos_,
+              trace_.swayAHp, trace_.swayVel, trace_.swayPosRaw, trace_.swayClamped);
 
     // --- Rotational: HP(rate) -> integrate -> washout leak ---
     auto rotChan = [&](double gain, double rate, double& rateLp, double& angle,
@@ -83,13 +112,15 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     // --- Output smoothing: 2nd-order LP removes high-frequency grain the HP
     // channels pass through (turbulence/engine jitter in g/PQR). The actuators
     // then track a jerk-limited trajectory instead of a jittery one.
-    double out[4] = { heavePos_,
+    double out[6] = { surgePos_,
+                      swayPos_,
+                      heavePos_,
                       tiltRoll_  + rollAngle_,
                       tiltPitch_ + pitchAngle_,
                       yawAngle_ };
     if (cfg_.smoothTau > 0.0) {
         const double a = lpAlpha(dt, cfg_.smoothTau);
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 6; ++i) {
             sm1_[i] += a * (out[i] - sm1_[i]);
             sm2_[i] += a * (sm1_[i] - sm2_[i]);
             out[i] = sm2_[i];
@@ -97,15 +128,18 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
     } else {
         // Keep state tracking the raw output so enabling smoothing via a config
         // reload doesn't start from zero (= a pose jump).
-        for (int i = 0; i < 4; ++i) { sm1_[i] = out[i]; sm2_[i] = out[i]; }
+        for (int i = 0; i < 6; ++i) { sm1_[i] = out[i]; sm2_[i] = out[i]; }
     }
 
     Pose p;
-    p.surge = 0.0f;
-    p.sway  = 0.0f;
-    p.heave = static_cast<float>(out[0]);
-    p.roll  = static_cast<float>(out[1]);
-    p.pitch = static_cast<float>(out[2]);
-    p.yaw   = static_cast<float>(out[3]);
+    // Sign convention: +X forward, so a forward specific force commands a
+    // forward platform translation. Confirmed against the tilt axis by bench
+    // jog in Task 8 -- do not flip it on reasoning alone.
+    p.surge = static_cast<float>(out[0]);
+    p.sway  = static_cast<float>(out[1]);
+    p.heave = static_cast<float>(out[2]);
+    p.roll  = static_cast<float>(out[3]);
+    p.pitch = static_cast<float>(out[4]);
+    p.yaw   = static_cast<float>(out[5]);
     return p;
 }
