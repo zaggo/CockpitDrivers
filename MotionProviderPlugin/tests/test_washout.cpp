@@ -7,6 +7,10 @@
 static int g_failures = 0, g_checks = 0;
 static void check(bool c, const char* w){ ++g_checks; if(!c){++g_failures; std::printf("  FAIL: %s\n", w);} }
 
+// M_PI is not standard C++ and MSVC won't define it without _USE_MATH_DEFINES;
+// use this everywhere in the file instead.
+constexpr double kPi = 3.14159265358979323846;
+
 static MotionCues level() { MotionCues c; c.heaveG = 1.0f; return c; } // at-rest
 
 static Pose run(WashoutFilter& f, MotionCues c, int ticks, double dt=1.0/60.0) {
@@ -169,26 +173,44 @@ int main() {
     // translation path consumes must sum back to the raw input, at every tick.
     // This is what makes double-counting structurally impossible; it is the
     // reason the crossover reuses tilt_lp_tau instead of adding a constant.
+    //
+    // The two gains per axis (surgeGain/tiltSurgeGain, swayGain/tiltSwayGain)
+    // are deliberately distinct and non-unity. At gain 1.0 every gain factor
+    // cancels in the check below, so a bug that applies the translation gain
+    // twice (`gain*(aRaw - gain*aLp)`), or one that never moved the low-pass
+    // off the *gained* signal in the first place (pre-restructure shape:
+    // LP(tiltGain*aRaw) instead of LP(aRaw)), would pass unchanged. Distinct
+    // gains make both of those show up as a nonzero reconstruction error.
     {
         WashoutConfig cfg = WashoutConfig::defaults();
-        cfg.surgeGain     = 1.0;
+        cfg.surgeGain     = 2.5;
+        cfg.tiltSurgeGain = 1.7;
         cfg.surgeLimitMm  = 1.0e9;    // clamp inert: this is about the split, not the limit
+        cfg.swayGain      = 1.4;
+        cfg.tiltSwayGain  = 0.6;
+        cfg.swayLimitMm   = 1.0e9;
         WashoutFilter f(cfg);
         const double dt = 1.0 / 60.0;
         const double G  = 9.80665;
-        double lpRef = 0.0;                       // the same one-pole, recomputed here
-        bool ok = true;
+        double lpRefSurge = 0.0, lpRefSway = 0.0;   // the same one-pole, recomputed here
+        bool okSurge = true, okSway = true;
         for (int i = 0; i < 300; ++i) {
             MotionCues c = level();
-            c.surgeG = 0.2f * static_cast<float>(std::sin(2 * M_PI * 0.3 * (i / 60.0)));
-            const double aRaw = static_cast<double>(c.surgeG) * G;
+            c.surgeG = 0.2f  * static_cast<float>(std::sin(2 * kPi * 0.3  * (i / 60.0)));
+            c.swayG  = 0.15f * static_cast<float>(std::cos(2 * kPi * 0.37 * (i / 60.0)));
+            const double aRawSurge = static_cast<double>(c.surgeG) * G;
+            const double aRawSway  = static_cast<double>(c.swayG)  * G;
             const double alpha = dt / (cfg.tiltLpTau + dt);
-            lpRef += alpha * (aRaw - lpRef);
+            lpRefSurge += alpha * (aRawSurge - lpRefSurge);
+            lpRefSway  += alpha * (aRawSway  - lpRefSway);
             f.update(c, dt);
-            const double hp = f.trace().surgeAHp / cfg.surgeGain;
-            if (std::fabs((lpRef + hp) - aRaw) > 1e-12) ok = false;
+            const double hpSurge = f.trace().surgeAHp / cfg.surgeGain;
+            const double hpSway  = f.trace().swayAHp  / cfg.swayGain;
+            if (std::fabs((lpRefSurge + hpSurge) - aRawSurge) > 1e-12) okSurge = false;
+            if (std::fabs((lpRefSway  + hpSway)  - aRawSway)  > 1e-12) okSway  = false;
         }
-        check(ok, "surge LP + HP reconstructs the raw input every tick");
+        check(okSurge, "surge LP + HP reconstructs the raw input every tick (distinct gains)");
+        check(okSway,  "sway LP + HP reconstructs the raw input every tick (distinct gains)");
     }
 
     // Zero gain (the shipped configuration) produces no translation at all.
@@ -201,21 +223,90 @@ int main() {
         check(p.sway  == 0.0f, "zero sway gain -> no sway output");
     }
 
-    // The per-axis clamp holds and writes back into the integrator state.
+    // Same, but with output smoothing enabled. configuration.toml ships
+    // smooth_tau = 0.01, so the live rig always runs the smoothing branch
+    // whose array indices this task shifted from 0..3 to 2..5 -- exercise
+    // that branch rather than only the smoothTau == 0 bypass above.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();   // surgeGain/swayGain default to 0
+        cfg.smoothTau = 0.01;
+        WashoutFilter f(cfg);
+        MotionCues c = level(); c.surgeG = 0.4f; c.swayG = 0.3f;
+        Pose p = run(f, c, 600);
+        check(p.surge == 0.0f, "zero surge gain -> no surge output (smoothing on)");
+        check(p.sway  == 0.0f, "zero sway gain -> no sway output (smoothing on)");
+    }
+
+    // The per-axis clamp holds and writes back into the integrator state:
+    // trace().surgePosRaw (read BEFORE this tick's clamp) must stay near
+    // surgeLimitMm under sustained saturation, not run away underneath a
+    // clamp that only ever touched the output.
     {
         WashoutConfig cfg = WashoutConfig::defaults();
         cfg.surgeGain    = 4.0;
         cfg.surgeLimitMm = 5.0;
         WashoutFilter f(cfg);
         MotionCues c = level(); c.surgeG = 0.6f;
-        bool sawClamp = false, everOver = false;
+        const double dt = 1.0 / 60.0;
+        const double G  = 9.80665;
+
+        // Bound derived from the recurrence itself, not chosen to pass:
+        // `pos = pos*leak(posTau) + vel*dt*1000` runs every tick off of
+        // last tick's post-clamp `pos` (the clamp writes back
+        // unconditionally: `pos = limited;`), so that term alone can never
+        // exceed surgeLimitMm (leak is in (0,1]). The only way this tick's
+        // pre-clamp value can exceed the limit is through `vel*dt*1000`.
+        // For this sustained, same-sign, constant input, the tilt low-pass
+        // rises monotonically from 0 toward aRaw, so
+        // aHp = surgeGain*(aRaw - aLp) is bounded in [0, surgeGain*aRaw] at
+        // every tick. Feeding that ceiling into the (also never clamped)
+        // velocity leaky-integrator forever gives its steady-state ceiling,
+        // which no finite run starting from vel=0 can exceed:
+        //   velBound = aHpMax * dt / (1 - leak(velTau))
+        // and one tick of that velocity can add at most velBound*dt*1000 mm
+        // to the pre-clamp position.
+        const double aRaw     = static_cast<double>(c.surgeG) * G;
+        const double aHpMax   = cfg.surgeGain * aRaw;
+        const double leakVel  = std::exp(-dt / cfg.transVelWashoutTau);
+        const double velBound = aHpMax * dt / (1.0 - leakVel);
+        const double rawBound = cfg.surgeLimitMm + velBound * dt * 1000.0;
+
+        bool sawClamp = false, everOver = false, rawEverFar = false;
         for (int i = 0; i < 600; ++i) {
-            Pose p = f.update(c, 1.0 / 60.0);
+            Pose p = f.update(c, dt);
             if (f.trace().surgeClamped) sawClamp = true;
             if (std::fabs(p.surge) > cfg.surgeLimitMm + 1e-6) everOver = true;
+            if (std::fabs(f.trace().surgePosRaw) > rawBound) rawEverFar = true;
         }
         check(sawClamp,  "sustained surge engages the surge clamp");
         check(!everOver, "surge output never exceeds surge_limit_mm");
+        check(!rawEverFar,
+              "clamp writes back into the integrator: pre-clamp position never runs away");
+    }
+
+    // Axis identity: nothing else in the suite would catch a surge<->sway
+    // swap. The golden case pins the other four axes with surge/sway both
+    // zero; the clamp case above drives surge alone but never checks sway;
+    // reset() compares two instances that would swap identically. Drive each
+    // axis alone with both gains non-zero and check the cue lands on the
+    // axis it was raised on.
+    {
+        WashoutConfig cfg = WashoutConfig::defaults();
+        cfg.surgeGain = 2.0; cfg.swayGain = 2.0;
+        {
+            WashoutFilter f(cfg);
+            MotionCues c = level(); c.surgeG = 0.3f; c.swayG = 0.0f;
+            Pose p = run(f, c, 300);
+            check(p.sway   == 0.0f, "pure surge cue -> no sway output");
+            check(p.surge  != 0.0f, "pure surge cue -> nonzero surge output");
+        }
+        {
+            WashoutFilter f(cfg);
+            MotionCues c = level(); c.surgeG = 0.0f; c.swayG = 0.3f;
+            Pose p = run(f, c, 300);
+            check(p.surge  == 0.0f, "pure sway cue -> no surge output");
+            check(p.sway   != 0.0f, "pure sway cue -> nonzero sway output");
+        }
     }
 
     // reset() clears the new state: a fresh filter and a reset one agree.
@@ -241,7 +332,6 @@ int main() {
     // clamp asserts the limiter, not the filter, and would pass unchanged even
     // if the filter itself regressed.
     {
-        constexpr double kPi = 3.14159265358979323846;
         WashoutConfig cfg = WashoutConfig::defaults();
         WashoutFilter f(cfg);
         Pose p120, p600;
