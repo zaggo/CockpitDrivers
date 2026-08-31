@@ -52,7 +52,8 @@ placeholders with no code — `EffectsLayer.cpp:126`):
 
 - **Engine vibration is unreachable at any limit that is plausible.** A piston engine's dominant
   order sits around 40 Hz, above the 30 Hz Nyquist of the 60 Hz command stream, and at 1.9 actuator
-  counts it is under the quantisation of the drive. This ticket will not rescue it.
+  counts it is under the quantisation of the drive. This ticket will not rescue it — see
+  `2026-09-01-yoke-haptics-ticket.md` for the approach that could.
 - **Buffet is already renderable** at 6–8 Hz within today's budget — it needs an implementation
   sized in acceleration, not a bigger budget. Its trigger input (`MotionCues::alphaDeg`) is already
   collected and recorded.
