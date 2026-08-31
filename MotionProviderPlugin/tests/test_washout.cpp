@@ -166,29 +166,43 @@ int main() {
     }
 
     // Restructure regression. Drives a deterministic mixed cue sequence through
-    // the shipped defaults and pins the four output DOF. Task 3 moves the tilt
-    // low-pass from the gained signal to the raw one -- algebraically identical,
-    // so these numbers must not move.
+    // the shipped defaults and pins the output DOF at two points in the run.
+    // Task 3 moves the tilt low-pass from the gained signal to the raw one --
+    // algebraically identical, so these numbers must not move. Heave amplitude
+    // is kept low enough that the clamp never engages: a value pinned to the
+    // clamp asserts the limiter, not the filter, and would pass unchanged even
+    // if the filter itself regressed.
     {
         constexpr double kPi = 3.14159265358979323846;
         WashoutConfig cfg = WashoutConfig::defaults();
         WashoutFilter f(cfg);
-        Pose p;
+        Pose p120, p600;
+        bool heaveEverClamped = false;
         for (int i = 0; i < 600; ++i) {
             const double t = i / 60.0;
             MotionCues c = level();
-            c.heaveG    = 1.0f + 0.3f * static_cast<float>(std::sin(2 * kPi * 0.4 * t));
+            c.heaveG    = 1.0f + 0.02f * static_cast<float>(std::sin(2 * kPi * 0.4 * t));
             c.surgeG    = 0.25f * static_cast<float>(std::sin(2 * kPi * 0.13 * t));
             c.swayG     = 0.18f * static_cast<float>(std::cos(2 * kPi * 0.21 * t));
             c.rollRate  = 6.0f * static_cast<float>(std::sin(2 * kPi * 0.7 * t));
             c.pitchRate = 4.0f * static_cast<float>(std::cos(2 * kPi * 0.5 * t));
             c.yawRate   = 2.0f * static_cast<float>(std::sin(2 * kPi * 0.3 * t));
-            p = f.update(c, 1.0 / 60.0);
+            Pose p = f.update(c, 1.0 / 60.0);
+            heaveEverClamped |= f.trace().heaveClamped;
+            if (i == 119) p120 = p;
+            if (i == 599) p600 = p;
         }
-        check(std::fabs(p.heave - -30.000000000000) < 1e-9, "restructure keeps heave bit-stable");
-        check(std::fabs(p.roll  -   2.095232009888) < 1e-9, "restructure keeps roll bit-stable");
-        check(std::fabs(p.pitch -   3.315368652344) < 1e-9, "restructure keeps pitch bit-stable");
-        check(std::fabs(p.yaw   -  -0.524945855141) < 1e-9, "restructure keeps yaw bit-stable");
+        check(!heaveEverClamped, "restructure golden run stays off the heave clamp");
+
+        check(std::fabs(p120.heave -  13.876955986023) < 1e-9, "restructure keeps t120 heave bit-stable");
+        check(std::fabs(p120.roll  -   0.631350338459) < 1e-9, "restructure keeps t120 roll bit-stable");
+        check(std::fabs(p120.pitch -   3.284156560898) < 1e-9, "restructure keeps t120 pitch bit-stable");
+        check(std::fabs(p120.yaw   -   0.123054608703) < 1e-9, "restructure keeps t120 yaw bit-stable");
+
+        check(std::fabs(p600.heave - -11.237508773804) < 1e-9, "restructure keeps t600 heave bit-stable");
+        check(std::fabs(p600.roll  -   2.095232009888) < 1e-9, "restructure keeps t600 roll bit-stable");
+        check(std::fabs(p600.pitch -   3.315368652344) < 1e-9, "restructure keeps t600 pitch bit-stable");
+        check(std::fabs(p600.yaw   -  -0.524945855141) < 1e-9, "restructure keeps t600 yaw bit-stable");
     }
 
     std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
