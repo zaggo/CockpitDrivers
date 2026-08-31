@@ -6,8 +6,11 @@
 #include "StewartKinematics.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -34,6 +37,26 @@ double maxTravel(const StewartKinematics& k, const Pose& base,
     return lo;
 }
 
+// Largest symmetric roll=pitch (all else zero) that still solves, searched in
+// [0, hi] by bisection. Same monotonicity assumption as maxTravel. This is a
+// diagnostic on the theoretical clamp corner (roll/pitch at their combined
+// per-axis maximum) -- report only, not an input to the chosen limits.
+double maxSymmetricRollPitch(const StewartKinematics& k, double hi) {
+    auto reachableAt = [&](double x) {
+        Pose p;
+        p.roll = static_cast<float>(x);
+        p.pitch = static_cast<float>(x);
+        return reachable(k, p);
+    };
+    if (reachableAt(hi)) return hi;      // never ran out inside the search range
+    double lo = 0.0;
+    for (int i = 0; i < 60; ++i) {
+        const double mid = 0.5 * (lo + hi);
+        if (reachableAt(mid)) lo = mid; else hi = mid;
+    }
+    return lo;
+}
+
 void report(const StewartKinematics& k, const char* label, const Pose& base) {
     if (!reachable(k, base)) {
         std::printf("%-28s BASE POSE UNREACHABLE\n", label);
@@ -47,12 +70,37 @@ void report(const StewartKinematics& k, const char* label, const Pose& base) {
                 label, sPos, sNeg, yPos, yNeg);
 }
 
+// Parses "heave,roll,pitch,yaw" (mm, deg, deg, deg) into a base Pose with
+// surge/sway left at zero -- the caller measures surge/sway travel around it.
+bool parsePose(const std::string& csv, Pose* out) {
+    std::vector<double> v;
+    std::stringstream ss(csv);
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
+        if (tok.empty()) return false;
+        v.push_back(std::atof(tok.c_str()));
+    }
+    if (v.size() != 4) return false;
+    out->heave = static_cast<float>(v[0]);
+    out->roll  = static_cast<float>(v[1]);
+    out->pitch = static_cast<float>(v[2]);
+    out->yaw   = static_cast<float>(v[3]);
+    return true;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::string cfgPath = "configuration.toml";
+    std::string poseArg;
+    bool havePose = false;
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc) cfgPath = argv[++i];
+        if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc) {
+            cfgPath = argv[++i];
+        } else if (std::strcmp(argv[i], "--pose") == 0 && i + 1 < argc) {
+            poseArg = argv[++i];
+            havePose = true;
+        }
     }
 
     bool loaded = false;
@@ -66,7 +114,8 @@ int main(int argc, char** argv) {
 
     // In the corner: heave at its limit and tilt+rotational at their combined
     // per-axis limit, i.e. what the existing channels are already allowed to
-    // occupy at the same time. This is the number the per-axis limits come from.
+    // occupy at the same time. This is the THEORETICAL clamp corner -- the two
+    // channels' independent clamps stacked, not a flown operating point.
     for (double hs : {+1.0, -1.0}) {
         for (double as : {+1.0, -1.0}) {
             Pose c;
@@ -79,6 +128,28 @@ int main(int argc, char** argv) {
                           c.heave, c.roll, c.yaw);
             report(kin, label, c);
         }
+    }
+
+    // Diagnostic on that theoretical corner: how far the two stacked channels
+    // could go together, symmetrically, before running out of legs. Report
+    // only -- this does not feed the chosen limits.
+    const double maxRP = maxSymmetricRollPitch(kin, 45.0);
+    std::printf("\nlargest symmetric reachable roll=pitch (all else zero): %.2f deg\n", maxRP);
+
+    // Empirical (or any other ad-hoc) base pose supplied on the command line,
+    // so a candidate corner can be probed without recompiling it in.
+    if (havePose) {
+        Pose p;
+        if (!parsePose(poseArg, &p)) {
+            std::fprintf(stderr, "--pose expects \"heave,roll,pitch,yaw\" (mm,deg,deg,deg), got \"%s\"\n",
+                         poseArg.c_str());
+            return 1;
+        }
+        char label[64];
+        std::snprintf(label, sizeof(label), "pose h%+.2f r%+.2f p%+.2f y%+.2f",
+                      p.heave, p.roll, p.pitch, p.yaw);
+        std::printf("\n");
+        report(kin, label, p);
     }
     return 0;
 }
