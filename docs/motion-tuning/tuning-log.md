@@ -780,6 +780,70 @@ sweep moved only what it claimed to.
 exactly this: Stage 3 removes most of the overdrive but not all of it, and the residue is what
 Stage 5's anti-windup and Stage 8's amplitude choice have to absorb.
 
+## Surge/sway onset channel
+
+### First rig session, 2026-09-01 — sign confirmed, gain 0.5 is far too high, and a tool defect found
+
+`surge-sway-motion-20260901-215605.csv`, 78 columns, 7229 rows, 173.3 s at ~41 fps. Flown with
+`surge_gain = sway_gain = 0.5`, everything else as shipped. Contains a takeoff push, a braking
+application and rudder input. Cue export committed as `reference/onset_events.csv.gz`; it replays
+bit-identically to the full recording, so it is a valid input for future sweeps.
+
+**Sign: confirmed, not guessed.** Bench jog first — `+surge` moves the platform forward (the pilot
+pressed `+` six or seven times, then Reset, and watched the platform travel back). In the filter,
+positive `g_axil` produces positive `surgePos_`, so the platform accelerates forward and presses the
+pilot back into the seat, which is what forward acceleration is. The cross-check is the tilt channel,
+already signed off on 2026-08-30: the same positive `g_axil` produces nose-up pitch through
+`asin(tiltSurgeGain * surgeLpRaw_ / G)`, leaning the pilot back. Both channels push in the same
+direction, so the onset sign stands as written. Pilot's verdict in flight: *"eher schwach, und somit
+nicht einfach auszumachen, wenn sich die Platform gleichzeitig auch noch neigt. Es hat sich aber auf
+jedenfall nicht 'falsch' angefühlt."*
+
+**A defect in `washout_replay`, found by this recording.** The first `--verify` failed with a
+residual of exactly 43 mm — `surge_limit_mm`. Cause: `runChain` composed its live pose from four DOF,
+so replay emitted a constant zero on `live_surge`/`live_sway`. Task 6 had widened the comparison to
+six DOF but not the source of the values being compared, and both reviews missed it because the
+offending line sat outside the diff. Fixed (`a218af4`); the same recording then verifies **PASS at
+1.9e-06 mm/deg**. That residual also confirms the flown gains were exactly 0.5/0.5 — a reconstruction
+with any other value would not land on the floating-point floor.
+
+**The cue is not weak, it is clipping.** At 0.5 it spends 5.98 % of ticks against `surge_limit_mm`
+and 3.91 % against `sway_limit_mm`, both pinned at their exact limit values. A clipped transient
+reads as mushy rather than strong — the same mechanism that ruined the 12 Hz rumble and the 6 Hz
+touchdown. Gain sweep over this recording:
+
+| `surge_gain` = `sway_gain` | peak surge | peak sway | surge clamped | `sat_envelope` |
+|---|---|---|---|---|
+| **off (cue-off baseline)** | — | — | — | **4.32 %** |
+| 0.1 | 27.3 mm | 40.9 mm | 0.00 % | 4.30 % |
+| 0.15 | 40.9 mm | 41.0 mm | 0.00 % | 4.40 % |
+| 0.2 | 43.0 mm | 41.0 mm | 0.54 % | 4.52 % |
+| 0.3 | 43.0 mm | 41.0 mm | 1.48 % | 5.49 % |
+| 0.4 | 43.0 mm | 41.0 mm | 3.28 % | 6.38 % |
+| 0.5 (flown) | 43.0 mm | 41.0 mm | 5.98 % | 7.15 % |
+
+`sat_heave`, `sat_rot`, `sat_tilt_rate`, `wrms`, `band_ratio`, `lag_ms` and both rate metrics are
+**identical** across every row: they are computed from `live_*`, and the onset channel does not touch
+the heave or rotational paths. Only `sat_envelope` and `sat_sl_acc` (21.5 % → 27.8 % at gain 0.5) see
+it, which is exactly why the envelope gate is the one that matters here.
+
+**The channel is much stronger than the design assumed.** Leaky double integration with
+`trans_vel_washout_tau = trans_pos_washout_tau = 0.25` delivers roughly 62 mm per m/s² of high-passed
+acceleration. At gain 0.1 sway is already at its 41 mm limit.
+
+**Two things this session changes about the campaign's assumptions:**
+
+1. **The cue-off `sat_envelope` baseline on this flight is 4.32 %**, against 0.00–0.34 % across the
+   seven reference recordings the limits were derived from. This flight is far more demanding than
+   the corpus, so the p1-sized limits (43 / 41 mm) are too generous for it. The gate — `sat_envelope`
+   must not exceed its own cue-off baseline — is only met at gain 0.1; 0.15 misses it by 0.08 pp.
+2. **The first rig candidate is `surge_gain = sway_gain = 0.1`**, not the ~0.4 the
+   `configuration.toml` comment suggests. That comment reasoned from the tilt/onset gain ratio and
+   did not account for the translational channel's own amplitude, which this session measured for the
+   first time. Expect a cleanly shaped 27 mm impulse to read as *more* distinct than today's clipped
+   43 mm one; if it then feels too small, the next lever is shortening `trans_*_washout_tau`, not
+   raising the gain.
+
 **Column meanings:**
 
 - **Date** — when the candidate was decided, not necessarily when it was recorded.

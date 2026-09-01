@@ -51,13 +51,19 @@ smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, mane
 # tilt_lp_tau. OFF until a rig verdict adopts values -- see
 # docs/superpowers/specs/2026-08-31-surge-sway-onset-cues-design.md.
 #
-# Tuning note: tilt renders 0.4 * LP(a) (tilt_surge_gain/tilt_sway_gain =
-# 0.4), but onset renders surge_gain/sway_gain * HP(a) off the *ungained*
-# low-pass -- so surge_gain = 1.0 makes the onset transient 2.5x the scale
-# of the sustained cue it hands over to, front-running the open handover
-# question (one cue or two felt as separate?) toward "two". The first rig
-# candidate should start near tilt_surge_gain/tilt_sway_gain, i.e. ~0.4,
-# not 1.0.
+# Measured 2026-09-01, first rig session (surge-sway-motion-20260901-215605):
+# this channel is far stronger than the gain ratio against tilt suggests. The
+# leaky double integration at trans_*_washout_tau = 0.25 delivers roughly
+# 62 mm per m/s^2 of high-passed acceleration, so at gain 0.1 sway already sits
+# at its 41 mm limit, and 0.5 clipped 6 % of ticks and pushed sat_envelope from
+# its 4.32 % cue-off baseline to 7.15 % -- surge/sway stealing from heave and
+# tilt, which is the one failure mode the design named.
+#
+# First rig candidate is 0.1 for both, NOT the ~0.4 an earlier note here
+# reasoned out from the tilt gain: that argument ignored the translational
+# channel's own amplitude. If 0.1 feels too small, shorten
+# trans_*_washout_tau rather than raising the gain.
+# See docs/motion-tuning/tuning-log.md, "Surge/sway onset channel".
 surge_gain = 0
 sway_gain = 0
 trans_vel_washout_tau = 0.25
