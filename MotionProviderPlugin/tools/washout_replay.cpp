@@ -425,6 +425,12 @@ RunResult runChain(const std::vector<CueSample>& samples,
         if (!s.cues.simPaused) {
             const Pose w = washout.update(s.cues, dt);
             e = effects.update(s.cues, dt);
+            // All six DOF, matching MotionProvider::onFlightLoopTick exactly. The
+            // translational onset channel writes surge/sway, so dropping them here
+            // would leave replay emitting a constant zero on two of the columns
+            // --verify compares — failing every recording made with the channel
+            // enabled, for a reason that has nothing to do with the filter.
+            live.surge = w.surge + e.surge;  live.sway  = w.sway  + e.sway;
             live.heave = w.heave + e.heave;  live.roll  = w.roll  + e.roll;
             live.pitch = w.pitch + e.pitch;  live.yaw   = w.yaw   + e.yaw;
         }
