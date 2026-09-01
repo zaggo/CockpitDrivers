@@ -133,10 +133,14 @@ Pose WashoutFilter::update(const MotionCues& c, double dt) {
 
     Pose p;
     // Sign convention: +X forward, so a forward specific force commands a
-    // forward platform translation. PROVISIONAL -- this is not yet confirmed
-    // against the tilt axis. It must be settled by a bench jog against the
-    // tilt axis (Task 8) before this channel is flown -- do not flip it on
-    // reasoning alone, but do not fly it unverified either.
+    // forward platform translation, accelerating the pilot's back into the seat
+    // -- which is what forward acceleration is.
+    //
+    // CONFIRMED 2026-09-01 by bench jog: +surge moves the platform forward. The
+    // cross-check is the tilt channel, signed off 2026-08-30 -- the same positive
+    // g_axil produces nose-up pitch there, leaning the pilot back, so both halves
+    // of the crossover cue the same direction. Do not flip either on reasoning
+    // alone; re-jog if the geometry or the actuator mapping ever changes.
     p.surge = static_cast<float>(out[0]);
     p.sway  = static_cast<float>(out[1]);
     p.heave = static_cast<float>(out[2]);
