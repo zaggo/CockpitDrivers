@@ -12,6 +12,14 @@ enum class CanMessageId : uint16_t {
   // [4..7] reserved
   airspeed = 0x100,
 
+  // 0x102: Altimeter + VSI (Gateway -> Instruments, 50Hz)
+  // [0..3] altitude int32, feet     (sim/cockpit2/gauges/indicators/altitude_ft_pilot)
+  // [4..5] vsi      int16, feet/min (sim/cockpit2/gauges/indicators/vvi_fpm_pilot)
+  // [6..7] reserved
+  // Both values are sent unscaled. One message feeds two boards: VerticalSpeedCAN
+  // reads bytes 4..5 only, the altimeter board reads bytes 0..3 only.
+  altimeterVsi = 0x102,
+
   rpm = 0x106,
 
   odometer = 0x1F0,

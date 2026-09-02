@@ -13,7 +13,7 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 
 - Board projects (`AirspeedCAN`, `AltimeterDriver`, `CANDebugNode`, `DCU`, `FuelGaugeCAN`, `HSIDriver`,
   `HandbrakeCAN`, `I2CBoard`, `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`, `RudderCAN`,
-  `ServoBoard`, `StepperBoard`, `TransponderBoard`): independent PlatformIO/Arduino projects, each with its own
+  `ServoBoard`, `StepperBoard`, `TransponderBoard`, `VerticalSpeedCAN`): independent PlatformIO/Arduino projects, each with its own
   `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (`DCU`, `MotionActor`, `MotionGateway`)
   have their own `CLAUDE.md` with board-specific detail — read it too when working in that directory.
 - `shared/CANBase`: shared PlatformIO library with the CAN wire protocol (see Architecture below).
@@ -48,7 +48,8 @@ RudderCAN's and AirspeedCAN's `platformio.ini` factor the AVR-common settings (`
 `lib_deps`, ...) into an `[avr]` section that `env:nano` / `env:diecimilaatmega328` pick up via
 `extends = avr`, rather than repeating them per env as DCU's does — copy this shape for any future board
 that adds a native test env. The natively tested logic lives in Arduino-free headers under that board's
-`include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`); `src/` stays Arduino-coupled.
+`include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`, `VerticalSpeedCalibration.h`);
+`src/` stays Arduino-coupled.
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
 
