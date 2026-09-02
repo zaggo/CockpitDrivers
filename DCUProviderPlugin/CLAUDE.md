@@ -44,8 +44,8 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
    `MessageQueue`.
 3. `DCUProvider::updateDownlink()` — X-Plane → gateway. Reads datarefs via `DataRefManager` and
    `msgQueue_->enqueueTx(...)`, one block per data category, each independently rate-limited via its own
-   accumulator (fuel 5 Hz, lights/transponder/odometer 10 Hz, RPM/airspeed 50 Hz — constants in
-   `DCUProvider.h`).
+   accumulator (fuel 5 Hz, lights/transponder/odometer 10 Hz, RPM/airspeed/altimeter+VSI 50 Hz —
+   constants in `DCUProvider.h`).
 4. `DCUProvider::updateUplink()` — gateway → X-Plane. Drains `MessageQueue` RX, `switch`es on
    `MessageType`, writes into `DataRefManager` setters.
 5. `DCUProvider::updateRudderOverride()` — watchdog for the rudder/toe-brake axes. X-Plane rewrites

@@ -379,6 +379,29 @@ void DCUProvider::updateDownlink(float dt)
         airspeedAccumulator_ = 0.0f;
     }
 
+    // ============ Altimeter + VSI Data (50 Hz) ============
+    altimeterVsiAccumulator_ += dt;
+    float altimeterVsiRate = 1.0f / ALTIMETER_VSI_RATE;
+
+    if (altimeterVsiAccumulator_ >= altimeterVsiRate)
+    {
+        // Both halves travel together: the gateway packs them into the single CAN
+        // frame 0x102 that feeds VerticalSpeedCAN and the altimeter board.
+        struct AltimeterVsiData
+        {
+            float altitudeFt;
+            float vsiFpm;
+        };
+
+        AltimeterVsiData altimeterVsi;
+        altimeterVsi.altitudeFt = dataRefMgr_->getAltitudeFt();
+        altimeterVsi.vsiFpm = dataRefMgr_->getVsiFpm();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageAltimeterVsi, &altimeterVsi, sizeof(altimeterVsi));
+
+        altimeterVsiAccumulator_ = 0.0f;
+    }
+
     // ============ Odometer Data (10 Hz) ============
     odometerAccumulator_ += dt;
     float odometerRate = 1.0f / ODOMETER_RATE;

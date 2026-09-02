@@ -70,6 +70,10 @@ void DataRefManager::onAircraftLoaded()
     // Airspeed indicator (ASI)
     dr_ias = XPLMFindDataRef("sim/cockpit2/gauges/indicators/airspeed_kts_pilot");
     dr_tas = XPLMFindDataRef("sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot");
+
+    // Altimeter + VSI (one downlink message, one CAN frame, two instrument boards)
+    dr_altitude = XPLMFindDataRef("sim/cockpit2/gauges/indicators/altitude_ft_pilot");
+    dr_vsi = XPLMFindDataRef("sim/cockpit2/gauges/indicators/vvi_fpm_pilot");
 }
 
 // Fuel
@@ -141,6 +145,17 @@ float DataRefManager::getIas() const
 float DataRefManager::getTas() const
 {
     return readFloat(dr_tas, 0.0f);
+}
+
+// Altimeter + vertical speed indicator
+float DataRefManager::getAltitudeFt() const
+{
+    return readFloat(dr_altitude, 0.0f);
+}
+
+float DataRefManager::getVsiFpm() const
+{
+    return readFloat(dr_vsi, 0.0f);
 }
 
 // Altimeter

@@ -46,6 +46,10 @@ public:
     float getIas() const;  // knots, indicated
     float getTas() const;  // knots, true
 
+    // Altimeter + vertical speed indicator (both halves of one message)
+    float getAltitudeFt() const;  // feet, pilot altimeter
+    float getVsiFpm() const;      // feet/min, negative = descending
+
     // Transponder
     uint16_t getTransponderCode() const;
     uint8_t getTransponderMode() const;
@@ -125,6 +129,9 @@ private:
 
     XPLMDataRef dr_ias = nullptr;
     XPLMDataRef dr_tas = nullptr;
+
+    XPLMDataRef dr_altitude = nullptr;
+    XPLMDataRef dr_vsi = nullptr;
 
     XPLMCommandRef cr_TransponderIdent = nullptr;
 };
