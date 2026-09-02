@@ -36,11 +36,63 @@ void test_fuel_level_kg100_matches_spec_layout(void) {
     TEST_ASSERT_EQUAL_UINT16(6700, unpackBE16(data + 2));
 }
 
+void test_packBE32_writes_most_significant_byte_first(void) {
+    uint8_t buf[4] = {0};
+    packBE32(buf, 0x12345678);
+    TEST_ASSERT_EQUAL_UINT8(0x12, buf[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x34, buf[1]);
+    TEST_ASSERT_EQUAL_UINT8(0x56, buf[2]);
+    TEST_ASSERT_EQUAL_UINT8(0x78, buf[3]);
+}
+
+void test_unpackBE32_reads_most_significant_byte_first(void) {
+    uint8_t buf[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+    TEST_ASSERT_EQUAL_UINT32(0xDEADBEEF, unpackBE32(buf));
+}
+
+void test_packBE32_unpackBE32_roundtrip(void) {
+    uint8_t buf[4];
+    packBE32(buf, 0xCAFEBABE);
+    TEST_ASSERT_EQUAL_UINT32(0xCAFEBABE, unpackBE32(buf));
+}
+
+// The altimeter/VSI frame (CAN ID 0x102) packs two signed fields of different
+// widths into one payload: [0..3] altitude int32 ft, [4..5] VSI int16 ft/min,
+// [6..7] reserved. Both halves must survive the round trip with their sign
+// intact — a descent below sea level exercises both at once.
+void test_altimeter_vsi_frame_matches_spec_layout(void) {
+    uint8_t data[8] = {0};
+    const int32_t altitudeFt = -1200;
+    const int16_t vsiFpm = -750;
+    packBE32(data + 0, static_cast<uint32_t>(altitudeFt));
+    packBE16(data + 4, static_cast<uint16_t>(vsiFpm));
+
+    TEST_ASSERT_EQUAL_INT32(-1200, static_cast<int32_t>(unpackBE32(data + 0)));
+    TEST_ASSERT_EQUAL_INT16(-750, static_cast<int16_t>(unpackBE16(data + 4)));
+    TEST_ASSERT_EQUAL_UINT8(0, data[6]);
+    TEST_ASSERT_EQUAL_UINT8(0, data[7]);
+}
+
+// Climbing, well above sea level: the positive side of the same layout.
+void test_altimeter_vsi_frame_carries_positive_values(void) {
+    uint8_t data[8] = {0};
+    packBE32(data + 0, static_cast<uint32_t>(static_cast<int32_t>(35000)));
+    packBE16(data + 4, static_cast<uint16_t>(static_cast<int16_t>(1800)));
+
+    TEST_ASSERT_EQUAL_INT32(35000, static_cast<int32_t>(unpackBE32(data + 0)));
+    TEST_ASSERT_EQUAL_INT16(1800, static_cast<int16_t>(unpackBE16(data + 4)));
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_packBE16_writes_high_byte_first);
     RUN_TEST(test_unpackBE16_reads_high_byte_first);
     RUN_TEST(test_packBE16_unpackBE16_roundtrip);
     RUN_TEST(test_fuel_level_kg100_matches_spec_layout);
+    RUN_TEST(test_packBE32_writes_most_significant_byte_first);
+    RUN_TEST(test_unpackBE32_reads_most_significant_byte_first);
+    RUN_TEST(test_packBE32_unpackBE32_roundtrip);
+    RUN_TEST(test_altimeter_vsi_frame_matches_spec_layout);
+    RUN_TEST(test_altimeter_vsi_frame_carries_positive_values);
     return UNITY_END();
 }

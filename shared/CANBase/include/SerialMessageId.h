@@ -19,6 +19,11 @@ enum class MessageType : uint8_t {
     // TAS is plumbed through for completeness; the ASI's TAS ring is mechanical,
     // so AirspeedCAN ignores it.
     SerialMessageAirspeed = 0x08,
+    // Plugin -> DCU. Payload: float altitudeFt, float vsiFpm (8 bytes, host order).
+    // Both are signed. One serial message feeds one CAN frame (0x102) that in turn
+    // feeds two boards: VerticalSpeedCAN reads the VSI half, the altimeter board
+    // the altitude half.
+    SerialMessageAltimeterVsi = 0x09,
 };
 
 // Message Payload for Transponder > DCU

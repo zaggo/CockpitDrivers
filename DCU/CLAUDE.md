@@ -60,7 +60,8 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
 
 - **`DCUReceiver`**: byte state machine (via `SerialFrameParser`) parsing frames from the plugin
   (`SerialMessageFuel`, `SerialMessageLights`, `SerialMessageTransponder`, `SerialMessageHandbrake`,
-  `SerialMessageRPM`, `SerialMessageOdometer`, `SerialMessageAirspeed`), converts them to CAN messages and sends them
+  `SerialMessageRPM`, `SerialMessageOdometer`, `SerialMessageAirspeed`, `SerialMessageAltimeterVsi`),
+  converts them to CAN messages and sends them
   onward to instruments via `CAN::sendMessage`. Caches last-sent values per message type and resends on
   a 5000ms max-age timer (`checkMaxAgeResync`) even without new plugin input, so instruments recover
   after a dropped frame or a restart.
@@ -74,7 +75,8 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
 
 Unit-tested independent of Arduino/hardware (see `env:native` above):
 
-- `WireEncoding.h` — `packBE16`/`unpackBE16` big-endian pack/unpack for CAN/serial payloads.
+- `WireEncoding.h` — `packBE16`/`unpackBE16` and `packBE32`/`unpackBE32` big-endian pack/unpack for
+  CAN/serial payloads.
 - `CanIdError.h` — `CanIdError`/`CanErrorType` fixed-size error record + `anyCanIdHasError()`; backs
   `CAN`'s `canIdErrors[]` alarm-LED logic above.
 - `Heartbeat.h` — `heartbeatAlive()`/`isStale()`; rollover-safe `millis()` comparisons shared by the
@@ -89,7 +91,9 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
 serial-console simulator that drives fuel/light/RPM/odometer/airspeed CAN messages directly, for
 testing instruments on the CAN bus without the plugin/X-Plane attached. `?` lists the commands
-(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`rw`); `as<knots>` sends an `airspeed` (0x100) frame to AirspeedCAN.
+(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`rw`); `as<knots>` sends an `airspeed` (0x100) frame to
+AirspeedCAN. `al<feet>` and `vs<fpm>` both resend the same `altimeterVsi` (0x102) frame — altitude and
+climb rate share one message, so each command updates its half and ships both.
 
 Because no `DCUSender` exists in bench builds, instrument→plugin frames decoded by `CAN` have no sink.
 For rudder input the `rw` console command works around that: `CAN` keeps the last decoded

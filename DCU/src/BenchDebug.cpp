@@ -1,6 +1,7 @@
 #include <BenchDebug.h>
 #include "WireEncoding.h"
 #include "CommandTokenizer.h"
+#include <math.h>
 
 #if BENCHDEBUG
 const int kLedPin = 13;
@@ -54,6 +55,19 @@ void BenchDebug::sendAirspeed() {
     Serial.println(String(F("Send Airspeed: ")) + iasKnots + F(" kts"));
 
     canBus->sendMessage(CanMessageId::airspeed, 4, data);
+}
+
+void BenchDebug::sendAltimeterVsi() {
+    byte data[8] = {0};
+    // [0..3] altitude ft int32, [4..5] VSI ft/min int16, [6..7] reserved.
+    // Both halves go out on every send — VerticalSpeedCAN picks 4..5 out, the
+    // altimeter board will pick 0..3 out.
+    packBE32(data + 0, static_cast<uint32_t>(static_cast<int32_t>(lroundf(altitudeFt))));
+    packBE16(data + 4, static_cast<uint16_t>(static_cast<int16_t>(lroundf(vsiFpm))));
+
+    Serial.println(String(F("Send Altimeter/VSI: ")) + altitudeFt + F(" ft, ") + vsiFpm + F(" fpm"));
+
+    canBus->sendMessage(CanMessageId::altimeterVsi, 8, data);
 }
 
 void BenchDebug::sendRpm() {
@@ -146,6 +160,20 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Airspeed set to "))+iasKnots+F(" kts"));
         sendAirspeed();
         return true;
+    } else if (command.startsWith("al")) {
+        String rString = command.substring(2);
+        rString.trim();
+        altitudeFt = rString.toFloat();
+        Serial.println(String(F("Altitude set to "))+altitudeFt+F(" ft"));
+        sendAltimeterVsi();
+        return true;
+    } else if (command.startsWith("vs")) {
+        String rString = command.substring(2);
+        rString.trim();
+        vsiFpm = rString.toFloat();
+        Serial.println(String(F("Vertical speed set to "))+vsiFpm+F(" fpm"));
+        sendAltimeterVsi();
+        return true;
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
@@ -157,6 +185,8 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("rp<rpm>: set RPM gauge value"));
         Serial.println(F("oh<hours>: set odometer total hours"));
         Serial.println(F("as<knots>: set airspeed indicator (IAS)"));
+        Serial.println(F("al<feet>: set altitude (shared 0x102 frame)"));
+        Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         return true;
     }

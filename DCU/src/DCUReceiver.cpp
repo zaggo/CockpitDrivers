@@ -2,6 +2,7 @@
 #include "DebugLog.h"
 #include "WireEncoding.h"
 #include "Heartbeat.h"
+#include <math.h>
 
 DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
 {
@@ -18,6 +19,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   rpmMeta = {0, 5000};
   odometerMeta = {0, 5000};
   airspeedMeta = {0, 5000};
+  altimeterVsiMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -217,6 +219,40 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageAltimeterVsi:
+  {
+    // Payload: float altitudeFt, float vsiFpm (8 bytes)
+    if (len != 8)
+      return;
+
+    float altitude;
+    float vsi;
+    memcpy(&altitude, payload + 0, 4);
+    memcpy(&vsi, payload + 4, 4);
+
+    // Both values are legitimately negative (below sea level, descending), so
+    // round with lroundf instead of the "+ 0.5" trick the unsigned values above
+    // use — that one rounds the wrong way on the negative side.
+    const int32_t altitudeRounded = static_cast<int32_t>(lroundf(altitude));
+
+    // vvi_fpm_pilot has no hard bound; clamp so an extreme dive or a garbage
+    // dataref read can't wrap the int16 wire field into the opposite sign.
+    long vsiRounded = lroundf(vsi);
+    if (vsiRounded < -32768L)
+      vsiRounded = -32768L;
+    else if (vsiRounded > 32767L)
+      vsiRounded = 32767L;
+
+    if (altitudeRounded != altitudeFt || static_cast<int16_t>(vsiRounded) != vsiFpm)
+    {
+      altitudeFt = altitudeRounded;
+      vsiFpm = static_cast<int16_t>(vsiRounded);
+      DEBUGLOG_PRINTLN(String(F("Received MSG_ALTIMETER_VSI Datagram alt: ")) + String(altitudeFt) + String(F("ft vsi: ")) + String(vsiFpm) + String(F("fpm")));
+      sendAltimeterVsi();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -314,6 +350,22 @@ void DCUReceiver::sendAirspeed()
   airspeedMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendAltimeterVsi()
+{
+  byte data[8] = {0};
+
+  // [0..3] altitude ft int32, [4..5] VSI ft/min int16, [6..7] reserved.
+  // One frame, two boards: VerticalSpeedCAN reads 4..5 and ignores the rest,
+  // the altimeter board will do the opposite.
+  packBE32(data + 0, static_cast<uint32_t>(altitudeFt));
+  packBE16(data + 4, static_cast<uint16_t>(vsiFpm));
+
+  canBus->sendMessage(CanMessageId::altimeterVsi, 8, data);
+
+  // Update last send timestamp for maxAge resync
+  altimeterVsiMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -358,5 +410,12 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for airspeed")));
     sendAirspeed();
+  }
+
+  // Check altimeter/VSI message
+  if (isStale(altimeterVsiMeta.lastSendTimestamp, now, altimeterVsiMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for altimeterVsi")));
+    sendAltimeterVsi();
   }
 }

@@ -30,6 +30,7 @@ class DCUReceiver {
         void sendRpm();
         void sendOdometer();
         void sendAirspeed();
+        void sendAltimeterVsi();
 
         // RX state machine
         // Fuel Gauge
@@ -61,6 +62,10 @@ class DCUReceiver {
         uint16_t iasKts10 = 0;
         uint16_t tasKts10 = 0;
 
+        // Altimeter + Vertical Speed Indicator (share CAN 0x102)
+        int32_t altitudeFt = 0;
+        int16_t vsiFpm = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
@@ -68,6 +73,7 @@ class DCUReceiver {
         MessageMeta rpmMeta;
         MessageMeta odometerMeta;
         MessageMeta airspeedMeta;
+        MessageMeta altimeterVsiMeta;
 
         // Reference to CAN bus
         CAN* canBus;
