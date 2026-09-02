@@ -841,8 +841,96 @@ acceleration. At gain 0.1 sway is already at its 41 mm limit.
    `configuration.toml` comment suggests. That comment reasoned from the tilt/onset gain ratio and
    did not account for the translational channel's own amplitude, which this session measured for the
    first time. Expect a cleanly shaped 27 mm impulse to read as *more* distinct than today's clipped
-   43 mm one; if it then feels too small, the next lever is shortening `trans_*_washout_tau`, not
-   raising the gain.
+   43 mm one.
+
+   *(Written that evening, this entry also said the next lever if 0.1 felt too small was to shorten
+   `trans_*_washout_tau`. Stage 9 measured that and it is wrong — see below. Shortening it makes the
+   cue smaller, not sharper.)*
+
+### Stage 9, 2026-09-02 — offline sweeps over all eight segments
+
+Ran on the seven `reference/` segments plus the new `onset_events` from the rig session above.
+`washout_metrics.py` on replay output; all gates evaluated per file, since the cue-off
+`sat_envelope` baseline is not the same everywhere.
+
+**Cue-off baselines (`sat_envelope`, gains at 0).** Six of eight segments are at 0.00 %.
+`steep_turns` is 0.34 % — 11 ticks of a 3211-row file, the same boundary window Task 1's envelope
+measurement ran into. `onset_events` is **4.32 %**, which makes it by far the most demanding
+recording in the corpus and the only one where the gate has real work to do.
+
+**Gain sweep, `surge_gain` = `sway_gain`, `sat_envelope` per segment:**
+
+| segment | cue-off | 0.05 | 0.1 | 0.15 | 0.2 |
+|---|---|---|---|---|---|
+| `cruise_calm`, `climb_descent`, `ground_takeoff`, `approach_landing`, `acceptance`, `turbulence` | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| `steep_turns` | 0.34 | 0.25 | 0.19 | 0.00 | 0.00 |
+| `onset_events` | 4.32 | 4.26 | **4.30** | 4.40 | 4.52 |
+
+**Gain 0.1 is the largest value that holds the gate on every segment.** 0.15 misses it only on
+`onset_events`, by 0.08 pp. `steep_turns` moving *down* with gain is not a real effect — it is those
+same 11 boundary ticks being nudged across the threshold.
+
+**The acceleration limiter does not care.** `sat_sl_acc` stays within 1 pp of its cue-off value on
+every segment at every gain up to 0.2 (`turbulence` 95.7 → 95.3, `climb_descent` 14.7 → 15.2,
+`cruise_calm` 1.69 → 1.74). An earlier estimate in this session predicted clipping from the demanded
+surge acceleration exceeding 363 mm/s² — that was wrong, because 363 mm/s² is derived from
+330.7 counts/mm, which is the **heave** mapping. Horizontal translation moves the legs less per mm of
+pose, so the same pose acceleration costs less actuator acceleration. **The envelope, not the
+limiter, is what binds this channel.**
+
+`sat_heave`, `sat_rot`, `sat_tilt_rate`, `wrms`, `band_ratio`, `lag_ms`, `rot_rate_*` and
+`tilt_rate_*` are bit-identical across every run: they are computed from `live_heave`/`live_roll`/
+`live_pitch`/`live_yaw`, and this channel writes neither. The lag gate is therefore satisfied by
+construction, not by margin.
+
+**What the cue actually delivers at gain 0.1** (peak / RMS of `live_surge`, and of its second
+difference):
+
+| segment | surge peak | surge RMS | peak accel | RMS accel |
+|---|---|---|---|---|
+| `cruise_calm` | 1.3 mm | 0.15 mm | 68 mm/s² | 3.7 |
+| `climb_descent` | 4.3 mm | 1.81 mm | 130 | 7.0 |
+| `steep_turns` | 3.6 mm | 1.02 mm | 33 | 3.2 |
+| `ground_takeoff` | 7.4 mm | 1.45 mm | 18 | 2.5 |
+| `turbulence` | 6.5 mm | 1.57 mm | 409 | 23.9 |
+| `approach_landing` | 20.5 mm | 2.67 mm | 511 | 16.5 |
+| `acceptance` | 17.6 mm | 1.57 mm | 256 | 13.1 |
+| `onset_events` | 27.2 mm | 4.51 mm | 1094 | 49.6 |
+
+Cruise stays quiet, which is the right shape — the channel is a transient renderer and should do
+almost nothing in steady flight.
+
+**`trans_*_washout_tau` is a second amplitude knob, not a sharpness knob.** Measured at gain 0.1:
+
+| segment | τ = 0.15 | τ = 0.25 (shipped) | τ = 0.4 |
+|---|---|---|---|
+| `ground_takeoff` peak | 3.1 mm | 7.4 mm | 16.4 mm |
+| `approach_landing` peak | 9.1 mm | 20.5 mm | 41.8 mm |
+| `approach_landing` peak accel | 352 mm/s² | 511 mm/s² | 830 mm/s² |
+| `onset_events` `sat_envelope` | 4.25 | 4.30 | 4.30 |
+| `onset_events` surge clamp | 0.00 % | 0.00 % | 0.65 % |
+
+Shortening τ shrinks displacement **and** peak acceleration together — a leaky integrator with a
+shorter time constant does not differentiate harder, it just leaks faster, so the whole signal
+including its fast content comes down. To make the cue bigger, lengthen τ.
+
+**Candidates for the next rig session, in order:**
+
+1. **`surge_gain = sway_gain = 0.1`, `trans_*_washout_tau = 0.4`.** Roughly doubles the takeoff-push
+   amplitude to 16.4 mm, holds the envelope gate on all eight segments, and lets the per-axis clamp
+   take the pressure on the worst recording (0.65 % of ticks) — which is exactly what the per-axis
+   limits exist for. This is the one to fly first: the pilot's verdict on 0.5 was "eher schwach", and
+   this buys amplitude without touching the gate.
+2. **`0.1` at the shipped `τ = 0.25`.** The conservative fallback. Nothing clamps anywhere except
+   0.04 % of sway ticks on `onset_events`.
+
+Raising the gain instead of τ is the worse trade: 0.2 at τ = 0.25 breaks the envelope gate on
+`onset_events` (4.52 vs 4.32) while delivering less than τ = 0.4 does at gain 0.1.
+
+**The open question is still the one no metric answers:** whether the handover from translation to
+tilt is felt as one cue or two. Note that τ = 0.4 lengthens how long the translational part persists
+before washing out, which pushes it further into the tilt ramp — that could read as a single blended
+cue, or as a drawn-out shove. The rig decides.
 
 **Column meanings:**
 
