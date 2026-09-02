@@ -39,8 +39,16 @@ class CAN : public BaseCAN {
         uint32_t lastInstrumentHeartbeatMs[kMaxInstrumentNodes] = {0};
         bool instrumentAlive[kMaxInstrumentNodes] = {false};
 
-        // CAN ID error tracking: tracks TX/RX error status per CAN ID
-        static constexpr uint8_t kMaxCanIdErrors = 12;
+        // CAN ID error tracking: tracks TX/RX error status per CAN ID.
+        // Slots are handed out lazily by setCanIdError() and never freed, so the
+        // table has to fit every ID that can ever fail at once. Two sources feed it:
+        // one pseudo-ID per monitored instrument node (0x301 + nodeId, every node but
+        // the gateway itself — see checkInstrumentHeartbeats) plus one per CAN ID this
+        // gateway transmits (8 today: airspeed, altimeterVsi, fuelLevel, lights,
+        // odometer, rpm, transponder, gatewayHeartbeat). At 12 the table overflowed
+        // on the heartbeats alone, after which every further error was dropped on the
+        // floor and the alarm LED stayed dark.
+        static constexpr uint8_t kMaxCanIdErrors = kMaxInstrumentNodes + 8;
         CanIdError canIdErrors[kMaxCanIdErrors];
         uint8_t canIdErrorCount = 0;
 
