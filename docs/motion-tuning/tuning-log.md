@@ -1007,6 +1007,69 @@ done here.
 
 **Still to do:** the acceptance flight at 0.1 / 0.07 / τ 0.4.
 
+### Acceptance flight, 2026-09-03 — **campaign closed, 0.1 / 0.07 / τ 0.4 adopted**
+
+`sway-0.07-motion-20260903-182246.csv`, 14 746 rows, 326.7 s. `--verify` PASS at 2.4e-07 mm/deg
+**against `configuration.toml` itself**, with no `--set` reconstruction — the flown configuration is
+bit-for-bit the committed one. Cue export: `reference/abnahme_onset_20260903.csv.gz`.
+
+Pilot, before seeing any numbers:
+
+> Ich habe das Wetter komplett windfrei gemacht. Cruise-Flug (und auch sonst) ohne Stöße. Bei der
+> Landung, die ich versucht habe soft zu fliegen und danach nicht eine Vollbremsung zu machen, war
+> wesentlich besser. Das vorne-links Neigen war jetzt nicht mehr zu bemerken. Große (gefühlte)
+> Amplituden beim abschließenden Taxiing, aber das war ok so. Subjektiv würde ich alles so lassen.
+
+**Gates, same cues with the channel off and on:**
+
+| | off | on | gate |
+|---|---|---|---|
+| `sat_envelope` | 0.08 % | **0.05 %** | not above cue-off — **passed**, and lower with the channel |
+| `sat_surge` / `sat_sway` | 0 / 0 | 0.00 / 0.07 % | no meaningful clipping |
+| `sat_heave` | 0.15 % | 0.15 % | unchanged |
+| `sat_sl_acc` | 10.12 % | 10.50 % | +0.38 pp |
+| `wrms`, `band_ratio`, `lag_ms`, `rot_rate_*`, `tilt_rate_*` | — | identical | unchanged by construction |
+| `jerk_p95` | 6.84 M | 6.94 M | +1.4 % |
+
+The envelope gate, which the 2026-09-03 session missed by 0.07 pp, is met with margin here — and the
+channel makes it *smaller*, 7 ticks against 12. Not a general property; on this flight the added
+translation happens to move the pose away from the boundary rather than toward it.
+
+**Amplitude by phase, which is what the pilot's "große Amplituden beim Taxiing" refers to:**
+
+| phase | surge p95 | surge p99 | surge max | sway p95 | sway p99 | sway max |
+|---|---|---|---|---|---|---|
+| taxi (< 12 m/s) | 26.9 | 36.9 | 40.2 mm | 16.3 | 37.3 | 41.0 mm |
+| takeoff/landing roll | 13.4 | 32.2 | 36.3 mm | 20.7 | 32.7 | 39.4 mm |
+| airborne | 3.2 | 9.3 | 11.1 mm | 4.2 | 6.5 | 7.7 mm |
+
+The ground/air asymmetry is a factor of four and is inherent: nosewheel steering and rudder make far
+more lateral specific force than flight does. Judged acceptable at the rig, so it is adopted as is.
+
+**Correction to the 2026-09-03 session entry above.** That entry attributed the "kurze kleine Stöße"
+in cruise to rough air and cleared this channel. The heave part of that was right — `wrms` and
+`band_ratio` were bit-identical with the channel off — but the attribution was wrong. This flight's
+calmest 60 s airborne window has `g_nrml` std **0.110**, essentially the same as the window that was
+called rough the day before (0.109), and the flight as a whole is slightly *rougher* (0.129 vs
+0.120). The air did not change; the wind-free weather made no difference to `g_nrml`, because that
+spread comes from flight dynamics and control inputs, not wind. What changed is the lateral
+amplitude: airborne sway p99 fell from **14.8 mm to 6.5 mm** with `sway_gain` 0.1 → 0.07, while surge
+stayed at 9.1 → 9.3 mm. The pilot's own note carried the doubt — *"kurze kleine Stöße (hieve?)"* —
+and the question mark was the right instinct. It was the sway channel.
+
+**Adopted:** `surge_gain = 0.1`, `sway_gain = 0.07`, `trans_vel_washout_tau = trans_pos_washout_tau
+= 0.4`, with `surge_limit_mm = 43` / `sway_limit_mm = 41` unchanged from the Task 1 measurement.
+`sway_gain` stays deliberately below `surge_gain`.
+
+**Left open, deliberately:**
+
+- Ground amplitude is at the limits while taxiing (surge 40 of 43 mm). Accepted by rig verdict. If it
+  ever needs handling, the fix is a factor while `onground`, not a lower gain — the airborne cue is
+  modest and cannot afford to lose any.
+- No golden test covers the shipped `tilt_surge_gain = 0.4` together with `tilt_limit_deg = 3`; the
+  gain-sensitive block had to disable the clamp to be sensitive at all. A gap in coverage, not a
+  defect.
+
 **Column meanings:**
 
 - **Date** — when the candidate was decided, not necessarily when it was recorded.
