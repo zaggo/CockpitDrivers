@@ -74,10 +74,21 @@ smooth_tau = 0.01 # ~20ms group delay (2*tau), shaves >~10Hz dataref grain, mane
 # (7.4 -> 16.4 mm) and still holds the envelope gate on all eight segments,
 # at the cost of the per-axis clamp biting 0.65 % of ticks on the worst one.
 # See docs/motion-tuning/tuning-log.md, "Surge/sway onset channel".
-surge_gain = 0
-sway_gain = 0
-trans_vel_washout_tau = 0.25
-trans_pos_washout_tau = 0.25
+#
+# CANDIDATE, flown once, NOT yet accepted (2026-09-03). The rig session with
+# 0.1/0.1 at tau 0.4 answered the design's open question: the handover reads as
+# ONE cue, not two, and the pilot reported the tilt cues as noticeably stronger
+# although live_pitch/live_roll are objectively smaller than the previous flight
+# and bit-identical with the channel off -- the onset gives the sustained lean an
+# interpretation. sway_gain comes down from 0.1 because ground handling makes
+# 2-4x the lateral specific force of flight and clipped the 41 mm limit on the
+# landing rollout; 0.07 peaks at 31 mm there and still leaves 10 mm p99 airborne.
+# surge stays at 0.1 but also runs near its limit on the ground (42 of 43 mm) --
+# if that ever needs fixing it wants a ground factor, not a lower gain.
+surge_gain = 0.1
+sway_gain = 0.07
+trans_vel_washout_tau = 0.4
+trans_pos_washout_tau = 0.4
 surge_limit_mm = 43    # Task 1 measurement, see docs/motion-tuning/baseline-metrics.md
 sway_limit_mm = 41     # Task 1 measurement
 
