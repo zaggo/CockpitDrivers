@@ -206,15 +206,15 @@ void CAN::sendGatewayHeartbeat()
 
 void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
 {
-    // DEBUGLOG_PRINTLN(String(F("Received Instrument HB")) + String(len) + F(" bytes"));
     if (len < 8)
         return;
 
     const uint8_t nodeId = data[0];
     if (nodeId >= kMaxInstrumentNodes)
         return;
-    // DEBUGLOG_PRINTLN(String(F("Received Instrument HB from node ")) + nodeId);
+
     lastInstrumentHeartbeatMs[nodeId] = millis();
+    instrumentMarkSeen(instrumentSeenMask, nodeId);
 }
 
 void CAN::updateTransponder(uint8_t len, const uint8_t *data)
@@ -300,7 +300,6 @@ void CAN::checkInstrumentHeartbeats()
 {
     const uint32_t now = millis();
     const uint32_t timeoutMs = 1500;
-    const uint16_t instrumentHeartbeatId = static_cast<uint16_t>(CanMessageId::instrumentHeartbeat);
 
     for (uint8_t nodeId = 0; nodeId < kMaxInstrumentNodes; ++nodeId)
     {
@@ -308,25 +307,17 @@ void CAN::checkInstrumentHeartbeats()
             continue; // skip gateway itself
 
         const bool alive = heartbeatAlive(lastInstrumentHeartbeatMs[nodeId], now, timeoutMs);
-        if (alive != instrumentAlive[nodeId])
+        if (alive != instrumentIsAlive(instrumentAliveMask, nodeId))
         {
-            instrumentAlive[nodeId] = alive;
-            // For now: log state changes. Later can propagate to USB status/annunciators.
-            // DEBUGLOG_PRINTLN(String(F("Instrument HB node ")) + nodeId + (alive ? F(" OK") : F(" TIMEOUT")));
-
-            // Update error tracking: Use instrumentHeartbeat CAN ID with node-specific offset
-            // to distinguish different nodes (ID + nodeId)
-            const uint16_t nodeSpecificId = instrumentHeartbeatId + static_cast<uint16_t>(nodeId);
-            if (alive)
-            {
-                clearCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);
-            }
-            else
-            {
-                setCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);
-            }
+            instrumentSetAlive(instrumentAliveMask, nodeId, alive);
+            DEBUGLOG_PRINTLN(String(F("Instrument HB node ")) + String(nodeId) + (alive ? F(" OK") : F(" TIMEOUT")));
         }
     }
+}
+
+uint16_t CAN::silentInstrumentMask() const
+{
+    return silentInstruments(instrumentSeenMask, instrumentAliveMask);
 }
 
 void CAN::setCanIdError(uint16_t canId, CanErrorType errorType)
@@ -404,7 +395,8 @@ void CAN::updateAlarmLED()
     }
     else
     {
-        ledOn = anyCanIdHasError(canIdErrors, canIdErrorCount);
+        ledOn = anyCanIdHasError(canIdErrors, canIdErrorCount) ||
+                anyKnownInstrumentSilent(instrumentSeenMask, instrumentAliveMask);
     }
 
     digitalWrite(kCANAlarmPin, ledOn ? HIGH : LOW);

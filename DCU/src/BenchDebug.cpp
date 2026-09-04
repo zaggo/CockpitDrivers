@@ -177,6 +177,21 @@ bool BenchDebug::handleAltimeterInput(String command) {
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
+    } else if (command.startsWith("hb")) {
+        const uint16_t silent = canBus->silentInstrumentMask();
+        if (silent == 0) {
+            Serial.println(F("All known instruments alive."));
+            return true;
+        }
+        Serial.print(F("Silent nodes:"));
+        for (uint8_t nodeId = 0; nodeId < 16; nodeId++) {
+            if (silent & (1u << nodeId)) {
+                Serial.print(' ');
+                Serial.print(nodeId);
+            }
+        }
+        Serial.println();
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
@@ -188,6 +203,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("al<feet>: set altitude (shared 0x102 frame)"));
         Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
+        Serial.println(F("hb: list instrument nodes that went quiet"));
         return true;
     }
     return false;
