@@ -14,7 +14,14 @@ const CanNodeId kNodeId = CanNodeId::altimeterNodeId;
 // master mode; making it the chip select means SPI.begin() drives it for us.
 // Left unused it would be a floating input, and a low level there drops the SPI
 // out of master mode.
-const uint8_t kCanIntPin = 4;
+//
+// /INT must be D2 or D3: those are the ATmega328's only external-interrupt pins
+// (INT0/INT1), and BaseCAN hangs its RX handler off attachInterrupt(). On any
+// other pin digitalPinToInterrupt() returns NOT_AN_INTERRUPT and attachInterrupt
+// silently does nothing — reception then limps along on InstrumentCAN's
+// digitalRead() polling fallback. D2 already carries the 100s hall sensor here,
+// so /INT gets D3.
+const uint8_t kCanIntPin = 3;
 const uint8_t kCanCSPin = 10;
 
 // Panel light. D5 is Timer0-backed PWM; the servo library owns Timer1 and takes

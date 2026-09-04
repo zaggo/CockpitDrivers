@@ -62,7 +62,7 @@ im Rahmen dieses Ports entfernt.
 | Pin | Funktion | Status |
 |---|---|---|
 | D2 | Hall 100er, `INPUT_PULLUP`, aktiv LOW | unverändert |
-| D4 | CAN `/INT` | neu |
+| D3 | CAN `/INT` | neu |
 | D5 | Instrumentenbeleuchtung (PWM) | neu |
 | D7 | Hall 10k | **verschoben von D10** |
 | D8 | Hall 1000er | unverändert |
@@ -74,7 +74,15 @@ im Rahmen dieses Ports entfernt.
 | A0 | Poti (Baro) | unverändert |
 | A4/A5 | I2C zum MCP23017 | unverändert |
 
-Frei bleiben D3, D6, A1, A2, A3.
+Frei bleiben D4, D6, A1, A2, A3.
+
+`/INT` muss auf D2 oder D3 liegen. Das sind beim ATmega328 die einzigen Pins mit
+externem Interrupt (INT0/INT1), und `BaseCAN` hängt seinen RX-Handler an
+`attachInterrupt()`. Auf jedem anderen Pin liefert `digitalPinToInterrupt()`
+`NOT_AN_INTERRUPT`, `attachInterrupt` tut stillschweigend nichts, und der Empfang
+läuft nur noch über das `digitalRead()`-Polling in `InstrumentCAN::loop()` — es
+funktioniert, aber der Interruptpfad ist toter Code. D2 trägt hier bereits den
+Hall-Sensor der 100er-Achse, also bleibt D3.
 
 `/CS` liegt bewusst auf D10 und nicht auf einem beliebigen freien Pin. D10 ist das
 `/SS`-Pin (siehe unten) und muss im Master-Betrieb zwingend Ausgang sein oder dauerhaft
