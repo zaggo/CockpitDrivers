@@ -21,7 +21,10 @@ void DataRefManager::onAircraftLoaded()
     dr_domeLightDim = XPLMFindDataRef("sim/cockpit2/switches/panel_brightness_ratio");
 
     dr_HeadingBug = XPLMFindDataRef("sim/cockpit/autopilot/heading_bug_deg_mag_pil");
-    dr_BarometerSetting = XPLMFindDataRef("sim/cockpit/misc/barometer_setting");
+    // The cockpit2 actuator, not the legacy sim/cockpit/misc/barometer_setting:
+    // this is the per-pilot Kollsman setting the altimeter's own altitude_ft_pilot
+    // is derived from, and it is what the wire protocol names for CAN 0x340.
+    dr_BarometerSetting = XPLMFindDataRef("sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot");
 
     dr_TransponderCode = XPLMFindDataRef("sim/cockpit2/radios/actuators/transponder_code");
     dr_TransponderModeR = XPLMFindDataRef("sim/cockpit/radios/transponder_mode");
