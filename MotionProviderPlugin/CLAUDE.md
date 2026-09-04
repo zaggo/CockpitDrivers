@@ -69,7 +69,11 @@ makes it host-testable and offline-replayable.
   double-integrated to mm and clamped per axis. Renders the onset of a longitudinal or
   lateral acceleration, which tilt coordination cannot: it is low-passed and rate-limited
   by design. Crossover constant is `tilt_lp_tau`, shared with the tilt half, so the two
-  cannot double-count. Off by default (`surge_gain`/`sway_gain` = 0). Design:
+  cannot double-count. **Adopted 2026-09-03** at `surge_gain = 0.1`, `sway_gain = 0.07`,
+  `trans_*_washout_tau = 0.4`. Two things that campaign established and that are easy to get
+  wrong: `trans_*_washout_tau` is a second *amplitude* knob, not a sharpness knob — shortening it
+  shrinks displacement and peak acceleration together — and `sway_gain` is deliberately below
+  `surge_gain` because ground handling makes 2–4× the lateral specific force of flight. Design:
   `../docs/superpowers/specs/2026-08-31-surge-sway-onset-cues-design.md`.
 - **Rotational** — body rates high-passed, integrated, then leaked back toward centre.
 - **Output smoothing** — two cascaded one-pole low-passes (`smooth_tau`), currently one shared

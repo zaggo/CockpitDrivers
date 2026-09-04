@@ -932,6 +932,144 @@ tilt is felt as one cue or two. Note that τ = 0.4 lengthens how long the transl
 before washing out, which pushes it further into the tilt ramp — that could read as a single blended
 cue, or as a drawn-out shove. The rig decides.
 
+### Second rig session, 2026-09-03 — **the handover reads as one cue**; `sway_gain` down to 0.07
+
+`surgesway-0.1-motion-20260903-175425.csv`, 16 424 rows, 367.6 s at ~45 fps, flown at
+`surge_gain = sway_gain = 0.1`, `trans_*_washout_tau = 0.4`. `--verify` PASS at 2.4e-07 mm/deg. Cue
+export committed as `reference/onset_g01_tau04.csv.gz`, round-trips bit-identically.
+
+Pilot, before seeing any numbers:
+
+> Surge sway nicht separat oder als zu stark spürbar. Es hat sich insgesamt so angefühlt, als wären
+> Roll/Pitch neigungen viel stärker als vorher (nicht unbedingt schlecht). Bei Bremsungen ist mir
+> aufgefallen, dass sich die Platform dabei bzw. danach immer sehr deutlich nach vorne links geneigt
+> hat. Keine Ahnung ob das nur Steuerfehler von mir waren, oder resultat der neuen Washouts. Aber das
+> war mir vorher nie so aufgefallen. Während einer kleinen Cruise-Phase (vor der Landung) fiel mir
+> auf, dass es regelmäßig kurze kleine Stöße (hieve?) gab. Waren mir vorher auch nicht so aufgefallen.
+
+**"Nicht separat spürbar" is the answer to the design's open question.** The handover from
+translation to tilt is felt as one cue, at τ = 0.4. That was the risk that would have sent the
+campaign to approach C (tilt-error-driven handover); it does not need to.
+
+**"Roll/Pitch viel stärker" — the tilt is objectively smaller.** `live_pitch` p99 is 4.57° this
+flight against 8.01° on 2026-09-01, `live_roll` 4.62° against 7.81°. And on the same cues with the
+channel off, `sat_rot`, `tilt_rate_p95`, `rot_rate_p95`, `wrms` and `band_ratio` are **bit-identical**
+— this channel does not write roll or pitch.
+
+The most likely reading is that this is the feature working. The 2026-08-30 entry on the tilt gain
+left exactly this question open: *whether 5° of sustained lean reads as acceleration or merely as
+"tilted"*. Tilt coordination alone is ambiguous. The onset gives the lean an interpretation — shove
+first, lean second — and the percept resolves toward acceleration. Less angle, more motion.
+
+**"Nach vorne links" on braking — correct, and mostly translation.** During the braking phases
+`live_pitch` averages **−4.7°** (nose down, lean forward), which is the tilt coordination for
+deceleration and is unchanged since 2026-08-30. `live_roll` stays inside ±3°. The lateral part the
+pilot felt is the new sway channel, and on the ground it is large:
+
+| | `g_side` p99 | sway p95 | sway p99 | sway max |
+|---|---|---|---|---|
+| airborne | 0.129 | 5.0 mm | 14.8 mm | 18.6 mm |
+| **on the ground** | **0.394** | **29.1 mm** | **39.2 mm** | **41.0 mm (clipped)** |
+
+Nosewheel steering, rudder and differential braking produce two to four times the lateral specific
+force of flight, and the channel renders all of it: 11 % of ground ticks exceed 20 mm, and the
+landing rollout pins the 41 mm limit. Surge does the same on the ground (42.1 mm against a 43 mm
+limit) though the pilot did not flag it.
+
+**"Stöße im Cruise" are not this channel, and not a defect.** `sat_heave` 0.00 %, limiter engagement
+0.0 % through the whole airborne phase, no frame hitches (max `dt_real` 43 ms, none above 50 ms), and
+`wrms`/`band_ratio` identical with the channel off. The air simply was not calm:
+
+| segment | `g_nrml` std |
+|---|---|
+| `reference/cruise_calm` | 0.027 |
+| **this flight, cruise window 240–320 s** | **0.109** |
+| this flight, all airborne | 0.120 |
+| 2026-09-01 flight, airborne | 0.319 |
+| `reference/turbulence` | 0.334 |
+
+`g_nrml` ranged 0.72–1.37 g in that window — four times the spread of the calm reference. The heave
+channel was doing its job.
+
+**Gate:** `sat_envelope` 0.146 % against a 0.079 % cue-off baseline on this flight. Over by
+0.07 pp — 12 ticks of 16 424. Noted rather than waved away: the gate is "not above its own cue-off
+baseline", and this is above it.
+
+**Change adopted for the next flight: `sway_gain` 0.1 → 0.07**, `surge_gain` unchanged at 0.1, τ
+unchanged at 0.4. Measured on this recording: ground sway peak 41.0 → 31.4 mm (no longer clipping),
+ground p95 29.1 → 20.4, airborne p99 14.8 → 10.3, `sat_envelope` 0.146 → 0.134 %. The asymmetry is
+deliberate — lateral ground force is the outlier, not the flight cue.
+
+If the ground amplitude ever needs proper handling rather than trimming, the right fix is a factor on
+the channel while `onground`, not a lower gain: the airborne cue is modest (surge p99 9.1 mm) and can
+afford more, while the ground cue cannot. That is new code and a new config key, so it is not being
+done here.
+
+**Still to do:** the acceptance flight at 0.1 / 0.07 / τ 0.4.
+
+### Acceptance flight, 2026-09-03 — **campaign closed, 0.1 / 0.07 / τ 0.4 adopted**
+
+`sway-0.07-motion-20260903-182246.csv`, 14 746 rows, 326.7 s. `--verify` PASS at 2.4e-07 mm/deg
+**against `configuration.toml` itself**, with no `--set` reconstruction — the flown configuration is
+bit-for-bit the committed one. Cue export: `reference/abnahme_onset_20260903.csv.gz`.
+
+Pilot, before seeing any numbers:
+
+> Ich habe das Wetter komplett windfrei gemacht. Cruise-Flug (und auch sonst) ohne Stöße. Bei der
+> Landung, die ich versucht habe soft zu fliegen und danach nicht eine Vollbremsung zu machen, war
+> wesentlich besser. Das vorne-links Neigen war jetzt nicht mehr zu bemerken. Große (gefühlte)
+> Amplituden beim abschließenden Taxiing, aber das war ok so. Subjektiv würde ich alles so lassen.
+
+**Gates, same cues with the channel off and on:**
+
+| | off | on | gate |
+|---|---|---|---|
+| `sat_envelope` | 0.08 % | **0.05 %** | not above cue-off — **passed**, and lower with the channel |
+| `sat_surge` / `sat_sway` | 0 / 0 | 0.00 / 0.07 % | no meaningful clipping |
+| `sat_heave` | 0.15 % | 0.15 % | unchanged |
+| `sat_sl_acc` | 10.12 % | 10.50 % | +0.38 pp |
+| `wrms`, `band_ratio`, `lag_ms`, `rot_rate_*`, `tilt_rate_*` | — | identical | unchanged by construction |
+| `jerk_p95` | 6.84 M | 6.94 M | +1.4 % |
+
+The envelope gate, which the 2026-09-03 session missed by 0.07 pp, is met with margin here — and the
+channel makes it *smaller*, 7 ticks against 12. Not a general property; on this flight the added
+translation happens to move the pose away from the boundary rather than toward it.
+
+**Amplitude by phase, which is what the pilot's "große Amplituden beim Taxiing" refers to:**
+
+| phase | surge p95 | surge p99 | surge max | sway p95 | sway p99 | sway max |
+|---|---|---|---|---|---|---|
+| taxi (< 12 m/s) | 26.9 | 36.9 | 40.2 mm | 16.3 | 37.3 | 41.0 mm |
+| takeoff/landing roll | 13.4 | 32.2 | 36.3 mm | 20.7 | 32.7 | 39.4 mm |
+| airborne | 3.2 | 9.3 | 11.1 mm | 4.2 | 6.5 | 7.7 mm |
+
+The ground/air asymmetry is a factor of four and is inherent: nosewheel steering and rudder make far
+more lateral specific force than flight does. Judged acceptable at the rig, so it is adopted as is.
+
+**Correction to the 2026-09-03 session entry above.** That entry attributed the "kurze kleine Stöße"
+in cruise to rough air and cleared this channel. The heave part of that was right — `wrms` and
+`band_ratio` were bit-identical with the channel off — but the attribution was wrong. This flight's
+calmest 60 s airborne window has `g_nrml` std **0.110**, essentially the same as the window that was
+called rough the day before (0.109), and the flight as a whole is slightly *rougher* (0.129 vs
+0.120). The air did not change; the wind-free weather made no difference to `g_nrml`, because that
+spread comes from flight dynamics and control inputs, not wind. What changed is the lateral
+amplitude: airborne sway p99 fell from **14.8 mm to 6.5 mm** with `sway_gain` 0.1 → 0.07, while surge
+stayed at 9.1 → 9.3 mm. The pilot's own note carried the doubt — *"kurze kleine Stöße (hieve?)"* —
+and the question mark was the right instinct. It was the sway channel.
+
+**Adopted:** `surge_gain = 0.1`, `sway_gain = 0.07`, `trans_vel_washout_tau = trans_pos_washout_tau
+= 0.4`, with `surge_limit_mm = 43` / `sway_limit_mm = 41` unchanged from the Task 1 measurement.
+`sway_gain` stays deliberately below `surge_gain`.
+
+**Left open, deliberately:**
+
+- Ground amplitude is at the limits while taxiing (surge 40 of 43 mm). Accepted by rig verdict. If it
+  ever needs handling, the fix is a factor while `onground`, not a lower gain — the airborne cue is
+  modest and cannot afford to lose any.
+- No golden test covers the shipped `tilt_surge_gain = 0.4` together with `tilt_limit_deg = 3`; the
+  gain-sensitive block had to disable the clamp to be sensitive at all. A gap in coverage, not a
+  defect.
+
 **Column meanings:**
 
 - **Date** — when the candidate was decided, not necessarily when it was recorded.

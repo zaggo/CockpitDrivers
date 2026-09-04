@@ -1,7 +1,20 @@
 # Ticket: surge/sway onset cues
 
-**Status:** not started. Written 2026-08-30 as a follow-up to the heave-tuning campaign, to be picked
-up in its own session.
+**Status: DONE, 2026-09-03.** Written 2026-08-30 as a follow-up to the heave-tuning campaign. Built
+and adopted at `surge_gain = 0.1`, `sway_gain = 0.07`, `trans_*_washout_tau = 0.4`, signed off in the
+acceptance flight `sway-0.07-motion-20260903-182246.csv`.
+
+- Design: `2026-08-31-surge-sway-onset-cues-design.md`
+- Plan: `../plans/2026-08-31-surge-sway-onset-cues.md`
+- Campaign log, including every rejected candidate: `docs/motion-tuning/tuning-log.md`, section
+  "Surge/sway onset channel"
+
+The four questions this ticket raised were all answered. The translational envelope was measured for
+the first time (`tools/envelope_probe`, results in `docs/motion-tuning/baseline-metrics.md`); the
+acceleration budget turned out **not** to bind on the horizontal axes, because the 363 mm/s² figure
+derives from the heave counts/mm mapping; the handover to tilt is explicit through a shared crossover
+constant, and at the rig it is felt as one cue rather than two; and the pilot's verdict on whether it
+was wanted at all is that it stays.
 
 **Type:** feature, not tuning. Nothing in `configuration.toml` can produce this today.
 
