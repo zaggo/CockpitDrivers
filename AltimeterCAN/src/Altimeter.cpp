@@ -1,8 +1,53 @@
 #include <Altimeter.h>
 #include <Wire.h>
+#include <EEPROM.h>
 #include "DebugLog.h"
 
 Altimeter *Altimeter::instance = nullptr;
+
+static const uint32_t kAltimeterConfigMagic = 0x414C5431; // 'A','L','T','1'
+static const uint16_t kAltimeterConfigVersion = 1;
+static const uint16_t kAltimeterEepromAddress = 0;
+
+void Altimeter::applyConfigDefaults()
+{
+    config.magic = kAltimeterConfigMagic;
+    config.version = kAltimeterConfigVersion;
+    for (int axis = 0; axis < altimeterAxisCount; axis++)
+    {
+        config.zeroAdjustDegree[axis] = kDefaultZeroAdjustDegree[axis];
+    }
+    baroCalibrationDefaults(config.baro,
+                            kDefaultBaroLowRaw, kDefaultBaroLowInHg100,
+                            kDefaultBaroHighRaw, kDefaultBaroHighInHg100);
+}
+
+void Altimeter::loadConfig()
+{
+    EEPROM.get(kAltimeterEepromAddress, config);
+    if (config.magic != kAltimeterConfigMagic || config.version != kAltimeterConfigVersion)
+    {
+        DEBUGLOG_PRINTLN(String(F("ALT: No valid EEPROM config, writing defaults")));
+        applyConfigDefaults();
+        EEPROM.put(kAltimeterEepromAddress, config);
+    }
+    else
+    {
+        DEBUGLOG_PRINTLN(String(F("ALT: EEPROM config loaded")));
+    }
+}
+
+void Altimeter::saveConfig()
+{
+    EEPROM.put(kAltimeterEepromAddress, config);
+    DEBUGLOG_PRINTLN(String(F("ALT: config saved")));
+}
+
+void Altimeter::wipeCalibration()
+{
+    applyConfigDefaults();
+    saveConfig();
+}
 
 Altimeter::Altimeter()
 {
@@ -54,6 +99,8 @@ Altimeter::Altimeter()
     {
         zeroedState[axis] = digitalRead(kHallPins[axis]) == LOW;
     }
+
+    loadConfig();
 
     instance = this;
     DEBUGLOG_PRINTLN(String(F("Altimeter setup complete")));
@@ -254,9 +301,9 @@ Altimeter::AltimeterDriveResult Altimeter::nextHomingState(AltimeterAxis axis)
         {
             return success;
         }
-        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to adjusted zero position, adjustment degree: ")) + String(kDefaultZeroAdjustDegree[axis]));
+        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to adjusted zero position, adjustment degree: ")) + String(config.zeroAdjustDegree[axis]));
         axes[axis]->resetPosition();
-        moveDegree(axis, kDefaultZeroAdjustDegree[axis]);
+        moveDegree(axis, config.zeroAdjustDegree[axis]);
         homingState[axis] = moveToAdjustedZero;
         return success;
     case moveToAdjustedZero:
@@ -553,10 +600,45 @@ Altimeter::AltimeterDriveResult Altimeter::homeAxis(AltimeterAxis axis)
     DEBUGLOG_PRINTLN(zeroEndPosition);
     moveSteps(axis, zeroAdjust, true);
 
-    moveDegree(axis, kDefaultZeroAdjustDegree[axis], true);
+    moveDegree(axis, config.zeroAdjustDegree[axis], true);
     axes[axis]->resetPosition();
 
     return success;
+}
+
+bool Altimeter::calibrateZero(AltimeterAxis axis)
+{
+    if (!isHomed)
+    {
+        DEBUGLOG_PRINTLN(String(F("ALT: not homed, cannot store zero")));
+        return false;
+    }
+
+    const int32_t jog = jogDegreesFromPosition(axes[axis]->getPosition(),
+                                               axes[axis]->getTotalSteps());
+    config.zeroAdjustDegree[axis] = accumulateZeroAdjust(config.zeroAdjustDegree[axis], jog);
+    saveConfig();
+
+    // The needle is now standing on what we just declared to be zero.
+    axes[axis]->resetPosition();
+    return true;
+}
+
+bool Altimeter::setBaroCalibrationPoint(bool isHigh, uint16_t inHg100)
+{
+    const uint16_t raw = static_cast<uint16_t>(analogRead(kPotentiometerPin));
+    if (isHigh)
+    {
+        config.baro.high.raw = raw;
+        config.baro.high.inHg100 = inHg100;
+    }
+    else
+    {
+        config.baro.low.raw = raw;
+        config.baro.low.inHg100 = inHg100;
+    }
+    saveConfig();
+    return true;
 }
 
 Altimeter::AltimeterDriveResult Altimeter::lookForZeroChange(AltimeterAxis axis, int32_t degree, bool targetZeroedState)

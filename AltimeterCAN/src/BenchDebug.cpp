@@ -76,6 +76,21 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("Altimeter Status:"));
         Serial.println(String(F("  Homed: ")) + String(altimeter->isHomed ? F("true") : F("false")));
         Serial.println(String(F("  Current Height: ")) + String(altimeter->currentHeightInFeet(), 2) + String(F(" feet")));
+        printCalibration();
+        return true;
+    } else if (command.startsWith("zh")) {
+        storeZero(hundred, F("100s"));
+        return true;
+    } else if (command.startsWith("zt")) {
+        storeZero(thousand, F("1000s"));
+        return true;
+    } else if (command.startsWith("ze")) {
+        storeZero(tenshousand, F("10ks"));
+        return true;
+    } else if (command.startsWith("cw")) {
+        altimeter->wipeCalibration();
+        Serial.println(F("Calibration wiped (needle zeros and baro)."));
+        printCalibration();
         return true;
     }  else if (command.startsWith("?")) {
         Serial.println(F("Altimeter Commands:"));
@@ -85,11 +100,42 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("te<degrees>: Move the 10k axis to the given degrees."));
         Serial.println(F("fl<value>: 0 means fully 'off', 1 means fully 'on'."));
         Serial.println(F("cf<value>: calibrate flag servo to given degrees."));
-        Serial.println(F("he<feet>: move altimeter to given height in feet.")); 
+        Serial.println(F("he<feet>: move altimeter to given height in feet."));
         Serial.println(F("st: shows current altimeter status."));
+        Serial.println(F("zh / zt / ze: store current position as true zero (100s / 1000s / 10ks)"));
+        Serial.println(F("cw: wipe calibration back to defaults"));
+        printCalibration();
         return true;
-    }       
+    }
     return false;
+}
+
+void BenchDebug::storeZero(AltimeterAxis axis, const __FlashStringHelper* name)
+{
+    if (!altimeter->calibrateZero(axis)) {
+        Serial.println(F("Not homed. Run 'ho' first."));
+        return;
+    }
+    Serial.print(F("Stored zero for "));
+    Serial.print(name);
+    Serial.print(F(" axis, offset now "));
+    Serial.print(altimeter->zeroAdjustDegree(axis));
+    Serial.println(F(" degrees"));
+}
+
+void BenchDebug::printCalibration()
+{
+    Serial.println(F("Calibration:"));
+    Serial.print(F("  zero 100s : ")); Serial.println(altimeter->zeroAdjustDegree(hundred));
+    Serial.print(F("  zero 1000s: ")); Serial.println(altimeter->zeroAdjustDegree(thousand));
+    Serial.print(F("  zero 10ks : ")); Serial.println(altimeter->zeroAdjustDegree(tenshousand));
+    const BaroCalibration& baro = altimeter->baroCalibration();
+    Serial.print(F("  baro low  : raw ")); Serial.print(baro.low.raw);
+    Serial.print(F(" -> ")); Serial.print(baro.low.inHg100 / 100.);
+    Serial.println(F(" inHg"));
+    Serial.print(F("  baro high : raw ")); Serial.print(baro.high.raw);
+    Serial.print(F(" -> ")); Serial.print(baro.high.inHg100 / 100.);
+    Serial.println(F(" inHg"));
 }
 
 void BenchDebug::handleUserInput()

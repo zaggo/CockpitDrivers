@@ -15,6 +15,8 @@ class BenchDebug {
     private:
         void handleUserInput();
         bool handleAltimeterInput(String command);
+        void storeZero(AltimeterAxis axis, const __FlashStringHelper* name);
+        void printCalibration();
 
         String inputBuffer;
                 
