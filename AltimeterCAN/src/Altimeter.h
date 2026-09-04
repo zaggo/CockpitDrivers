@@ -49,6 +49,7 @@ public:
     AltimeterDriveResult moveToDegree(double hundredDegree, double thousandDegree, double tenThousandDegree, double flagDegree); // Ansyc
     AltimeterDriveResult moveToDegree(AltimeterAxis axis, double degree);
     AltimeterDriveResult moveServo(ServoId id, double degree, bool calibration = false);
+    AltimeterDriveResult setBrightness(uint8_t brightness);
 
     Altimeter::AltimeterDriveResult moveToHeight(double heightInFeet);
 

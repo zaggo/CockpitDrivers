@@ -45,6 +45,9 @@ Altimeter::Altimeter()
 
     pinMode(kPotentiometerPin, INPUT);
 
+    pinMode(kLightPin, OUTPUT);
+    analogWrite(kLightPin, 0);
+
     delay(2000); // Wait for the Pullup resistors to stabilize
 
     for (int axis = 0; axis < altimeterAxisCount; axis++)
@@ -448,6 +451,12 @@ Altimeter::AltimeterDriveResult Altimeter::moveServo(ServoId id, double degree, 
         // DEBUGLOG_PRINTLN(String(F("Move ")) + servoName(id) + String(F(" to ")) + String(degree) + String(F(" adjusted to ")) + String(adjustedDegree));
     }
     servos[id]->write(adjustedDegree);
+    return success;
+}
+
+Altimeter::AltimeterDriveResult Altimeter::setBrightness(uint8_t brightness)
+{
+    analogWrite(kLightPin, brightness);
     return success;
 }
 
