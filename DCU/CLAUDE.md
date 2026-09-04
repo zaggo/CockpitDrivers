@@ -43,9 +43,12 @@ gateway, so it implements the other half of the heartbeat protocol described in 
 - Tracks `instrumentHeartbeat` (0x301) per node in `lastInstrumentHeartbeatMs[nodeId]`
   (`kMaxInstrumentNodes = 16`), and flags a node dead after 1500ms of silence
   (`checkInstrumentHeartbeats()`).
-- Filters/decodes `transponderInput` (0x311), `handbrakeStatus` (0x330) and `rudder` (0x303) frames from
-  instruments and forwards them to the plugin via `DCUSender`. Note `rudder` arrives big-endian on CAN
-  but the serial `RudderToDcuMessage` struct is host order, so `updateRudder()` converts via
+- Filters/decodes `transponderInput` (0x311), `handbrakeStatus` (0x330), `rudder` (0x303) and the
+  cluster-input block `0x340`–`0x34F` (currently just `altimeterBaro`, 0x340) from instruments and
+  forwards them to the plugin via `DCUSender`. RXB0 matches the instrument heartbeat exactly; RXB1
+  uses the range mask `MASK_RANGE` so each of its four filters covers 16 consecutive ids — that is
+  what lets new cluster inputs arrive without touching the gateway. Note `rudder` arrives big-endian
+  on CAN but the serial `RudderToDcuMessage` struct is host order, so `updateRudder()` converts via
   `unpackBE16` instead of reinterpret_cast'ing the CAN buffer (unlike `updateTransponder`).
 - CAN alarm LED (`kCANAlarmPin`) lights if CAN isn't started, or if any tracked CAN ID has an
   outstanding TX/RX/heartbeat-timeout error — tracked in the fixed-size `canIdErrors[]`
