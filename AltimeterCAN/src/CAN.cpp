@@ -99,4 +99,11 @@ void CAN::onGatewayHeartbeatDiscovered()
 {
     DEBUGLOG_PRINTLN(F("Gateway heartbeat OK"));
     altimeter->setBrightness(255);
+
+    // First contact with the gateway is what starts the needles: homing before
+    // that would drive the instrument with no sim running.
+    if (!altimeter->isHomed && !altimeter->isHoming())
+    {
+        altimeter->beginHoming();
+    }
 }

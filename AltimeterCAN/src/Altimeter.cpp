@@ -130,6 +130,11 @@ void Altimeter::loop()
         return;
     }
 
+    if (homingActive)
+    {
+        runHomingStep();
+    }
+
     uint32_t uS = micros();
 #if COUPLED_MODE
     if (axesCoupled && axes[hundred]->getStepsLeft() != 0)
@@ -357,6 +362,53 @@ Altimeter::AltimeterDriveResult Altimeter::homeAllAxis()
     axesCoupled = true;
 #endif
     return success;
+}
+
+void Altimeter::beginHoming()
+{
+    if (homingActive)
+    {
+        return;
+    }
+
+    stopAllAxes();
+    axesCoupled = false;
+    isHomed = false;
+
+    for (int axisIndex = 0; axisIndex < altimeterAxisCount; axisIndex++)
+    {
+        homingState[axisIndex] = unknown;
+        nextHomingState(static_cast<AltimeterAxis>(axisIndex));
+    }
+
+    homingActive = true;
+    DEBUGLOG_PRINTLN(String(F("ALT: homing started")));
+}
+
+void Altimeter::runHomingStep()
+{
+    for (int axisIndex = 0; axisIndex < altimeterAxisCount; axisIndex++)
+    {
+        AltimeterAxis axis = static_cast<AltimeterAxis>(axisIndex);
+        AltimeterDriveResult result = nextHomingState(axis);
+        if (result != success)
+        {
+            DEBUGLOG_PRINTLN(String(F("*** Error homing '")) + errorName(result) + String(F("' on axis ")) + axisName(axis));
+            homingActive = false;
+            return;
+        }
+    }
+
+    if (checkAllHomed())
+    {
+        homingActive = false;
+        moveServo(flagServo, kServoMaximumDegree[flagServo]); // Move flag down after homing
+        isHomed = true;
+#if COUPLED_MODE
+        axesCoupled = true;
+#endif
+        DEBUGLOG_PRINTLN(String(F("ALT: homing complete")));
+    }
 }
 
 bool Altimeter::checkAllHomed()

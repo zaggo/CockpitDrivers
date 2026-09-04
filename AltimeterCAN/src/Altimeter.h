@@ -48,6 +48,13 @@ public:
     AltimeterDriveResult homeAllAxis(); // Synchronous
     AltimeterDriveResult homeAxis(AltimeterAxis axis); // Synchronous
 
+    // Starts a homing run that is driven forward by loop(). Unlike homeAllAxis()
+    // this returns immediately, so the CAN heartbeat keeps flowing in both
+    // directions while the axes search — a blocking run takes several seconds,
+    // well past the 1500ms both ends use to declare each other dead.
+    void beginHoming();
+    bool isHoming() const { return homingActive; }
+
     // Records the current position of `axis` as its true zero and persists it.
     // Must be homed first; the axis is re-zeroed on success.
     bool calibrateZero(AltimeterAxis axis);
@@ -90,6 +97,9 @@ private:
     AltimeterDriveResult nextHomingState(AltimeterAxis axis);
     bool checkAllHomed();
     AltimeterDriveResult lookForZeroChangeNonBlocking(AltimeterAxis axis, bool targetZeroedState);
+
+    bool homingActive = false;
+    void runHomingStep();
 
 private:
     struct Config
