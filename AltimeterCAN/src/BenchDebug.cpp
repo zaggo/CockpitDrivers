@@ -92,6 +92,29 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("Calibration wiped (needle zeros and baro)."));
         printCalibration();
         return true;
+    } else if (command.startsWith("bn")) {
+        String rString = command.substring(2);
+        rString.trim();
+        const uint16_t inHg100 = static_cast<uint16_t>(rString.toFloat() * 100. + 0.5);
+        altimeter->setBaroCalibrationPoint(false, inHg100);
+        Serial.print(F("Baro low point stored at raw "));
+        Serial.println(altimeter->baroCalibration().low.raw);
+        return true;
+    } else if (command.startsWith("bx")) {
+        String rString = command.substring(2);
+        rString.trim();
+        const uint16_t inHg100 = static_cast<uint16_t>(rString.toFloat() * 100. + 0.5);
+        altimeter->setBaroCalibrationPoint(true, inHg100);
+        Serial.print(F("Baro high point stored at raw "));
+        Serial.println(altimeter->baroCalibration().high.raw);
+        return true;
+    } else if (command.startsWith("ba")) {
+        Serial.print(F("Baro raw "));
+        Serial.print(altimeter->baroRaw());
+        Serial.print(F(" -> "));
+        Serial.print(altimeter->baroInHg100Now() / 100.);
+        Serial.println(F(" inHg"));
+        return true;
     }  else if (command.startsWith("?")) {
         Serial.println(F("Altimeter Commands:"));
         Serial.println(F("ho<axis>: Home axis, no axis = all, 0 = hundreds, 1 = 1k, 2 = 10k."));
@@ -104,6 +127,9 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("st: shows current altimeter status."));
         Serial.println(F("zh / zt / ze: store current position as true zero (100s / 1000s / 10ks)"));
         Serial.println(F("cw: wipe calibration back to defaults"));
+        Serial.println(F("bn<inHg>: store current pot position as the low baro point"));
+        Serial.println(F("bx<inHg>: store current pot position as the high baro point"));
+        Serial.println(F("ba: show current baro raw value and inHg"));
         printCalibration();
         return true;
     }
@@ -196,16 +222,5 @@ void BenchDebug::loop()
 {
     handleUserInput();
     altimeter->loop();
-
-    // Fetch and display pressure ratio if changed
-    if(millis() - fetchPressureRatio > 500L) {
-        fetchPressureRatio = millis();
-        float ratio = altimeter->fetchPressureRatio();
-        if(round(ratio*100.) != round(lastPressureRatio*100.)) {
-            lastPressureRatio = ratio;
-            Serial.print(F("Pressure Ratio: "));
-            Serial.println(lastPressureRatio, 3);
-        }
-    }
 }
 #endif

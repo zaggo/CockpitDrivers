@@ -164,12 +164,14 @@ void Altimeter::loop()
     }
 }
 
-float Altimeter::fetchPressureRatio()
+uint16_t Altimeter::baroRaw() const
 {
-    int potValue = analogRead(kPotentiometerPin);
-    // DEBUGLOG_PRINTLN(String(F("Raw Pot Value: ")) + String(potValue));
-    float ratio = static_cast<float>(potValue - kZeroPressure) / static_cast<float>(kHundredPercentPressure - kZeroPressure);
-    return roundf(500.f * constrain(ratio, 0.0f, 1.0f)) / 500.f;
+    return static_cast<uint16_t>(analogRead(kPotentiometerPin));
+}
+
+uint16_t Altimeter::baroInHg100Now() const
+{
+    return baroInHg100(config.baro, baroRaw());
 }
 
 void Altimeter::sendMotorData()

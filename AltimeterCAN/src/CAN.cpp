@@ -107,3 +107,38 @@ void CAN::onGatewayHeartbeatDiscovered()
         altimeter->beginHoming();
     }
 }
+
+void CAN::loop()
+{
+    InstrumentCAN::loop();
+
+    const uint32_t now = millis();
+    if (now - lastBaroPollMs < kBaroPollIntervalMs)
+    {
+        return;
+    }
+    lastBaroPollMs = now;
+
+    const uint16_t inHg100 = altimeter->baroInHg100Now();
+    const bool changed = !baroSentOnce || inHg100 != lastBaroInHg100;
+    const bool due = (now - lastBaroSendMs) >= kBaroRefreshMs;
+
+    if (changed || due)
+    {
+        lastBaroInHg100 = inHg100;
+        lastBaroSendMs = now;
+        baroSentOnce = true;
+        sendBaro(inHg100);
+    }
+}
+
+void CAN::sendBaro(uint16_t inHg100)
+{
+    // [0..1] inHg * 100 big endian, [2] unit (1 = inHg), [3..7] reserved.
+    byte data[8] = {0};
+    data[0] = static_cast<uint8_t>(inHg100 >> 8);
+    data[1] = static_cast<uint8_t>(inHg100 & 0xFF);
+    data[2] = 1;
+
+    sendMessage(static_cast<uint16_t>(CanMessageId::altimeterBaro), 8, data);
+}

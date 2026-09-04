@@ -55,11 +55,6 @@ const uint8_t kHallPins[altimeterAxisCount] = {
 
 const uint8_t kPotentiometerPin = A0;
 
-// Still referenced by Altimeter::fetchPressureRatio(), which Task 9 replaces with
-// the calibrated conversion. Both constants go away with it.
-const uint16_t kZeroPressure = 0;
-const uint16_t kHundredPercentPressure = 1023;
-
 const uint32_t kTotalSteps[altimeterAxisCount] = {
     4096L, 4096L, 4096L
 };

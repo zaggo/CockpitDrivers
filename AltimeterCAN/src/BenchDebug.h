@@ -19,9 +19,6 @@ class BenchDebug {
         void printCalibration();
 
         String inputBuffer;
-                
-        uint32_t fetchPressureRatio = 0L;
-        float lastPressureRatio = -1.0f;
 
         float currentHeightInFeet = 0.0f;
 

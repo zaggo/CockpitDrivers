@@ -39,7 +39,11 @@ public:
 
     // Returns true, if all axes homingState are `homed`
     bool isHomed = false;
-    float fetchPressureRatio();
+
+    // Raw ADC reading of the barometer pot, and that reading run through the
+    // stored calibration. inHg * 100, matching CAN 0x340.
+    uint16_t baroRaw() const;
+    uint16_t baroInHg100Now() const;
 
     void loop();
     void stopAllAxes();
