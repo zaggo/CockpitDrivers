@@ -43,7 +43,17 @@ enum class CanMessageId : uint16_t {
   rudder = 0x303,
 
   transponderInput = 0x311,
-  handbrakeStatus = 0x330
+  handbrakeStatus = 0x330,
+
+  // 0x340..0x34F: cluster inputs (Instruments -> Gateway, onChange).
+  // The DCU covers this whole block with a single range filter (mask 0x7F0),
+  // so new clusters in here need no filter change on the gateway.
+  //
+  // 0x340: Altimeter barometer knob
+  // [0..1] baro   uint16, inHg * 100 (sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot)
+  // [2]    unit   uint8, 0 = hPa, 1 = inHg — AltimeterCAN always sends 1
+  // [3..7] reserved
+  altimeterBaro = 0x340
 };
 
 // Filtering

@@ -24,6 +24,9 @@ enum class MessageType : uint8_t {
     // feeds two boards: VerticalSpeedCAN reads the VSI half, the altimeter board
     // the altitude half.
     SerialMessageAltimeterVsi = 0x09,
+    // DCU -> Plugin. Payload: float inHg (4 bytes, host order).
+    // Decoded from CAN 0x340, which carries inHg * 100 as a big-endian uint16.
+    SerialMessageBaro = 0x0A,
 };
 
 // Message Payload for Transponder > DCU
