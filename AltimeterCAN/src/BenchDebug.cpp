@@ -162,6 +162,9 @@ void BenchDebug::printCalibration()
     Serial.print(F("  baro high : raw ")); Serial.print(baro.high.raw);
     Serial.print(F(" -> ")); Serial.print(baro.high.inHg100 / 100.);
     Serial.println(F(" inHg"));
+    Serial.print(F("  baro now  : raw ")); Serial.print(altimeter->baroRaw());
+    Serial.print(F(" -> ")); Serial.print(altimeter->baroInHg100Now() / 100.);
+    Serial.println(F(" inHg"));
 }
 
 void BenchDebug::handleUserInput()
@@ -221,6 +224,5 @@ void BenchDebug::handleUserInput()
 void BenchDebug::loop()
 {
     handleUserInput();
-    altimeter->loop();
 }
 #endif

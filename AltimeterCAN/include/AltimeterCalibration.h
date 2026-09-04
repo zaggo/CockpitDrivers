@@ -77,6 +77,15 @@ inline void baroCalibrationDefaults(BaroCalibration &table,
     table.high.inHg100 = highInHg100;
 }
 
+// Stores one taught endpoint. Kept here rather than inline at the call site so
+// the isHigh-to-endpoint wiring is covered by the native tests.
+inline void baroCalibrationSet(BaroCalibration &table, bool isHigh, uint16_t raw, uint16_t inHg100)
+{
+    BaroCalibrationPoint &point = isHigh ? table.high : table.low;
+    point.raw = raw;
+    point.inHg100 = inHg100;
+}
+
 // Linear interpolation between the two taught points, clamped beyond them. The
 // pot may be wired either way round, so the direction is taken from the points
 // rather than assumed. Two points taught at the same raw value would divide by

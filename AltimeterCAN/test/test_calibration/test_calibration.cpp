@@ -115,6 +115,25 @@ void test_two_points_at_the_same_raw_value_do_not_divide_by_zero(void) {
     TEST_ASSERT_EQUAL_UINT16(2900, baroInHg100(c, 1023));
 }
 
+// Guards the isHigh-to-endpoint wiring: a swapped ternary would let a low
+// point clobber the high endpoint (or vice versa) with nothing to catch it.
+void test_baro_calibration_set_wires_isHigh_to_the_right_endpoint(void) {
+    BaroCalibration c = defaultBaro();
+
+    baroCalibrationSet(c, false, 10, 2750);
+    TEST_ASSERT_EQUAL_UINT16(10, c.low.raw);
+    TEST_ASSERT_EQUAL_UINT16(2750, c.low.inHg100);
+    TEST_ASSERT_EQUAL_UINT16(1023, c.high.raw);
+    TEST_ASSERT_EQUAL_UINT16(3100, c.high.inHg100);
+
+    baroCalibrationSet(c, true, 900, 3050);
+    TEST_ASSERT_EQUAL_UINT16(900, c.high.raw);
+    TEST_ASSERT_EQUAL_UINT16(3050, c.high.inHg100);
+    // Overwriting the high endpoint must leave the low one exactly as taught above.
+    TEST_ASSERT_EQUAL_UINT16(10, c.low.raw);
+    TEST_ASSERT_EQUAL_UINT16(2750, c.low.inHg100);
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_small_values_pass_through_unchanged);
@@ -131,5 +150,6 @@ int main(int, char **) {
     RUN_TEST(test_raw_values_outside_the_endpoints_are_clamped);
     RUN_TEST(test_a_reversed_pot_still_interpolates);
     RUN_TEST(test_two_points_at_the_same_raw_value_do_not_divide_by_zero);
+    RUN_TEST(test_baro_calibration_set_wires_isHigh_to_the_right_endpoint);
     return UNITY_END();
 }

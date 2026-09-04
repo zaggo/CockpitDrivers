@@ -299,7 +299,7 @@ void CAN::updateBaro(uint8_t len, const uint8_t *data)
 
     if (dcuSender != nullptr)
     {
-        DEBUGLOG_PRINTLN(String(F("Send Baro: ")) + String(inHg, 2) + String(F(" inHg")));
+        // DEBUGLOG_PRINTLN(String(F("Send Baro: ")) + String(inHg, 2) + String(F(" inHg")));
         dcuSender->sendFrame(MessageType::SerialMessageBaro,
                              sizeof(float),
                              reinterpret_cast<const uint8_t *>(&inHg));

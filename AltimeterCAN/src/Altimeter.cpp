@@ -668,6 +668,8 @@ bool Altimeter::calibrateZero(AltimeterAxis axis)
         return false;
     }
 
+    // getPosition() is int32_t and may be negative; the uint32_t round trip into
+    // jogDegreesFromPosition is well-defined and the fold there handles both forms.
     const int32_t jog = jogDegreesFromPosition(axes[axis]->getPosition(),
                                                axes[axis]->getTotalSteps());
     config.zeroAdjustDegree[axis] = accumulateZeroAdjust(config.zeroAdjustDegree[axis], jog);
@@ -678,21 +680,11 @@ bool Altimeter::calibrateZero(AltimeterAxis axis)
     return true;
 }
 
-bool Altimeter::setBaroCalibrationPoint(bool isHigh, uint16_t inHg100)
+void Altimeter::setBaroCalibrationPoint(bool isHigh, uint16_t inHg100)
 {
     const uint16_t raw = static_cast<uint16_t>(analogRead(kPotentiometerPin));
-    if (isHigh)
-    {
-        config.baro.high.raw = raw;
-        config.baro.high.inHg100 = inHg100;
-    }
-    else
-    {
-        config.baro.low.raw = raw;
-        config.baro.low.inHg100 = inHg100;
-    }
+    baroCalibrationSet(config.baro, isHigh, raw, inHg100);
     saveConfig();
-    return true;
 }
 
 Altimeter::AltimeterDriveResult Altimeter::lookForZeroChange(AltimeterAxis axis, int32_t degree, bool targetZeroedState)

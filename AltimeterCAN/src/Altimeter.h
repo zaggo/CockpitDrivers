@@ -71,8 +71,8 @@ public:
     const BaroCalibration &baroCalibration() const { return config.baro; }
 
     // Stores the pot's current raw reading against `inHg100` as the low or high
-    // endpoint. Returns false if the reading is unusable.
-    bool setBaroCalibrationPoint(bool isHigh, uint16_t inHg100);
+    // endpoint.
+    void setBaroCalibrationPoint(bool isHigh, uint16_t inHg100);
 
     AltimeterDriveResult moveToDegree(double hundredDegree, double thousandDegree, double tenThousandDegree, double flagDegree); // Ansyc
     AltimeterDriveResult moveToDegree(AltimeterAxis axis, double degree);

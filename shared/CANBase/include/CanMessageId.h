@@ -45,7 +45,10 @@ enum class CanMessageId : uint16_t {
   transponderInput = 0x311,
   handbrakeStatus = 0x330,
 
-  // 0x340..0x34F: cluster inputs (Instruments -> Gateway, onChange).
+  // 0x340..0x34F: cluster inputs (Instruments -> Gateway, onChange, plus an
+  // unconditional resend every 5s). The periodic resend is load-bearing: it is
+  // how the sim recovers the current knob position after a DCU or plugin
+  // restart, since a restart has no prior onChange to react to.
   // The DCU covers this whole block with a single range filter (mask 0x7F0),
   // so new clusters in here need no filter change on the gateway.
   //
