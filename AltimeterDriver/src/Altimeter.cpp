@@ -21,7 +21,7 @@ Altimeter::Altimeter()
 
     axes[hundred] = new CheapStepper(&hundredsPattern);
     axes[thousand] = new CheapStepper(&thousandsPattern, true);
-    axes[tenshousand] = new CheapStepper(6, 7, 12, 13);
+    axes[tenshousand] = new CheapStepper(&tenThousandsPattern, true);
 
     for (int axis = 0; axis < altimeterAxisCount; axis++)
     {
@@ -136,12 +136,12 @@ void Altimeter::sendMotorData()
         // DEBUGLOG_PRINTLN(String(F("Sent portA: 0b")) + String(portA, BIN));
         mcp->writePort(MCP23017Port::A, portA);
     }
-    // uint8_t portB = compPattern & 0x0F; // Combine the patterns for port B
-    // if (currentPortB != portB)
-    // {
-    //     currentPortB = portB;
-    //     mcp->writePort(MCP23017Port::B, portB);
-    // }
+    uint8_t portB = tenThousandsPattern & 0x0F; // Combine the patterns for port B
+    if (currentPortB != portB)
+    {
+        currentPortB = portB;
+        mcp->writePort(MCP23017Port::B, portB);
+    }
 }
 
 void Altimeter::stopAllAxes()

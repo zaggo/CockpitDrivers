@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define BENCHDEBUG 0                                           
+#define BENCHDEBUG 1                                           
 #define COUPLED_MODE 0
 
 const uint8_t kMCP23017Address = 0x20;

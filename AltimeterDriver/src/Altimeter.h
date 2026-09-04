@@ -83,6 +83,7 @@ private:
 
     uint8_t hundredsPattern = 0;
     uint8_t thousandsPattern = 0;
+    uint8_t tenThousandsPattern = 0;
 
     uint8_t currentPortA = 0;
     uint8_t currentPortB = 0;
