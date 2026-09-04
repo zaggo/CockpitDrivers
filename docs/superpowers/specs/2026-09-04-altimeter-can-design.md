@@ -64,17 +64,27 @@ im Rahmen dieses Ports entfernt.
 | D2 | Hall 100er, `INPUT_PULLUP`, aktiv LOW | unverändert |
 | D4 | CAN `/INT` | neu |
 | D5 | Instrumentenbeleuchtung (PWM) | neu |
-| D6 | CAN `/CS` | neu |
 | D7 | Hall 10k | **verschoben von D10** |
 | D8 | Hall 1000er | unverändert |
 | D9 | Flag-Servo | unverändert |
+| D10 | CAN `/CS` | neu |
 | D11 | SPI MOSI | neu |
 | D12 | SPI MISO | neu |
 | D13 | SPI SCK | neu |
 | A0 | Poti (Baro) | unverändert |
 | A4/A5 | I2C zum MCP23017 | unverändert |
 
-Frei bleiben D3, A1, A2, A3.
+Frei bleiben D3, D6, A1, A2, A3.
+
+`/CS` liegt bewusst auf D10 und nicht auf einem beliebigen freien Pin. D10 ist das
+`/SS`-Pin (siehe unten) und muss im Master-Betrieb zwingend Ausgang sein oder dauerhaft
+HIGH liegen. Liegt `/CS` darauf, erledigt `SPI.begin()` das von selbst — bliebe D10
+ungenutzt, stünde es nach dem Reset als floatender Eingang da und ein eingekoppelter
+LOW-Pegel würfe die SPI erneut aus dem Master-Modus.
+
+Dass D6 dafür frei bleibt, ist der zweite Grund: die Servo-Bibliothek belegt Timer1 und
+schaltet PWM auf D9 und D10 ab, D10 kann also ohnehin kein `analogWrite`. D6 hängt an
+Timer0 und behält seine PWM-Fähigkeit für spätere Verwendung.
 
 ### Warum der Hall-Sensor umziehen muss
 
@@ -94,7 +104,8 @@ Firmware nicht betriebsfähig.
 ### Timer
 
 `analogWrite` auf D5 nutzt Timer0, die Servo-Bibliothek auf dem Nano Timer1. Kein
-Konflikt. D6 ist als `/CS` reiner Digitalausgang und braucht kein PWM.
+Konflikt. Timer1 kostet allerdings PWM auf D9 und D10 — D9 trägt den Servo selbst, D10
+ist als `/CS` reiner Digitalausgang. Beides unkritisch.
 
 Die Onboard-LED des Nano hängt an D13 und flackert künftig mit dem SPI-Verkehr. Der
 Heartbeat-Blinker aus `BenchDebug` (`kLedPin = 13`) entfällt ersatzlos.
