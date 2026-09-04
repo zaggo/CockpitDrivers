@@ -11,9 +11,11 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 
 ## Repo layout
 
-- Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `CANDebugNode`, `DCU`, `FuelGaugeCAN`, `HSIDriver`,
-  `HandbrakeCAN`, `I2CBoard`, `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`, `RudderCAN`,
-  `ServoBoard`, `StepperBoard`, `TransponderBoard`, `VerticalSpeedCAN`): independent PlatformIO/Arduino projects, each with its own
+- Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `CANDebugNode`,
+  `DCU`, `FuelGaugeCAN`, `HSIDriver`, `HandbrakeCAN`, `I2CBoard`,
+  `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`,
+  `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`,
+  `VerticalSpeedCAN`): independent PlatformIO/Arduino projects, each with its own
   `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (`DCU`, `MotionActor`, `MotionGateway`)
   have their own `CLAUDE.md` with board-specific detail — read it too when working in that directory.
   `AltimeterDriver` is the pre-CAN altimeter firmware, driven over USB by AirManager. It is superseded by
