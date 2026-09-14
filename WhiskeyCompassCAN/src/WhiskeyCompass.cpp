@@ -8,6 +8,14 @@ static const uint16_t kCompassEepromAddress = 0;
 
 static const int32_t kDegreeFullRotation = 360L;
 
+// A Hall detection window spans a few degrees of card rotation. A computed
+// "window" anywhere near a full turn therefore did not come from the sensor's
+// two edges at all — it comes from a phase latching before the card stepped,
+// which leaves one edge captured at position 0 and turns the modular difference
+// into most of a revolution. Halving that would park the card ~180 degrees off
+// and still report success, so treat it as a failed homing run instead.
+static const uint32_t kMaxPlausibleWindowFraction = 8; // total/8 = 45 degrees
+
 void WhiskeyCompass::applyConfigDefaults()
 {
     config.magic = kCompassConfigMagic;
@@ -254,6 +262,16 @@ WhiskeyCompass::CompassResult WhiskeyCompass::nextHomingState()
             const uint32_t total = card->getTotalSteps();
             const int32_t windowSteps = (int32_t)normalizeStepPosition(
                 (int32_t)zeroEndPosition - (int32_t)zeroStartPosition, total);
+            if ((uint32_t)windowSteps > total / kMaxPlausibleWindowFraction)
+            {
+                // A window this wide cannot be the Hall sensor's real detection
+                // window (see kMaxPlausibleWindowFraction above) - most likely a
+                // phase latched at position 0 before the card had stepped. The
+                // card and stepper are already stopped and reset above, so just
+                // fail homing instead of driving half a turn off north.
+                DEBUGLOG_PRINTLN(F("WKC: implausible zero window, homing failed"));
+                return homingTimeout;
+            }
             const int32_t zeroAdjust = windowSteps / 2L;
             DEBUGLOG_PRINT(F("WKC: zero adjust steps "));
             DEBUGLOG_PRINTLN(zeroAdjust);

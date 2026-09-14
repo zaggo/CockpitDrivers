@@ -43,8 +43,8 @@ pio run -t upload        # flash to connected board
 pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
 pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
-                          # AirspeedCAN, AltimeterCAN, DCU, RudderCAN, VerticalSpeedCAN and
-                          # WhiskeyCompassCAN have real
+                          # AirspeedCAN, AltimeterCAN, DCU, RudderCAN,
+                          # VerticalSpeedCAN and WhiskeyCompassCAN have real
                           # Unity tests, run natively (no device needed):
 pio test -e native       # runs test/test_* against that board's include headers
 ```

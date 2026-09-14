@@ -184,6 +184,8 @@ Owns everything hardware-facing except CAN.
 ```cpp
 class WhiskeyCompass {
 public:
+    enum CompassResult { success, notHomed, homingTimeout, cardStateReached };
+
     enum HomingPhase { unknown, leaveZero, searchZero, searchZeroEnd,
                        returnToZeroEnd, searchZeroStart, moveToTrueZero,
                        moveToAdjustedZero, homed, timeout };
@@ -196,7 +198,7 @@ public:
     void beginHoming();
     bool isHoming() const;
 
-    void moveToHeading(double degMag);
+    CompassResult moveToHeading(double degMag);
     void setBrightness(uint8_t pwm);
 
     bool calibrateZero();
@@ -205,6 +207,8 @@ public:
 
     void stop();
     void off();
+
+    int32_t position() const;
 };
 ```
 
@@ -255,11 +259,14 @@ them lives in EEPROM so it can be taught on the bench without a reflash:
 
 ```cpp
 struct CompassConfig {
-    uint16_t magic;              // identifies a valid, matching layout
-    uint8_t  version;
+    uint32_t magic;              // identifies a valid, matching layout
+    uint16_t version;
     int16_t  zeroAdjustDegree;   // -180..179
 };
 ```
+
+Mirrors `AltimeterCAN`'s EEPROM layout exactly (`uint32_t magic`, `uint16_t version`), rather than
+inventing a narrower one for this board.
 
 A wrong or missing magic/version falls back to `kDefaultZeroAdjustDegree` from
 `Configuration.h` and rewrites the block, so a freshly flashed board comes up sane.
@@ -276,12 +283,17 @@ A wrong or missing magic/version falls back to `kDefaultZeroAdjustDegree` from
 ### Receive
 
 Three exact IDs, all masks `MASK_EXACT` (`0x07FF0000`, all 11 ID bits significant).
-The MCP2515 offers two masks and six filters; the filter layout mirrors
-`AltimeterCAN`'s, doubling up IDs on RXB1 rather than leaving slots open:
+The MCP2515 offers two masks and six filters; both filters on RXB0 match `compass`
+so the 50 Hz heading frame gets its own receive buffer instead of sharing RXB1 with
+the much less frequent `lights` and `gatewayHeartbeat`:
 
-- RXB0 (mask 0): filter 0 = `0x107`, filter 1 = `0x300`
-- RXB1 (mask 1): filter 2 = `0x203`, filter 3 = `0x300`, filter 4 = `0x203`,
-  filter 5 = `0x300`
+- RXB0 (mask 0): filter 0 = `0x107` (`compass`), filter 1 = `0x107` (`compass`)
+- RXB1 (mask 1): filter 2 = `0x203` (`lights`), filter 3 = `0x300` (`gatewayHeartbeat`),
+  filter 4 = `0x203` (`lights`), filter 5 = `0x300` (`gatewayHeartbeat`)
+
+All three IDs are still accepted either way; giving `compass` its own buffer just keeps
+the 50 Hz stream from ever contending with the far rarer `lights`/`gatewayHeartbeat`
+frames for RXB1's single hardware slot.
 
 | ID | Handling |
 |---|---|
@@ -298,11 +310,23 @@ report.
 ### Heartbeat hooks
 
 - `onGatewayHeartbeatDiscovered()` — LEDs on, and start homing if not homed and not
-  already homing. First contact with the gateway is what starts the card: homing before
-  that would drive the instrument with no sim running.
+  already homing.
 - `onGatewayHeartbeatTimeout()` — brightness to 0.
 
 Same behaviour as `AltimeterCAN::CAN`.
+
+**When this actually fires.** `InstrumentCAN::loop()` (`shared/CANBase/src/InstrumentCAN.cpp`)
+computes gateway liveness as `(now - lastGatewayHeartbeat <= GATEWAY_TIMEOUT)`, with
+`lastGatewayHeartbeat` initialised to 0 and its `!= 0` guard commented out. On the very first
+`loop()` call — while `millis()` is still under `GATEWAY_TIMEOUT` — that expression is
+spuriously true, so `onGatewayHeartbeatDiscovered()` fires at power-up before any real gateway
+heartbeat has ever arrived. The card therefore homes on boot regardless of whether the gateway
+is present, not "on first contact with the gateway" as this section previously claimed. This is
+a pre-existing property of `InstrumentCAN` itself, shared by every instrument board on this rig,
+not something specific to the whiskey compass. It is left alone here: the outcome is harmless,
+since homing is idempotent and only runs once per boot (`isHomed`/`isHoming()` guard the call),
+so the spurious early trigger just means the card homes a moment sooner than a real heartbeat
+would have caused anyway.
 
 ## `BenchDebug` — bench console
 
@@ -317,6 +341,7 @@ without a CAN bus. Commands:
 | `cz` | calibrate zero at current position |
 | `cw` | wipe calibration to defaults |
 | `st` | stop / de-energise the stepper |
+| `sd` | show status (homed/homing, position, zero adjust) |
 | `?` | help |
 
 ## DCU side
