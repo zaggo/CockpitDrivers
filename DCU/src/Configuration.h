@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 #define BENCHDEBUG 0
-#define DEBUGLOG_ENABLE 1
+#define DEBUGLOG_ENABLE 0
 
 const uint8_t kCanIntPin = 48; // MCP2515 /INT pin
 const uint8_t kCanCSPin = 53;

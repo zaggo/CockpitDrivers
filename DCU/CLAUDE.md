@@ -102,7 +102,7 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
 serial-console simulator that drives fuel/light/RPM/odometer/airspeed CAN messages directly, for
 testing instruments on the CAN bus without the plugin/X-Plane attached. `?` lists the commands
-(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`rw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
+(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`rw`/`bw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
 AirspeedCAN. `al<feet>` and `vs<fpm>` both resend the same `altimeterVsi` (0x102) frame — altitude and
 climb rate share one message, so each command updates its half and ships both. `hb` prints the
 instrument nodes that have gone quiet (backed by `InstrumentLiveness.h` above).
@@ -110,5 +110,7 @@ instrument nodes that have gone quiet (backed by `InstrumentLiveness.h` above).
 Because no `DCUSender` exists in bench builds, instrument→plugin frames decoded by `CAN` have no sink.
 For rudder input the `rw` console command works around that: `CAN` keeps the last decoded
 `RudderToDcuMessage` in a `#if BENCHDEBUG` slot that `BenchDebug` drains via `takeRudderSample()` and
-prints (changed values only) until any key is pressed. Other instrument→plugin messages
+prints (changed values only) until any key is pressed. `bw` is the same watch for the altimeter's baro
+knob (`altimeterBaro`, 0x340), draining a raw `inHg*100` slot via `takeBaroSample()`. Both watches can
+run at once and any key stops whichever are active. Other instrument→plugin messages
 (transponder, handbrake) are still dropped in bench mode.

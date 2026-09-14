@@ -297,6 +297,13 @@ void CAN::updateBaro(uint8_t len, const uint8_t *data)
     const uint16_t inHg100 = unpackBE16(data + 0);
     const float inHg = static_cast<float>(inHg100) / 100.0f;
 
+#if BENCHDEBUG
+    // No DCUSender in bench builds - hand the setting to BenchDebug's baro watch
+    // instead of dropping it below.
+    baroSampleInHg100 = inHg100;
+    baroSampleValid = true;
+#endif
+
     if (dcuSender != nullptr)
     {
         // DEBUGLOG_PRINTLN(String(F("Send Baro: ")) + String(inHg, 2) + String(F(" inHg")));
@@ -318,6 +325,18 @@ bool CAN::takeRudderSample(RudderToDcuMessage &sample)
 
     sample = rudderSample;
     rudderSampleValid = false;
+    return true;
+}
+
+bool CAN::takeBaroSample(uint16_t &inHg100)
+{
+    if (!baroSampleValid)
+    {
+        return false;
+    }
+
+    inHg100 = baroSampleInHg100;
+    baroSampleValid = false;
     return true;
 }
 #endif

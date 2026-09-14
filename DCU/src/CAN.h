@@ -34,6 +34,10 @@ class CAN : public BaseCAN {
         // rudder frames would otherwise be dropped. Returns true (and clears the slot)
         // when a frame arrived since the last call.
         bool takeRudderSample(RudderToDcuMessage& sample);
+
+        // Same tap for the baro knob (0x340). Hands out the raw inHg*100 the frame
+        // carried, so the watch can compare samples as integers.
+        bool takeBaroSample(uint16_t& inHg100);
 #endif
 
     private:
@@ -64,6 +68,10 @@ class CAN : public BaseCAN {
         // Last decoded rudder frame, drained by takeRudderSample().
         RudderToDcuMessage rudderSample = {0, 0, 0};
         bool rudderSampleValid = false;
+
+        // Last decoded baro setting (inHg*100), drained by takeBaroSample().
+        uint16_t baroSampleInHg100 = 0;
+        bool baroSampleValid = false;
 #endif
 
         // Handle incoming Serial Message frames
