@@ -96,6 +96,7 @@ private:
     float odometerAccumulator_ = 0.0f;
     float airspeedAccumulator_ = 0.0f;
     float altimeterVsiAccumulator_ = 0.0f;
+    float compassAccumulator_ = 0.0f;
 
     static constexpr float FUEL_RATE = 5.0f;    // Hz
     static constexpr float LIGHTS_RATE = 10.0f;  // Hz
@@ -104,6 +105,7 @@ private:
     static constexpr float ODOMETER_RATE = 10.0f; // Hz
     static constexpr float AIRSPEED_RATE = 50.0f; // Hz
     static constexpr float ALTIMETER_VSI_RATE = 50.0f; // Hz
+    static constexpr float COMPASS_RATE = 50.0f; // Hz
 
     // ============ Rudder Override Watchdog ============
 

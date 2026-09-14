@@ -50,6 +50,9 @@ public:
     float getAltitudeFt() const;  // feet, pilot altimeter
     float getVsiFpm() const;      // feet/min, negative = descending
 
+    // Magnetic compass (whiskey compass)
+    float getCompassHeadingDegMag() const;  // degrees magnetic, 0..360
+
     // Transponder
     uint16_t getTransponderCode() const;
     uint8_t getTransponderMode() const;
@@ -129,6 +132,7 @@ private:
 
     XPLMDataRef dr_ias = nullptr;
     XPLMDataRef dr_tas = nullptr;
+    XPLMDataRef dr_compass_heading = nullptr;
 
     XPLMDataRef dr_altitude = nullptr;
     XPLMDataRef dr_vsi = nullptr;

@@ -403,6 +403,25 @@ void DCUProvider::updateDownlink(float dt)
         altimeterVsiAccumulator_ = 0.0f;
     }
 
+    // ============ Compass Data (50 Hz) ============
+    compassAccumulator_ += dt;
+    float compassRate = 1.0f / COMPASS_RATE;
+
+    if (compassAccumulator_ >= compassRate)
+    {
+        struct CompassData
+        {
+            float headingDegMag;
+        };
+
+        CompassData compass;
+        compass.headingDegMag = dataRefMgr_->getCompassHeadingDegMag();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageCompass, &compass, sizeof(compass));
+
+        compassAccumulator_ = 0.0f;
+    }
+
     // ============ Odometer Data (10 Hz) ============
     odometerAccumulator_ += dt;
     float odometerRate = 1.0f / ODOMETER_RATE;

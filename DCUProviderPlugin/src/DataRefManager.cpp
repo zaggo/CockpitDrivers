@@ -73,6 +73,7 @@ void DataRefManager::onAircraftLoaded()
     // Airspeed indicator (ASI)
     dr_ias = XPLMFindDataRef("sim/cockpit2/gauges/indicators/airspeed_kts_pilot");
     dr_tas = XPLMFindDataRef("sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot");
+    dr_compass_heading = XPLMFindDataRef("sim/cockpit2/gauges/indicators/compass_heading_deg_mag");
 
     // Altimeter + VSI (one downlink message, one CAN frame, two instrument boards)
     dr_altitude = XPLMFindDataRef("sim/cockpit2/gauges/indicators/altitude_ft_pilot");
@@ -159,6 +160,12 @@ float DataRefManager::getAltitudeFt() const
 float DataRefManager::getVsiFpm() const
 {
     return readFloat(dr_vsi, 0.0f);
+}
+
+// Magnetic compass
+float DataRefManager::getCompassHeadingDegMag() const
+{
+    return readFloat(dr_compass_heading, 0.0f);
 }
 
 // Altimeter
