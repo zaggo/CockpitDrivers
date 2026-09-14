@@ -27,6 +27,10 @@ enum class MessageType : uint8_t {
     // DCU -> Plugin. Payload: float inHg (4 bytes, host order).
     // Decoded from CAN 0x340, which carries inHg * 100 as a big-endian uint16.
     SerialMessageBaro = 0x0A,
+    // Plugin -> DCU. Payload: float headingDegMag (4 bytes, host order), degrees
+    // magnetic. Repacked by the DCU into CAN 0x107 as a big-endian uint16 of
+    // degrees * 100.
+    SerialMessageCompass = 0x0B,
 };
 
 // Message Payload for Transponder > DCU

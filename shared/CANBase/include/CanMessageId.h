@@ -20,6 +20,12 @@ enum class CanMessageId : uint16_t {
   // reads bytes 4..5 only, the altimeter board reads bytes 0..3 only.
   altimeterVsi = 0x102,
 
+  // 0x107: Magnetic compass (Gateway -> Instrument, 50Hz)
+  // [0..1] heading uint16, degrees * 100, 0..35999
+  //        (sim/cockpit2/gauges/indicators/compass_heading_deg_mag)
+  // [2..7] reserved
+  compass = 0x107,
+
   rpm = 0x106,
 
   odometer = 0x1F0,
