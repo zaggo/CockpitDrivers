@@ -24,6 +24,7 @@ class BenchDebug {
         void sendOdometer();
         void sendAirspeed();
         void sendAltimeterVsi();
+        void sendCompass();
 
         void startRudderWatch();
         void stopRudderWatch();
@@ -48,6 +49,8 @@ class BenchDebug {
         // Altimeter + VSI share one frame, so both commands resend it together.
         float altitudeFt = 0.;
         float vsiFpm = 0.;
+
+        float compassHeadingDeg = 0.;
 
         // Rudder watch: prints incoming 0x303 frames until any key is pressed.
         bool rudderWatchActive = false;

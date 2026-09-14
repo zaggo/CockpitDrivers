@@ -70,6 +70,19 @@ void BenchDebug::sendAltimeterVsi() {
     canBus->sendMessage(CanMessageId::altimeterVsi, 8, data);
 }
 
+void BenchDebug::sendCompass() {
+    byte data[8] = {0};
+    // [0..1] magnetic heading, degrees * 100. [2..7] reserved.
+    float wrapped = fmodf(compassHeadingDeg, 360.f);
+    if (wrapped < 0.f)
+        wrapped += 360.f;
+    packBE16(data + 0, static_cast<uint16_t>(wrapped * 100.f + 0.5f));
+
+    Serial.println(String(F("Send Compass: ")) + compassHeadingDeg + F(" deg"));
+
+    canBus->sendMessage(CanMessageId::compass, 8, data);
+}
+
 void BenchDebug::sendRpm() {
     byte data[2] = {0};
     packBE16(data + 0, rpmValue);
@@ -174,6 +187,13 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Vertical speed set to "))+vsiFpm+F(" fpm"));
         sendAltimeterVsi();
         return true;
+    } else if (command.startsWith("co")) {
+        String rString = command.substring(2);
+        rString.trim();
+        compassHeadingDeg = rString.toFloat();
+        Serial.println(String(F("Compass heading set to "))+compassHeadingDeg+F(" deg"));
+        sendCompass();
+        return true;
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
@@ -205,6 +225,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("as<knots>: set airspeed indicator (IAS)"));
         Serial.println(F("al<feet>: set altitude (shared 0x102 frame)"));
         Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
+        Serial.println(F("co<deg>: set magnetic compass heading"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         Serial.println(F("bw: watch altimeter baro setting (any key stops)"));
         Serial.println(F("hb: list instrument nodes that went quiet"));

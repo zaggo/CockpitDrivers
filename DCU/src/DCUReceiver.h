@@ -31,6 +31,7 @@ class DCUReceiver {
         void sendOdometer();
         void sendAirspeed();
         void sendAltimeterVsi();
+        void sendCompass();
 
         // RX state machine
         // Fuel Gauge
@@ -66,6 +67,9 @@ class DCUReceiver {
         int32_t altitudeFt = 0;
         int16_t vsiFpm = 0;
 
+        // Magnetic compass (whiskey compass)
+        uint16_t compassDeg100 = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
@@ -74,6 +78,7 @@ class DCUReceiver {
         MessageMeta odometerMeta;
         MessageMeta airspeedMeta;
         MessageMeta altimeterVsiMeta;
+        MessageMeta compassMeta;
 
         // Reference to CAN bus
         CAN* canBus;

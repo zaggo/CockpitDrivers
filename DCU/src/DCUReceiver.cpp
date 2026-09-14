@@ -20,6 +20,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   odometerMeta = {0, 5000};
   airspeedMeta = {0, 5000};
   altimeterVsiMeta = {0, 5000};
+  compassMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -253,6 +254,35 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageCompass:
+  {
+    // Payload: float headingDegMag (4 bytes), degrees magnetic
+    if (len != 4)
+      return;
+
+    float heading;
+    memcpy(&heading, payload + 0, 4);
+
+    // compass_heading_deg_mag can read slightly negative or above 360 depending
+    // on X-Plane's internal state. Wrapping here is load-bearing: an unwrapped
+    // negative cast to uint16 would send the card on a full spurious turn.
+    heading = fmodf(heading, 360.f);
+    if (heading < 0.f)
+      heading += 360.f;
+
+    uint16_t deg100 = static_cast<uint16_t>(heading * 100.f + 0.5f);
+    if (deg100 > 35999)
+      deg100 = 0;
+
+    if (deg100 != compassDeg100)
+    {
+      compassDeg100 = deg100;
+      DEBUGLOG_PRINTLN(String(F("Received MSG_COMPASS Datagram deg*100: ")) + String(deg100));
+      sendCompass();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -366,6 +396,19 @@ void DCUReceiver::sendAltimeterVsi()
   altimeterVsiMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendCompass()
+{
+  byte data[8] = {0};
+
+  // [0..1] magnetic heading, degrees * 100. [2..7] reserved.
+  packBE16(data + 0, compassDeg100);
+
+  canBus->sendMessage(CanMessageId::compass, 8, data);
+
+  // Update last send timestamp for maxAge resync
+  compassMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -417,5 +460,12 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for altimeterVsi")));
     sendAltimeterVsi();
+  }
+
+  // Check compass message
+  if (isStale(compassMeta.lastSendTimestamp, now, compassMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for compass")));
+    sendCompass();
   }
 }
