@@ -163,8 +163,10 @@ Contents:
   stepper reports its position normalised into `0..totalSteps-1`, so a small
   counter-clockwise jog comes back as nearly a full turn; this folds it onto the short
   way round.
+- `normalizeStepPosition(int32_t position, uint32_t totalSteps) -> uint32_t` — folds any
+  step position, negative included, into `0..totalSteps-1`.
 - `degreesToSteps(double degrees, uint32_t totalSteps) -> uint32_t` — heading to
-  normalised step position.
+  normalised step position; wraps headings outside 0..360 (negative ones included).
 - `shortestPathSteps(uint32_t current, uint32_t target, uint32_t totalSteps) -> int32_t`
   — signed step delta taking the short way round, so 359° → 1° is +2° of travel rather
   than -358°. Positive is clockwise. At exactly half a turn the tie is broken
@@ -219,9 +221,14 @@ a possible follow-up if the card looks twitchy on the rig.
 
 `moveToHeading(deg)`:
 
-1. target position = `degreesToSteps(deg + zeroAdjustDegree(), kTotalSteps)`
-2. delta = `shortestPathSteps(stepper.getPosition(), target, kTotalSteps)`
+1. target position = `degreesToSteps(deg, kTotalSteps)`
+2. delta = `shortestPathSteps(normalizeStepPosition(stepper.getPosition()), target, kTotalSteps)`
 3. issue a non-blocking `newMove` for that delta
+
+The stored zero offset is *not* added here. Homing's `moveToAdjustedZero` phase already
+drives the card onto the painted N mark and calls `resetPosition()` there, so step
+position 0 *is* the painted zero — the same arrangement `Altimeter::moveToDegree` uses.
+Adding the offset again at move time would double-apply it.
 
 A new target arriving mid-move replaces the old one, recomputed from the current
 position. No queueing — at 50 Hz a queue would only accumulate stale headings.
