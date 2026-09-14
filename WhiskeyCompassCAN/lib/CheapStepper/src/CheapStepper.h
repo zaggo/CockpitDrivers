@@ -45,6 +45,10 @@ public:
   // allows custom # of steps (usually 4076)
 
   // blocking! (pauses arduino until move is done)
+  // These block until the move finishes and MUST NOT be used on this board -
+  // a homing run spans several seconds, well past the 1500ms both ends of the
+  // CAN heartbeat use to declare each other dead. The non-blocking newMove()/
+  // run() pair below is the only supported path here.
   void move (bool clockwise, uint32_t numSteps); // 4096 steps = 1 revolution
   void moveTo (bool clockwise, int32_t toStep); // move to specific step position
   void moveDegrees (bool clockwise, uint16_t deg);

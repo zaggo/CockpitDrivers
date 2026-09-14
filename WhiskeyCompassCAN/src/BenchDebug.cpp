@@ -30,6 +30,10 @@ bool BenchDebug::handleCommand(String command)
     if (command.startsWith("hd")) {
         String rString = command.substring(2);
         rString.trim();
+        if (rString.length() == 0) {
+            Serial.println(F("Usage: hd<deg>, e.g. hd090"));
+            return true;
+        }
         float degrees = rString.toFloat();
         if (compass->moveToHeading(degrees) == WhiskeyCompass::notHomed) {
             Serial.println(F("Not homed - run 'ho' first"));

@@ -90,7 +90,7 @@ void WhiskeyCompass::off()
 
 void WhiskeyCompass::moveSteps(int32_t steps)
 {
-    card->newMove(steps > 0, (uint32_t)abs(steps));
+    card->newMove(steps > 0, (uint32_t)labs(steps));
 }
 
 void WhiskeyCompass::moveDegree(int32_t degree)
@@ -126,6 +126,11 @@ bool WhiskeyCompass::calibrateZero()
         DEBUGLOG_PRINTLN(F("WKC: not homed, cannot store zero"));
         return false;
     }
+
+    // Freeze the position before reading it: with a move still in flight the
+    // card would keep travelling past the point we are about to declare north,
+    // making the stored offset wrong by whatever travel remained.
+    card->stop();
 
     // getPosition() is int32_t and may be negative; normalising first keeps the
     // fold in jogDegreesFromPosition well-defined.
@@ -205,6 +210,8 @@ WhiskeyCompass::CompassResult WhiskeyCompass::nextHomingState()
         zeroState = lookForZeroChange(false);
         if (zeroState == cardStateReached)
         {
+            // Superseded by the capture in returnToZeroEnd below - this value is
+            // unconditionally overwritten and does not feed the midpoint result.
             zeroEndPosition = normalizeStepPosition(card->getPosition(), card->getTotalSteps());
             card->stop();
             card->resetPosition();
@@ -238,9 +245,16 @@ WhiskeyCompass::CompassResult WhiskeyCompass::nextHomingState()
             card->setRpm(kRpmLimits[maxRpm]);
             // True zero is the middle of the Hall window. Taking the first edge
             // instead would make homing depend on approach direction.
-            const int32_t zeroAdjust =
-                ((int32_t)zeroEndPosition - (int32_t)zeroStartPosition) %
-                (int32_t)card->getTotalSteps() / 2L;
+            // Normalise the DIFFERENCE, not the operands: this is the modular
+            // distance from the window's start edge to its end edge, and halving
+            // it lands on the middle. Subtracting two already-normalised
+            // positions as int32_t instead would make the result negative — and
+            // park the card most of a turn away — whenever the end edge is
+            // captured at a lower position than the start edge.
+            const uint32_t total = card->getTotalSteps();
+            const int32_t windowSteps = (int32_t)normalizeStepPosition(
+                (int32_t)zeroEndPosition - (int32_t)zeroStartPosition, total);
+            const int32_t zeroAdjust = windowSteps / 2L;
             DEBUGLOG_PRINT(F("WKC: zero adjust steps "));
             DEBUGLOG_PRINTLN(zeroAdjust);
             moveSteps(zeroAdjust);
