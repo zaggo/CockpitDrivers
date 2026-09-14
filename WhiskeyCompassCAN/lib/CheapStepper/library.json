@@ -1,0 +1,8 @@
+{
+  "name": "CheapStepper",
+  "version": "0.2.0-local1",
+  "description": "Local fork of Tyler Henry's CheapStepper for the 28BYJ-48 via a ULN2003 driver, with the MCP23017 port-expander output path removed - this board drives the four coil pins directly. Based on https://github.com/tyhenry/CheapStepper.",
+  "keywords": "28byj-48, uln2003, stepper, compass",
+  "frameworks": "arduino",
+  "platforms": "atmelavr"
+}
