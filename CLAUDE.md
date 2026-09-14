@@ -15,7 +15,7 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
   `DCU`, `FuelGaugeCAN`, `HSIDriver`, `HandbrakeCAN`, `I2CBoard`,
   `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`,
   `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`,
-  `VerticalSpeedCAN`): independent PlatformIO/Arduino projects, each with its own
+  `VerticalSpeedCAN`, `WhiskeyCompassCAN`): independent PlatformIO/Arduino projects, each with its own
   `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (`DCU`, `MotionActor`, `MotionGateway`)
   have their own `CLAUDE.md` with board-specific detail — read it too when working in that directory.
   `AltimeterDriver` is the pre-CAN altimeter firmware, driven over USB by AirManager. It is superseded by
@@ -43,7 +43,8 @@ pio run -t upload        # flash to connected board
 pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
 pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
-                          # AirspeedCAN, AltimeterCAN, DCU, RudderCAN and VerticalSpeedCAN have real
+                          # AirspeedCAN, AltimeterCAN, DCU, RudderCAN, VerticalSpeedCAN and
+                          # WhiskeyCompassCAN have real
                           # Unity tests, run natively (no device needed):
 pio test -e native       # runs test/test_* against that board's include headers
 ```
@@ -53,7 +54,7 @@ RudderCAN's and AirspeedCAN's `platformio.ini` factor the AVR-common settings (`
 `extends = avr`, rather than repeating them per env as DCU's does — copy this shape for any future board
 that adds a native test env. The natively tested logic lives in Arduino-free headers under that board's
 `include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`, `VerticalSpeedCalibration.h`,
-`AltimeterCalibration.h`); `src/` stays Arduino-coupled.
+`AltimeterCalibration.h`, `CompassGeometry.h`); `src/` stays Arduino-coupled.
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
 
@@ -86,6 +87,10 @@ Plugin logs go to X-Plane's `Log.txt` (`XPLMDebugString`).
   serial link (separate protocol from CAN, framed `0xAA 0x55 TYPE LEN PAYLOAD...` — see `DCU/CLAUDE.md`
   for the parser/gateway side). Adding a message type here means also updating `DCUReceiver`/`DCUSender`
   in `DCU` and the matching dataref plumbing in `DCUProviderPlugin/src/DataRefManager`.
+- The whiskey compass is the simplest full-chain example to copy for a new read-only
+  instrument: dataref in `DCUProviderPlugin/src/DataRefManager`, serial `0x0B` in
+  `SerialMessageId.h`, `DCUReceiver::sendCompass()` in the DCU, CAN `0x107` consumed by
+  `WhiskeyCompassCAN`. See `docs/superpowers/specs/2026-09-14-whiskey-compass-can-design.md`.
 
 ### Motion chain (`MotionProviderPlugin` → `MotionGateway` → `MotionActor`)
 
