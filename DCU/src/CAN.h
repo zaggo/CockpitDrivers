@@ -7,6 +7,7 @@
 #include <CanNodeId.h>
 #include <SerialMessageId.h>
 #include "CanIdError.h"
+#include "InstrumentLiveness.h"
 
 // Forward declaration
 class DCUSender;
@@ -24,31 +25,39 @@ class CAN : public BaseCAN {
         
         void setDCUSender(DCUSender* sender);
 
+        // Nodes that reported at least once and have since gone quiet.
+        // Bit N is node N. Used by BenchDebug and the alarm LED.
+        uint16_t silentInstrumentMask() const;
+
 #if BENCHDEBUG
         // Bench console tap. In BENCHDEBUG builds no DCUSender is attached, so decoded
         // rudder frames would otherwise be dropped. Returns true (and clears the slot)
         // when a frame arrived since the last call.
         bool takeRudderSample(RudderToDcuMessage& sample);
+
+        // Same tap for the baro knob (0x340). Hands out the raw inHg*100 the frame
+        // carried, so the watch can compare samples as integers.
+        bool takeBaroSample(uint16_t& inHg100);
 #endif
 
     private:
         uint32_t lastGatewayHeartbeatSendMs = 0;
 
         // Instrument heartbeat monitoring (nodeId -> last seen)
-        static constexpr uint8_t kMaxInstrumentNodes = 16; // 0..15
+        static constexpr uint8_t kMaxInstrumentNodes = kLivenessMaxNodes; // 0..15
         uint32_t lastInstrumentHeartbeatMs[kMaxInstrumentNodes] = {0};
-        bool instrumentAlive[kMaxInstrumentNodes] = {false};
+
+        // Liveness lives in two bitmasks instead of one canIdErrors[] entry per
+        // node. The old scheme keyed those entries on a fake CAN id (0x301 +
+        // nodeId), which aliased real bus ids - 0x303 is both the rudder frame
+        // and node 2's pseudo-id - and could fill the table on its own.
+        uint16_t instrumentSeenMask = 0;
+        uint16_t instrumentAliveMask = 0;
 
         // CAN ID error tracking: tracks TX/RX error status per CAN ID.
-        // Slots are handed out lazily by setCanIdError() and never freed, so the
-        // table has to fit every ID that can ever fail at once. Two sources feed it:
-        // one pseudo-ID per monitored instrument node (0x301 + nodeId, every node but
-        // the gateway itself — see checkInstrumentHeartbeats) plus one per CAN ID this
-        // gateway transmits (8 today: airspeed, altimeterVsi, fuelLevel, lights,
-        // odometer, rpm, transponder, gatewayHeartbeat). At 12 the table overflowed
-        // on the heartbeats alone, after which every further error was dropped on the
-        // floor and the alarm LED stayed dark.
-        static constexpr uint8_t kMaxCanIdErrors = kMaxInstrumentNodes + 8;
+        // Only real bus ids land here now (8 transmitted ids today), so the
+        // table no longer has to absorb one entry per monitored node.
+        static constexpr uint8_t kMaxCanIdErrors = 12;
         CanIdError canIdErrors[kMaxCanIdErrors];
         uint8_t canIdErrorCount = 0;
 
@@ -59,6 +68,10 @@ class CAN : public BaseCAN {
         // Last decoded rudder frame, drained by takeRudderSample().
         RudderToDcuMessage rudderSample = {0, 0, 0};
         bool rudderSampleValid = false;
+
+        // Last decoded baro setting (inHg*100), drained by takeBaroSample().
+        uint16_t baroSampleInHg100 = 0;
+        bool baroSampleValid = false;
 #endif
 
         // Handle incoming Serial Message frames
@@ -66,6 +79,7 @@ class CAN : public BaseCAN {
         void updateTransponder(uint8_t len, const uint8_t* data);
         void updateHandbrake(uint8_t len, const uint8_t* data);
         void updateRudder(uint8_t len, const uint8_t* data);
+        void updateBaro(uint8_t len, const uint8_t* data);
 
         void sendGatewayHeartbeat();
         void checkInstrumentHeartbeats();

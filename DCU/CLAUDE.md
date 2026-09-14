@@ -43,13 +43,20 @@ gateway, so it implements the other half of the heartbeat protocol described in 
 - Tracks `instrumentHeartbeat` (0x301) per node in `lastInstrumentHeartbeatMs[nodeId]`
   (`kMaxInstrumentNodes = 16`), and flags a node dead after 1500ms of silence
   (`checkInstrumentHeartbeats()`).
-- Filters/decodes `transponderInput` (0x311), `handbrakeStatus` (0x330) and `rudder` (0x303) frames from
-  instruments and forwards them to the plugin via `DCUSender`. Note `rudder` arrives big-endian on CAN
-  but the serial `RudderToDcuMessage` struct is host order, so `updateRudder()` converts via
+- Filters/decodes `transponderInput` (0x311), `handbrakeStatus` (0x330), `rudder` (0x303) and the
+  cluster-input block `0x340`–`0x34F` (currently just `altimeterBaro`, 0x340) from instruments and
+  forwards them to the plugin via `DCUSender`. RXB0 matches the instrument heartbeat exactly; RXB1
+  uses the range mask `MASK_RANGE` so each of its four filters covers 16 consecutive ids — that is
+  what lets new cluster inputs arrive without touching the gateway. Note `rudder` arrives big-endian
+  on CAN but the serial `RudderToDcuMessage` struct is host order, so `updateRudder()` converts via
   `unpackBE16` instead of reinterpret_cast'ing the CAN buffer (unlike `updateTransponder`).
 - CAN alarm LED (`kCANAlarmPin`) lights if CAN isn't started, or if any tracked CAN ID has an
-  outstanding TX/RX/heartbeat-timeout error — tracked in the fixed-size `canIdErrors[]`
-  (`kMaxCanIdErrors = 12`, linear scan, no dynamic allocation per Arduino convention).
+  outstanding TX/RX error — tracked in the fixed-size `canIdErrors[]` (`kMaxCanIdErrors = 12`,
+  linear scan, no dynamic allocation per Arduino convention) — or if any instrument that has ever
+  reported in has since gone quiet (`anyKnownInstrumentSilent(instrumentSeenMask,
+  instrumentAliveMask)`, see `InstrumentLiveness.h` below). Heartbeat timeouts no longer live in
+  `canIdErrors[]`; `checkInstrumentHeartbeats()` updates `instrumentAliveMask` instead, and
+  `updateAlarmLED()` ORs both sources together.
 - `MASK_EXACT`/`CAN_STD_ID` filter setup in `CAN::begin()` must stay in sync with any new message IDs
   added to `CanMessageId.h`.
 
@@ -85,18 +92,25 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
   console commands.
 - `SerialFrameParser.h` — byte-in/frame-out state machine for the `0xAA 0x55 TYPE LEN PAYLOAD...`
   framing, used by `DCUReceiver`.
+- `InstrumentLiveness.h` — `instrumentSeenMask`/`instrumentAliveMask`, two bitmasks (bit N = node N)
+  tracked by `CAN`: `seen` is sticky (a node enters it on its first heartbeat and never leaves),
+  `alive` reflects whether its heartbeat is currently fresh. Backs both the alarm-LED check above and
+  the `hb` BenchDebug command below.
 
 ## BenchDebug mode
 
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
 serial-console simulator that drives fuel/light/RPM/odometer/airspeed CAN messages directly, for
 testing instruments on the CAN bus without the plugin/X-Plane attached. `?` lists the commands
-(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`rw`); `as<knots>` sends an `airspeed` (0x100) frame to
+(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`rw`/`bw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
 AirspeedCAN. `al<feet>` and `vs<fpm>` both resend the same `altimeterVsi` (0x102) frame — altitude and
-climb rate share one message, so each command updates its half and ships both.
+climb rate share one message, so each command updates its half and ships both. `hb` prints the
+instrument nodes that have gone quiet (backed by `InstrumentLiveness.h` above).
 
 Because no `DCUSender` exists in bench builds, instrument→plugin frames decoded by `CAN` have no sink.
 For rudder input the `rw` console command works around that: `CAN` keeps the last decoded
 `RudderToDcuMessage` in a `#if BENCHDEBUG` slot that `BenchDebug` drains via `takeRudderSample()` and
-prints (changed values only) until any key is pressed. Other instrument→plugin messages
+prints (changed values only) until any key is pressed. `bw` is the same watch for the altimeter's baro
+knob (`altimeterBaro`, 0x340), draining a raw `inHg*100` slot via `takeBaroSample()`. Both watches can
+run at once and any key stops whichever are active. Other instrument→plugin messages
 (transponder, handbrake) are still dropped in bench mode.

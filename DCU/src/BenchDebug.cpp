@@ -177,6 +177,24 @@ bool BenchDebug::handleAltimeterInput(String command) {
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
+    } else if (command.startsWith("bw")) {
+        startBaroWatch();
+        return true;
+    } else if (command.startsWith("hb")) {
+        const uint16_t silent = canBus->silentInstrumentMask();
+        if (silent == 0) {
+            Serial.println(F("All known instruments alive."));
+            return true;
+        }
+        Serial.print(F("Silent nodes:"));
+        for (uint8_t nodeId = 0; nodeId < 16; nodeId++) {
+            if (silent & (1u << nodeId)) {
+                Serial.print(' ');
+                Serial.print(nodeId);
+            }
+        }
+        Serial.println();
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
@@ -188,6 +206,8 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("al<feet>: set altitude (shared 0x102 frame)"));
         Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
+        Serial.println(F("bw: watch altimeter baro setting (any key stops)"));
+        Serial.println(F("hb: list instrument nodes that went quiet"));
         return true;
     }
     return false;
@@ -242,20 +262,78 @@ void BenchDebug::handleRudderWatch()
     Serial.println(sample.rightBrake);
 }
 
+void BenchDebug::startBaroWatch()
+{
+    // Same as the rudder watch: drop the pre-armed sample so only knob movement
+    // that happens while watching shows up.
+    uint16_t stale;
+    canBus->takeBaroSample(stale);
+
+    baroWatchActive = true;
+    baroWatchPrinted = false;
+    Serial.println(F("Baro watch on - press any key to stop"));
+}
+
+void BenchDebug::stopBaroWatch()
+{
+    baroWatchActive = false;
+    Serial.println(F("Baro watch off"));
+}
+
+void BenchDebug::handleBaroWatch()
+{
+    uint16_t inHg100;
+    if (!canBus->takeBaroSample(inHg100))
+    {
+        return;
+    }
+
+    // AltimeterCAN resends the setting every few seconds even when the knob sits
+    // still - only actual changes are worth a line.
+    if (baroWatchPrinted && inHg100 == lastBaroPrintedInHg100)
+    {
+        return;
+    }
+
+    lastBaroPrintedInHg100 = inHg100;
+    baroWatchPrinted = true;
+
+    // No String/float formatting here (see the rudder watch) - split the fixed
+    // point value by hand instead.
+    Serial.print(F("Baro "));
+    Serial.print(inHg100 / 100);
+    Serial.print('.');
+    const uint16_t hundredths = inHg100 % 100;
+    if (hundredths < 10)
+    {
+        Serial.print('0');
+    }
+    Serial.print(hundredths);
+    Serial.println(F(" inHg"));
+}
+
 void BenchDebug::handleUserInput()
 {
     static String inputBuffer = ""; // Zwischenspeicher für serielle Eingaben
 
-    if (rudderWatchActive)
+    if (rudderWatchActive || baroWatchActive)
     {
-        // Any key leaves the watch; the keystroke itself is not a command.
+        // Any key leaves the watch; the keystroke itself is not a command. Both
+        // watches can run at once, so a keypress ends whichever are active.
         if (Serial.available() > 0)
         {
             while (Serial.available() > 0)
             {
                 Serial.read();
             }
-            stopRudderWatch();
+            if (rudderWatchActive)
+            {
+                stopRudderWatch();
+            }
+            if (baroWatchActive)
+            {
+                stopBaroWatch();
+            }
         }
         return;
     }
@@ -310,6 +388,11 @@ void BenchDebug::loop()
     if (rudderWatchActive)
     {
         handleRudderWatch();
+    }
+
+    if (baroWatchActive)
+    {
+        handleBaroWatch();
     }
 }
 #endif

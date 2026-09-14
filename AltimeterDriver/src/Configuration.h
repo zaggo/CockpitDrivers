@@ -33,7 +33,7 @@ const uint8_t kServoPins[servoCount] = {
 const uint8_t kHallPins[altimeterAxisCount] = {
     2, // 100s Hall sensor
     8, // 1000s Hall sensor
-    10 // 10ks Hall sensor
+    7 // 10ks Hall sensor
 };
 
 const uint8_t kPotentiometerPin = A0;

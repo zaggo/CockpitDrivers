@@ -12,8 +12,7 @@ enum class CanNodeId : uint8_t {
   rpmGaugeNodeId = 0x05,
   rudderNodeId = 0x06,
   asiNodeId = 0x07,
-  // The altimeter shares message 0x102 with the VSI, but is its own board with
-  // its own heartbeat, so it needs its own id (0x09) when it arrives.
-  vsiNodeId = 0x08
+  vsiNodeId = 0x08,
+  altimeterNodeId = 0x09
 };
 #endif // CAN_NODE_ID_H

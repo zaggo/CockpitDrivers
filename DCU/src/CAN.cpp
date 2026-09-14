@@ -49,9 +49,13 @@ bool CAN::begin()
         return false;
     }
 
-    // Filters: receive Instrument Heartbeat (0x301) in RXB0.
+    // RXB0 matches the instrument heartbeat exactly. RXB1 shares one mask across
+    // all four of its filters, so it uses a 16-id range mask instead: that is
+    // the only way to cover the growing 0x340..0x34F cluster-input block without
+    // running out of filter slots. Ids that slip through a neighbouring window
+    // land in handleFrame's default branch and cost a few cycles.
     canBus->init_Mask(0, 0, MASK_EXACT); // RXB0 exact match
-    canBus->init_Mask(1, 0, MASK_EXACT); // RXB1 exact match
+    canBus->init_Mask(1, 0, MASK_RANGE); // RXB1 matches the high 7 id bits
 
     uint32_t instrumentHeartbeat = CAN_STD_ID(CanMessageId::instrumentHeartbeat);
 
@@ -59,12 +63,11 @@ bool CAN::begin()
     canBus->init_Filt(0, 0, instrumentHeartbeat);
     canBus->init_Filt(1, 0, instrumentHeartbeat);
 
-    // RXB1: instrument inputs. The heartbeat is still covered by RXB0's F0/F1,
-    // so F4 can carry a real input filter instead of a third heartbeat copy.
-    canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::transponderInput));
-    canBus->init_Filt(3, 0, CAN_STD_ID(CanMessageId::handbrakeStatus));
-    canBus->init_Filt(4, 0, CAN_STD_ID(CanMessageId::rudder));
-    canBus->init_Filt(5, 0, instrumentHeartbeat);
+    // RXB1: instrument inputs, one filter per 16-id window.
+    canBus->init_Filt(2, 0, CAN_STD_ID(CanMessageId::transponderInput)); // 0x310..0x31F
+    canBus->init_Filt(3, 0, CAN_STD_ID(CanMessageId::handbrakeStatus));  // 0x330..0x33F
+    canBus->init_Filt(4, 0, CAN_STD_ID(CanMessageId::rudder));           // 0x300..0x30F
+    canBus->init_Filt(5, 0, CAN_STD_ID(CanMessageId::altimeterBaro));    // 0x340..0x34F
 
     canBus->setMode(MCP_NORMAL);
     isStarted = true;
@@ -154,6 +157,9 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     case CanMessageId::rudder:
         updateRudder(len, data);
         break;
+    case CanMessageId::altimeterBaro:
+        updateBaro(len, data);
+        break;
     default:
         // Unknown/unhandled CAN ID - ignore for now but log
         DEBUGLOG_PRINTLN(String(F("Received message with unknown CAN ID: 0x")) + String(id, HEX) + String(F(" len: ")) + String(len));
@@ -206,15 +212,15 @@ void CAN::sendGatewayHeartbeat()
 
 void CAN::updateInstrumentHeartbeat(uint8_t len, const uint8_t *data)
 {
-    // DEBUGLOG_PRINTLN(String(F("Received Instrument HB")) + String(len) + F(" bytes"));
     if (len < 8)
         return;
 
     const uint8_t nodeId = data[0];
     if (nodeId >= kMaxInstrumentNodes)
         return;
-    // DEBUGLOG_PRINTLN(String(F("Received Instrument HB from node ")) + nodeId);
+
     lastInstrumentHeartbeatMs[nodeId] = millis();
+    instrumentMarkSeen(instrumentSeenMask, nodeId);
 }
 
 void CAN::updateTransponder(uint8_t len, const uint8_t *data)
@@ -280,6 +286,33 @@ void CAN::updateRudder(uint8_t len, const uint8_t *data)
     }
 }
 
+void CAN::updateBaro(uint8_t len, const uint8_t *data)
+{
+    // CAN 0x340: [0..1] inHg * 100 big endian, [2] unit (1 = inHg).
+    // The serial side carries a plain float in host order, like the other
+    // plugin-facing payloads.
+    if (len < 3)
+        return;
+
+    const uint16_t inHg100 = unpackBE16(data + 0);
+    const float inHg = static_cast<float>(inHg100) / 100.0f;
+
+#if BENCHDEBUG
+    // No DCUSender in bench builds - hand the setting to BenchDebug's baro watch
+    // instead of dropping it below.
+    baroSampleInHg100 = inHg100;
+    baroSampleValid = true;
+#endif
+
+    if (dcuSender != nullptr)
+    {
+        // DEBUGLOG_PRINTLN(String(F("Send Baro: ")) + String(inHg, 2) + String(F(" inHg")));
+        dcuSender->sendFrame(MessageType::SerialMessageBaro,
+                             sizeof(float),
+                             reinterpret_cast<const uint8_t *>(&inHg));
+    }
+}
+
 #if BENCHDEBUG
 bool CAN::takeRudderSample(RudderToDcuMessage &sample)
 {
@@ -294,13 +327,24 @@ bool CAN::takeRudderSample(RudderToDcuMessage &sample)
     rudderSampleValid = false;
     return true;
 }
+
+bool CAN::takeBaroSample(uint16_t &inHg100)
+{
+    if (!baroSampleValid)
+    {
+        return false;
+    }
+
+    inHg100 = baroSampleInHg100;
+    baroSampleValid = false;
+    return true;
+}
 #endif
 
 void CAN::checkInstrumentHeartbeats()
 {
     const uint32_t now = millis();
     const uint32_t timeoutMs = 1500;
-    const uint16_t instrumentHeartbeatId = static_cast<uint16_t>(CanMessageId::instrumentHeartbeat);
 
     for (uint8_t nodeId = 0; nodeId < kMaxInstrumentNodes; ++nodeId)
     {
@@ -308,25 +352,17 @@ void CAN::checkInstrumentHeartbeats()
             continue; // skip gateway itself
 
         const bool alive = heartbeatAlive(lastInstrumentHeartbeatMs[nodeId], now, timeoutMs);
-        if (alive != instrumentAlive[nodeId])
+        if (alive != instrumentIsAlive(instrumentAliveMask, nodeId))
         {
-            instrumentAlive[nodeId] = alive;
-            // For now: log state changes. Later can propagate to USB status/annunciators.
-            // DEBUGLOG_PRINTLN(String(F("Instrument HB node ")) + nodeId + (alive ? F(" OK") : F(" TIMEOUT")));
-
-            // Update error tracking: Use instrumentHeartbeat CAN ID with node-specific offset
-            // to distinguish different nodes (ID + nodeId)
-            const uint16_t nodeSpecificId = instrumentHeartbeatId + static_cast<uint16_t>(nodeId);
-            if (alive)
-            {
-                clearCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);
-            }
-            else
-            {
-                setCanIdError(nodeSpecificId, CanErrorType::HEARTBEAT_TIMEOUT);
-            }
+            instrumentSetAlive(instrumentAliveMask, nodeId, alive);
+            DEBUGLOG_PRINTLN(String(F("Instrument HB node ")) + String(nodeId) + (alive ? F(" OK") : F(" TIMEOUT")));
         }
     }
+}
+
+uint16_t CAN::silentInstrumentMask() const
+{
+    return silentInstruments(instrumentSeenMask, instrumentAliveMask);
 }
 
 void CAN::setCanIdError(uint16_t canId, CanErrorType errorType)
@@ -404,7 +440,8 @@ void CAN::updateAlarmLED()
     }
     else
     {
-        ledOn = anyCanIdHasError(canIdErrors, canIdErrorCount);
+        ledOn = anyCanIdHasError(canIdErrors, canIdErrorCount) ||
+                anyKnownInstrumentSilent(instrumentSeenMask, instrumentAliveMask);
     }
 
     digitalWrite(kCANAlarmPin, ledOn ? HIGH : LOW);

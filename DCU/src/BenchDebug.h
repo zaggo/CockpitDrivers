@@ -29,6 +29,10 @@ class BenchDebug {
         void stopRudderWatch();
         void handleRudderWatch();
 
+        void startBaroWatch();
+        void stopBaroWatch();
+        void handleBaroWatch();
+
         String inputBuffer;
 
         float leftTankLevelKg = 0.;
@@ -49,6 +53,11 @@ class BenchDebug {
         bool rudderWatchActive = false;
         bool rudderWatchPrinted = false; // false = print the next sample unconditionally
         RudderToDcuMessage lastRudderPrinted = {0, 0, 0};
+
+        // Baro watch: same deal for the altimeter's Kollsman knob (0x340).
+        bool baroWatchActive = false;
+        bool baroWatchPrinted = false; // false = print the next sample unconditionally
+        uint16_t lastBaroPrintedInHg100 = 0;
 
 
         CAN* canBus;

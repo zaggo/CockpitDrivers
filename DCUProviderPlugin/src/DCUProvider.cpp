@@ -2,6 +2,7 @@
 #include "XPLMUtilities.h"
 #include "ConfigUtils.h"
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <SerialMessageId.h>
 
@@ -489,6 +490,16 @@ void DCUProvider::updateUplink()
             {
                 uint8_t breakStatus = *reinterpret_cast<const uint8_t *>(msg->payload.data());
                 dataRefMgr_->setParkingBrakeRatio(static_cast<float>(breakStatus) / 100.0f);
+            }
+            break;
+
+        case MessageType::SerialMessageBaro:
+            // Gateway → Plugin: barometer knob on the altimeter (CAN 0x340)
+            if (msg->payload.size() >= sizeof(float))
+            {
+                float inHg = 0.0f;
+                std::memcpy(&inHg, msg->payload.data(), sizeof(float));
+                dataRefMgr_->setBarometerSetting(inHg);
             }
             break;
 

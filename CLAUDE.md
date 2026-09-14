@@ -11,11 +11,15 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 
 ## Repo layout
 
-- Board projects (`AirspeedCAN`, `AltimeterDriver`, `CANDebugNode`, `DCU`, `FuelGaugeCAN`, `HSIDriver`,
-  `HandbrakeCAN`, `I2CBoard`, `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`, `RudderCAN`,
-  `ServoBoard`, `StepperBoard`, `TransponderBoard`, `VerticalSpeedCAN`): independent PlatformIO/Arduino projects, each with its own
+- Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `CANDebugNode`,
+  `DCU`, `FuelGaugeCAN`, `HSIDriver`, `HandbrakeCAN`, `I2CBoard`,
+  `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`,
+  `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`,
+  `VerticalSpeedCAN`): independent PlatformIO/Arduino projects, each with its own
   `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (`DCU`, `MotionActor`, `MotionGateway`)
   have their own `CLAUDE.md` with board-specific detail — read it too when working in that directory.
+  `AltimeterDriver` is the pre-CAN altimeter firmware, driven over USB by AirManager. It is superseded by
+  `AltimeterCAN` and kept only as a fallback until the CAN board is confirmed on the rig.
 - `shared/CANBase`: shared PlatformIO library with the CAN wire protocol (see Architecture below).
   Board projects pull it in via `lib_extra_dirs = ../shared` in `platformio.ini`.
 - `DCUProviderPlugin`: X-Plane 12 plugin (C++/CMake, not PlatformIO) bridging DCU serial data into
@@ -39,8 +43,8 @@ pio run -t upload        # flash to connected board
 pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
 pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
-                          # AirspeedCAN, DCU and RudderCAN have real Unity tests, run natively
-                          # (no device needed):
+                          # AirspeedCAN, AltimeterCAN, DCU, RudderCAN and VerticalSpeedCAN have real
+                          # Unity tests, run natively (no device needed):
 pio test -e native       # runs test/test_* against that board's include headers
 ```
 
@@ -48,8 +52,8 @@ RudderCAN's and AirspeedCAN's `platformio.ini` factor the AVR-common settings (`
 `lib_deps`, ...) into an `[avr]` section that `env:nano` / `env:diecimilaatmega328` pick up via
 `extends = avr`, rather than repeating them per env as DCU's does — copy this shape for any future board
 that adds a native test env. The natively tested logic lives in Arduino-free headers under that board's
-`include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`, `VerticalSpeedCalibration.h`);
-`src/` stays Arduino-coupled.
+`include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`, `VerticalSpeedCalibration.h`,
+`AltimeterCalibration.h`); `src/` stays Arduino-coupled.
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
 
