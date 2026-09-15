@@ -130,13 +130,13 @@ elseif(WIN32)
         add_custom_target(xplm_import_lib DEPENDS ${XPLM_IMPORT_LIB})
         add_dependencies(MotionProvider xplm_import_lib)
         target_link_libraries(MotionProvider PRIVATE
-            ${XPLM_IMPORT_LIB} opengl32 setupapi
+            ${XPLM_IMPORT_LIB} opengl32 setupapi advapi32
             -static-libgcc -static-libstdc++ -static
             -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive)
         target_compile_options(MotionProvider PRIVATE -Wall -Wextra -fvisibility=hidden)
     else()
         target_link_libraries(MotionProvider PRIVATE
-            ${XPLANE_SDK}/Libraries/Win/XPLM_64.lib opengl32 setupapi)
+            ${XPLANE_SDK}/Libraries/Win/XPLM_64.lib opengl32 setupapi advapi32)
         target_compile_options(MotionProvider PRIVATE /W4)
     endif()
 elseif(UNIX AND NOT APPLE)
