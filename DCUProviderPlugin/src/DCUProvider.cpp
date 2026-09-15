@@ -85,6 +85,14 @@ void DCUProvider::refreshPorts()
                 break;
             }
         }
+        // The port we are talking to is present by definition. Never let a
+        // rescan hide it - setAvailablePorts() would otherwise clamp the stale
+        // index to 0 and mark whatever port happens to be first as selected.
+        if (selectIdx < 0)
+        {
+            ports.push_back(currentPort_);
+            selectIdx = (int)ports.size() - 1;
+        }
     }
     statusWin_->setAvailablePorts(ports);
     if (selectIdx >= 0)

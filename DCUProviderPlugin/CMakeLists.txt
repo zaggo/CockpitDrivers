@@ -198,6 +198,7 @@ elseif(WIN32)
             ${XPLM_IMPORT_LIB}
             opengl32
             setupapi
+            advapi32
             -static-libgcc
             -static-libstdc++
             -static
@@ -209,6 +210,7 @@ elseif(WIN32)
             ${XPLANE_SDK}/Libraries/Win/XPLM_64.lib
             opengl32
             setupapi
+            advapi32
         )
     endif()
     
