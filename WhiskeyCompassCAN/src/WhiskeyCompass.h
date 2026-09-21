@@ -43,6 +43,10 @@ public:
     void beginHoming();
     bool isHoming() const { return homingActive; }
 
+    // True from a failed homing run until the next beginHoming(). While set, the
+    // panel lights blink instead of following the commanded brightness.
+    bool hasHomingFailed() const { return homingFailed; }
+
     CompassResult moveToHeading(double degMag);
 
     // One brightness for all populated LEDs.
@@ -74,6 +78,9 @@ private:
     void saveConfig();
     void applyConfigDefaults();
 
+    void applyLights(uint8_t brightness);
+    void updateFailBlink();
+
     void fetchZeroedState();
     void moveSteps(int32_t steps);
     void moveDegree(int32_t degree);
@@ -85,6 +92,10 @@ private:
     CheapStepper *card;
 
     HomingPhase homingState = unknown;
+    uint8_t commandedBrightness = 0;
+    bool homingFailed = false;
+    bool failBlinkOn = false;
+    uint32_t failBlinkLastToggleMs = 0;
     uint32_t zeroEndPosition = 0;
     bool zeroedState = false;
     bool homingActive = false;

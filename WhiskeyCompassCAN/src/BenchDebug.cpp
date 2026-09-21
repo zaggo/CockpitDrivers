@@ -19,6 +19,7 @@ void BenchDebug::printStatus()
 {
     Serial.println(String(F("homed: ")) + (compass->isHomed ? F("yes") : F("no"))
                  + F(" homing: ") + (compass->isHoming() ? F("yes") : F("no"))
+                 + F(" homingFailed: ") + (compass->hasHomingFailed() ? F("yes") : F("no"))
                  + F(" position: ") + String(compass->position())
                  + F(" zeroAdjust: ") + String(compass->zeroAdjustDegree()));
 }

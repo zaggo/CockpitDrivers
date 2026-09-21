@@ -16,6 +16,14 @@ static const int32_t kDegreeFullRotation = 360L;
 // and still report success, so treat it as a failed homing run instead.
 static const uint32_t kMaxPlausibleWindowFraction = 8; // total/8 = 45 degrees
 
+// Failed homing is signalled on the panel lights: 1s on, 1s off, forever.
+static const uint32_t kFailBlinkIntervalMs = 1000;
+
+// The gateway can legitimately dim the panel all the way down, which would hide
+// the fault blink. Blink at least this bright so a failed card is always visible,
+// while a brighter panel setting still wins.
+static const uint8_t kFailBlinkMinBrightness = 64;
+
 void WhiskeyCompass::applyConfigDefaults()
 {
     config.magic = kCompassConfigMagic;
@@ -59,8 +67,8 @@ WhiskeyCompass::WhiskeyCompass()
     for (uint8_t i = 0; i < kLightCount; i++)
     {
         pinMode(kLightPins[i], OUTPUT);
-        analogWrite(kLightPins[i], 0);
     }
+    applyLights(0);
 
     card = new CheapStepper(kStepperPins[0], kStepperPins[1],
                             kStepperPins[2], kStepperPins[3], kCardInversed);
@@ -75,15 +83,45 @@ void WhiskeyCompass::loop()
     {
         runHomingStep();
     }
+    updateFailBlink();
     card->run(micros());
 }
 
-void WhiskeyCompass::setBrightness(uint8_t brightness)
+void WhiskeyCompass::applyLights(uint8_t brightness)
 {
     for (uint8_t i = 0; i < kLightCount; i++)
     {
         analogWrite(kLightPins[i], brightness);
     }
+}
+
+void WhiskeyCompass::setBrightness(uint8_t brightness)
+{
+    // Always remember the commanded level, even while the fault blink owns the
+    // lights: it is what the blink's on-phase uses, and what the panel returns
+    // to once homing succeeds.
+    commandedBrightness = brightness;
+    if (!homingFailed)
+    {
+        applyLights(brightness);
+    }
+}
+
+void WhiskeyCompass::updateFailBlink()
+{
+    if (!homingFailed)
+    {
+        return;
+    }
+
+    const uint32_t now = millis();
+    if (now - failBlinkLastToggleMs < kFailBlinkIntervalMs)
+    {
+        return;
+    }
+    failBlinkLastToggleMs = now;
+    failBlinkOn = !failBlinkOn;
+    applyLights(failBlinkOn ? max(commandedBrightness, kFailBlinkMinBrightness) : 0);
 }
 
 void WhiskeyCompass::stop()
@@ -318,6 +356,11 @@ void WhiskeyCompass::beginHoming()
 
     card->stop();
     isHomed = false;
+    // A retry clears the fault blink and hands the lights back to the panel
+    // brightness; a second failure switches it on again.
+    homingFailed = false;
+    failBlinkOn = false;
+    applyLights(commandedBrightness);
     homingState = unknown;
     nextHomingState();
     homingActive = true;
@@ -332,6 +375,13 @@ void WhiskeyCompass::runHomingStep()
         DEBUGLOG_PRINTLN(F("WKC: homing failed"));
         homingState = timeout;
         homingActive = false;
+        // Blink the panel lights until someone retries homing: the card is
+        // parked at an unknown heading and will refuse setpoints, which is
+        // otherwise invisible on the instrument itself.
+        homingFailed = true;
+        failBlinkOn = true;
+        failBlinkLastToggleMs = millis();
+        applyLights(max(commandedBrightness, kFailBlinkMinBrightness));
         return;
     }
 
