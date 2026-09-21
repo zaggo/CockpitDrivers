@@ -193,7 +193,66 @@ bool WhiskeyCompass::calibrateZero()
 
 void WhiskeyCompass::fetchZeroedState()
 {
-    zeroedState = (digitalRead(kHallPin) == LOW);
+    const bool state = (digitalRead(kHallPin) == LOW);
+    // Log edges only. The card steps every 1.4ms at the slow homing rate, so a
+    // print per poll would both flood the line and stall the stepper; a print
+    // per edge is a handful of lines per run and shows exactly where in the
+    // phase's own step frame the sensor changed.
+    if (state != zeroedState)
+    {
+        DEBUGLOG_PRINT(F("WKC: hall "));
+        DEBUGLOG_PRINT(state ? F("ON") : F("OFF"));
+        DEBUGLOG_PRINT(F(" @ "));
+        DEBUGLOG_PRINTLN(card->getPosition());
+    }
+    zeroedState = state;
+}
+
+void WhiskeyCompass::logHomingPhase()
+{
+#if DEBUGLOG_ENABLE
+    DEBUGLOG_PRINT(F("WKC: phase "));
+    switch (homingState)
+    {
+    case unknown:
+        DEBUGLOG_PRINT(F("unknown"));
+        break;
+    case leaveZero:
+        DEBUGLOG_PRINT(F("leaveZero"));
+        break;
+    case searchZero:
+        DEBUGLOG_PRINT(F("searchZero"));
+        break;
+    case searchZeroEnd:
+        DEBUGLOG_PRINT(F("searchZeroEnd"));
+        break;
+    case returnToZeroEnd:
+        DEBUGLOG_PRINT(F("returnToZeroEnd"));
+        break;
+    case searchZeroStart:
+        DEBUGLOG_PRINT(F("searchZeroStart"));
+        break;
+    case moveToTrueZero:
+        DEBUGLOG_PRINT(F("moveToTrueZero"));
+        break;
+    case moveToAdjustedZero:
+        DEBUGLOG_PRINT(F("moveToAdjustedZero"));
+        break;
+    case homed:
+        DEBUGLOG_PRINT(F("homed"));
+        break;
+    case timeout:
+        DEBUGLOG_PRINT(F("timeout"));
+        break;
+    }
+    // Travel budget the phase was just handed. A phase that reaches its target
+    // state with this still near its start value never moved - that is the
+    // zero-travel capture that produces a bogus zero window.
+    DEBUGLOG_PRINT(F(" left "));
+    DEBUGLOG_PRINT(card->getStepsLeft());
+    DEBUGLOG_PRINT(F(" hall "));
+    DEBUGLOG_PRINTLN(zeroedState ? F("ON") : F("OFF"));
+#endif
 }
 
 WhiskeyCompass::CompassResult WhiskeyCompass::lookForZeroChange(bool targetZeroedState)
@@ -300,6 +359,15 @@ WhiskeyCompass::CompassResult WhiskeyCompass::nextHomingState()
             const uint32_t total = card->getTotalSteps();
             const int32_t windowSteps = (int32_t)normalizeStepPosition(
                 (int32_t)zeroEndPosition - (int32_t)zeroStartPosition, total);
+            // Both raw edges, not just the halved result: an edge captured at 0
+            // (or at total-1) is the signature of a phase that latched before
+            // the card stepped, and the halved value alone cannot show that.
+            DEBUGLOG_PRINT(F("WKC: window end "));
+            DEBUGLOG_PRINT(zeroEndPosition);
+            DEBUGLOG_PRINT(F(" start "));
+            DEBUGLOG_PRINT(zeroStartPosition);
+            DEBUGLOG_PRINT(F(" span "));
+            DEBUGLOG_PRINTLN(windowSteps);
             if ((uint32_t)windowSteps > total / kMaxPlausibleWindowFraction)
             {
                 // A window this wide cannot be the Hall sensor's real detection
@@ -362,16 +430,27 @@ void WhiskeyCompass::beginHoming()
     failBlinkOn = false;
     applyLights(commandedBrightness);
     homingState = unknown;
-    nextHomingState();
-    homingActive = true;
     DEBUGLOG_PRINTLN(F("WKC: homing started"));
+    nextHomingState();
+    logHomingPhase();
+    homingActive = true;
 }
 
 void WhiskeyCompass::runHomingStep()
 {
+    // Phase transitions are the interesting events, so log on change rather
+    // than once per loop iteration - this runs at the full loop rate.
+    const HomingPhase phaseBefore = homingState;
     const CompassResult result = nextHomingState();
+    if (homingState != phaseBefore)
+    {
+        logHomingPhase();
+    }
     if (result != success)
     {
+        // A timeout leaves homingState on the phase that ran out of travel, so
+        // log it before it is overwritten - that name is the whole diagnosis.
+        logHomingPhase();
         DEBUGLOG_PRINTLN(F("WKC: homing failed"));
         homingState = timeout;
         homingActive = false;

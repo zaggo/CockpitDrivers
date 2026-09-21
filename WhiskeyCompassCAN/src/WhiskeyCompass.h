@@ -88,6 +88,10 @@ private:
     CompassResult nextHomingState();
     void runHomingStep();
 
+    // Prints the phase the state machine just entered, plus the travel budget it
+    // was given. Compiles away with DEBUGLOG_ENABLE off.
+    void logHomingPhase();
+
     Config config;
     CheapStepper *card;
 
