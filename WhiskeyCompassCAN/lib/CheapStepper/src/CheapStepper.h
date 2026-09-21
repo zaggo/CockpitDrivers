@@ -131,7 +131,7 @@ private:
   int8_t seqN = -1; // keeps track of sequence number
 
   // variables for non-blocking moves:
-  uint32_t lastStepTime; // time in microseconds that last step happened
+  uint32_t lastStepTime = 0; // time in microseconds that last step happened
   int32_t stepsLeft = 0; // steps left to move, neg for counter-clockwise
 };
 

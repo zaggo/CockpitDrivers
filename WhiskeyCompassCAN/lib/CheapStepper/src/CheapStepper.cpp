@@ -128,7 +128,12 @@ void CheapStepper::newMoveToDegree(bool clockwise, uint16_t deg)
 
 void CheapStepper::run(uint32_t currentMicros)
 {
-  if (lastStepTime + delay <= currentMicros)
+  // Unsigned difference, not lastStepTime + delay <= currentMicros: that sum
+  // wraps in the last `delay` microseconds before micros() rolls over (every
+  // 71.6 min), and the comparison then holds on every loop pass. The motor would
+  // be stepped at loop rate for ~1ms - far past what the 28BYJ-48 can follow - so
+  // it stalls and drops steps while position keeps counting them.
+  if (currentMicros - lastStepTime >= delay)
   { // if time for step
     if (stepsLeft > 0)
     { // clockwise

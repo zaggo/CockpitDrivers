@@ -26,6 +26,10 @@ void setup() {
   canBus = new CAN(compass);
   if (canBus->begin()) {
     DEBUGLOG_PRINTLN(F("WhiskeyCompass started up"));
+  } else {
+    // InstrumentCAN::loop() early-returns forever once begin() failed, so the
+    // board goes quiet rather than obviously dead. Say so on the console.
+    DEBUGLOG_PRINTLN(F("WhiskeyCompass CAN startup FAILED - board is inert"));
   }
   #endif
 }

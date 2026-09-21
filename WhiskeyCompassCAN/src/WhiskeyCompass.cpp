@@ -16,6 +16,11 @@ static const int32_t kDegreeFullRotation = 360L;
 // and still report success, so treat it as a failed homing run instead.
 static const uint32_t kMaxPlausibleWindowFraction = 8; // total/8 = 45 degrees
 
+// ...and the same argument from the other end: a window of a step or two means
+// two consecutive phases were satisfied with essentially no travel between them,
+// so the "midpoint" carries no information about where the window actually is.
+static const int32_t kMinPlausibleWindowSteps = 4; // ~0.35 degrees
+
 // Failed homing is signalled on the panel lights: 1s on, 1s off, forever.
 static const uint32_t kFailBlinkIntervalMs = 1000;
 
@@ -56,6 +61,11 @@ void WhiskeyCompass::wipeCalibration()
 {
     applyConfigDefaults();
     saveConfig();
+    // Homing folded the OLD offset into the card's origin (moveToAdjustedZero
+    // moves by it, then resets the position there). Wiping the offset does not
+    // move the card, so every heading would now be wrong by exactly the amount
+    // just wiped - with isHomed still true and nothing saying so. Force a re-home.
+    isHomed = false;
 }
 
 WhiskeyCompass::WhiskeyCompass()
@@ -315,9 +325,6 @@ WhiskeyCompass::CompassResult WhiskeyCompass::nextHomingState()
         zeroState = lookForZeroChange(false);
         if (zeroState == cardStateReached)
         {
-            // Superseded by the capture in returnToZeroEnd below - this value is
-            // unconditionally overwritten and does not feed the midpoint result.
-            zeroEndPosition = normalizeStepPosition(card->getPosition(), card->getTotalSteps());
             card->stop();
             card->resetPosition();
             moveDegree(-65);
@@ -350,31 +357,42 @@ WhiskeyCompass::CompassResult WhiskeyCompass::nextHomingState()
             card->setRpm(kRpmLimits[maxRpm]);
             // True zero is the middle of the Hall window. Taking the first edge
             // instead would make homing depend on approach direction.
-            // Normalise the DIFFERENCE, not the operands: this is the modular
-            // distance from the window's start edge to its end edge, and halving
-            // it lands on the middle. Subtracting two already-normalised
-            // positions as int32_t instead would make the result negative — and
-            // park the card most of a turn away — whenever the end edge is
-            // captured at a lower position than the start edge.
+            //
+            // returnToZeroEnd reset the position ON the window's end edge, so in
+            // the frame zeroStartPosition was captured in the end edge sits at 0
+            // and the start edge at a negative offset. The modular distance from
+            // start to end is therefore -zeroStartPosition, and halving it lands
+            // on the middle. Do NOT reintroduce zeroEndPosition here: it is
+            // captured BEFORE that reset, in the previous frame, so the
+            // difference would silently be short by however many steps the
+            // reverse sweep took to re-assert the sensor (backlash + hysteresis).
             const uint32_t total = card->getTotalSteps();
-            const int32_t windowSteps = (int32_t)normalizeStepPosition(
-                (int32_t)zeroEndPosition - (int32_t)zeroStartPosition, total);
-            // Both raw edges, not just the halved result: an edge captured at 0
-            // (or at total-1) is the signature of a phase that latched before
+            const int32_t windowSteps =
+                (int32_t)normalizeStepPosition(-(int32_t)zeroStartPosition, total);
+            // Raw captures too, not just the halved result: an edge captured at
+            // 0 (or at total-1) is the signature of a phase that latched before
             // the card stepped, and the halved value alone cannot show that.
-            DEBUGLOG_PRINT(F("WKC: window end "));
+            // "rev" is how far returnToZeroEnd travelled before the sensor came
+            // back - backlash plus hysteresis, and a sanity check on its own.
+            DEBUGLOG_PRINT(F("WKC: window rev "));
             DEBUGLOG_PRINT(zeroEndPosition);
             DEBUGLOG_PRINT(F(" start "));
             DEBUGLOG_PRINT(zeroStartPosition);
             DEBUGLOG_PRINT(F(" span "));
             DEBUGLOG_PRINTLN(windowSteps);
-            if ((uint32_t)windowSteps > total / kMaxPlausibleWindowFraction)
+            // Bounded on BOTH sides. Too wide is the phase-latched-at-0 case
+            // described at kMaxPlausibleWindowFraction. Too narrow is the same
+            // class of artifact from the other end - a chattering edge that
+            // satisfied two consecutive phases with no travel between them - and
+            // it carries no information about where the window's middle is.
+            if ((uint32_t)windowSteps > total / kMaxPlausibleWindowFraction ||
+                windowSteps < kMinPlausibleWindowSteps)
             {
-                // A window this wide cannot be the Hall sensor's real detection
-                // window (see kMaxPlausibleWindowFraction above) - most likely a
-                // phase latched at position 0 before the card had stepped. The
-                // card and stepper are already stopped and reset above, so just
-                // fail homing instead of driving half a turn off north.
+                // A window this wide - or this narrow - cannot be the Hall
+                // sensor's real detection window (see the two k*PlausibleWindow*
+                // constants above); most likely a phase latched before the card
+                // had stepped. The card and stepper are already stopped and reset
+                // above, so just fail homing instead of parking off north.
                 DEBUGLOG_PRINTLN(F("WKC: implausible zero window, homing failed"));
                 return homingTimeout;
             }

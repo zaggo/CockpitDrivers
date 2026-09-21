@@ -40,10 +40,11 @@ bool CAN::instrumentBegin()
 
 void CAN::handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t *data)
 {
-    // No String here: heap churn + extra stack in the deepest call path was
-    // part of the stack/heap collision that froze the CAN link on other nodes.
-    DEBUGLOG_PRINT(F("CAN Message received: ID "));
-    DEBUGLOG_PRINTLN(static_cast<uint16_t>(id));
+    // Deliberately no per-frame log here. The DCU re-sends the compass heading on
+    // every change, so a print per frame is a continuous stream; at 115200 baud
+    // Serial.print blocks once the 64-byte TX buffer fills, and it blocks inside
+    // the same loop() that drives card->run() - which steps at most once per
+    // iteration. The card would visibly lag the commanded heading.
 
     // We currently expect standard frames only (ext == 0).
     (void)ext;

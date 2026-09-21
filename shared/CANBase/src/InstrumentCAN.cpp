@@ -57,7 +57,12 @@ void InstrumentCAN::loop()
     }
 
     // --- Gateway Heartbeat Timeout (DCU -> Instrument) ---
-    const bool alive = /*(lastGatewayHeartbeat != 0) &&*/ (now - lastGatewayHeartbeat <= GATEWAY_TIMEOUT);
+    // The lastGatewayHeartbeat != 0 term is load-bearing: without it the
+    // now - 0 <= GATEWAY_TIMEOUT comparison is true for the first 1500ms after
+    // boot, so onGatewayHeartbeatDiscovered() fires with no gateway on the bus at
+    // all - and boards that start their hardware on discovery (the whiskey compass
+    // homes its card there) would run on a cold, sim-less rig.
+    const bool alive = (lastGatewayHeartbeat != 0) && (now - lastGatewayHeartbeat <= GATEWAY_TIMEOUT);
     if (alive != gatewayAlive)
     {
         gatewayAlive = alive;
