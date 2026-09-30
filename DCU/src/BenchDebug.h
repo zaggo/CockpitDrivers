@@ -34,6 +34,20 @@ class BenchDebug {
         void stopBaroWatch();
         void handleBaroWatch();
 
+        // HSI bench state. One command updates its own field and reships the
+        // whole frame, the way al/vs already share the altimeterVsi frame.
+        uint16_t hsiHeadingDeg100 = 0;
+        uint16_t hsiObsDeg100 = 0;
+        uint16_t hsiHdgBugDeg100 = 0;
+        uint8_t  hsiFlags = 0;
+        int16_t  hsiCdiDots1000 = 0;
+        int16_t  hsiGsDots1000 = 0;
+        bool hsiInputWatchActive = false;
+
+        void sendHsiHeadingFrame();
+        void sendHsiNavFrame();
+        void pollHsiInputWatch();
+
         String inputBuffer;
 
         float leftTankLevelKg = 0.;

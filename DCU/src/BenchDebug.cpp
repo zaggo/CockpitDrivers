@@ -1,6 +1,7 @@
 #include <BenchDebug.h>
 #include "WireEncoding.h"
 #include "CommandTokenizer.h"
+#include "HsiWire.h"
 #include <math.h>
 
 #if BENCHDEBUG
@@ -81,6 +82,31 @@ void BenchDebug::sendCompass() {
     Serial.println(String(F("Send Compass: ")) + compassHeadingDeg + F(" deg"));
 
     canBus->sendMessage(CanMessageId::compass, 8, data);
+}
+
+void BenchDebug::sendHsiHeadingFrame() {
+    byte data[8] = {0};
+    packBE16(data + 0, hsiHeadingDeg100);
+    packBE16(data + 2, hsiObsDeg100);
+    packBE16(data + 4, hsiHdgBugDeg100);
+    data[6] = hsiFlags;
+
+    Serial.println(String(F("Send HSI heading: hdg*100=")) + hsiHeadingDeg100 +
+                    F(" obs*100=") + hsiObsDeg100 + F(" bug*100=") + hsiHdgBugDeg100 +
+                    F(" flags=") + hsiFlags);
+
+    canBus->sendMessage(CanMessageId::hsiHeading, 8, data);
+}
+
+void BenchDebug::sendHsiNavFrame() {
+    byte data[8] = {0};
+    packBE16(data + 0, static_cast<uint16_t>(hsiCdiDots1000));
+    packBE16(data + 2, static_cast<uint16_t>(hsiGsDots1000));
+
+    Serial.println(String(F("Send HSI nav: cdi*1000=")) + hsiCdiDots1000 +
+                    F(" gs*1000=") + hsiGsDots1000);
+
+    canBus->sendMessage(CanMessageId::hsiNav, 8, data);
 }
 
 void BenchDebug::sendRpm() {
@@ -215,6 +241,56 @@ bool BenchDebug::handleAltimeterInput(String command) {
         }
         Serial.println();
         return true;
+    } else if (command.startsWith("hd")) {
+        String rString = command.substring(2);
+        rString.trim();
+        hsiHeadingDeg100 = hsiWrapDeg100(rString.toFloat());
+        Serial.println(String(F("HSI heading deg*100: ")) + hsiHeadingDeg100);
+        sendHsiHeadingFrame();
+        return true;
+    } else if (command.startsWith("ob")) {
+        String rString = command.substring(2);
+        rString.trim();
+        hsiObsDeg100 = hsiWrapDeg100(rString.toFloat());
+        Serial.println(String(F("HSI OBS deg*100: ")) + hsiObsDeg100);
+        sendHsiHeadingFrame();
+        return true;
+    } else if (command.startsWith("bg")) {
+        String rString = command.substring(2);
+        rString.trim();
+        hsiHdgBugDeg100 = hsiWrapDeg100(rString.toFloat());
+        Serial.println(String(F("HSI HDG bug deg*100: ")) + hsiHdgBugDeg100);
+        sendHsiHeadingFrame();
+        return true;
+    } else if (command.startsWith("hf")) {
+        String rString = command.substring(2);
+        rString.trim();
+        hsiFlags = static_cast<uint8_t>(rString.toInt()) & 0x07;
+        Serial.println(String(F("HSI flags: ")) + hsiFlags);
+        sendHsiHeadingFrame();
+        return true;
+    } else if (command.startsWith("cd")) {
+        String rString = command.substring(2);
+        rString.trim();
+        hsiCdiDots1000 = static_cast<int16_t>(rString.toFloat() * 1000.0f);
+        Serial.println(String(F("HSI CDI dots*1000: ")) + hsiCdiDots1000);
+        sendHsiNavFrame();
+        return true;
+    } else if (command.startsWith("gs")) {
+        String rString = command.substring(2);
+        rString.trim();
+        hsiGsDots1000 = static_cast<int16_t>(rString.toFloat() * 1000.0f);
+        Serial.println(String(F("HSI GS dots*1000: ")) + hsiGsDots1000);
+        sendHsiNavFrame();
+        return true;
+    } else if (command.startsWith("hw")) {
+        // Same drain-then-arm mechanism as rw/bw: flush whatever CAN::handleFrame
+        // already stashed so the watch only prints clicks that happen from here on.
+        HsiInputToDcuMessage stale;
+        canBus->takeHsiInputSample(stale);
+        hsiInputWatchActive = true;
+        Serial.println(F("HSI input watch on - press any key to stop"));
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("DCU Commands:"));
         Serial.println(F("lt<kg>: display fuel level left tank"));
@@ -229,6 +305,8 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         Serial.println(F("bw: watch altimeter baro setting (any key stops)"));
         Serial.println(F("hb: list instrument nodes that went quiet"));
+        Serial.println(F("hd<deg> heading  ob<deg> OBS  bg<deg> HDG bug"));
+        Serial.println(F("cd<dots> CDI     gs<dots> GS  hf<bits> flags  hw watch HSI input"));
         return true;
     }
     return false;
@@ -333,13 +411,35 @@ void BenchDebug::handleBaroWatch()
     Serial.println(F(" inHg"));
 }
 
+void BenchDebug::pollHsiInputWatch()
+{
+    if (!hsiInputWatchActive)
+    {
+        return;
+    }
+    HsiInputToDcuMessage sample;
+    if (canBus->takeHsiInputSample(sample))
+    {
+        // 0x341 is onChange-only (unlike rudder/baro, which resend on a timer),
+        // so every sample here is a real click - no dedup needed.
+        Serial.print(F("HSI in: control="));
+        Serial.print(sample.control);
+        Serial.print(F(" action="));
+        Serial.print(sample.action);
+        Serial.print(F(" delta="));
+        Serial.print(sample.delta);
+        Serial.print(F(" push="));
+        Serial.println(sample.pushState);
+    }
+}
+
 void BenchDebug::handleUserInput()
 {
     static String inputBuffer = ""; // Zwischenspeicher für serielle Eingaben
 
-    if (rudderWatchActive || baroWatchActive)
+    if (rudderWatchActive || baroWatchActive || hsiInputWatchActive)
     {
-        // Any key leaves the watch; the keystroke itself is not a command. Both
+        // Any key leaves the watch; the keystroke itself is not a command. All
         // watches can run at once, so a keypress ends whichever are active.
         if (Serial.available() > 0)
         {
@@ -354,6 +454,11 @@ void BenchDebug::handleUserInput()
             if (baroWatchActive)
             {
                 stopBaroWatch();
+            }
+            if (hsiInputWatchActive)
+            {
+                hsiInputWatchActive = false;
+                Serial.println(F("HSI input watch off"));
             }
         }
         return;
@@ -415,5 +520,7 @@ void BenchDebug::loop()
     {
         handleBaroWatch();
     }
+
+    pollHsiInputWatch();
 }
 #endif
