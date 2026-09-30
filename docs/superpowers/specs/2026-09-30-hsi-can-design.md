@@ -36,19 +36,46 @@ Three 28BYJ-48 stepper axes on geared drives, four servos, two rotary encoders w
 push buttons, three hall sensors for homing, an MCP23017 port extender, and panel
 lighting.
 
-| Axis / actuator | Drives |
-|---|---|
-| `compass` stepper | the rotating compass card |
-| `cdi` stepper | the OBS course pointer, riding on the card |
-| `hdg` stepper | the heading bug, riding on the card |
-| `vorServo` | CDI (course deviation) needle |
-| `fromToServo` | TO/FROM flag, three discrete positions |
-| `vsi1Servo`, `vsi2Servo` | the glideslope needle, driven from both ends |
+| Axis / actuator | Drives | Driven by |
+|---|---|---|
+| `compass` stepper | the rotating compass card | `heading_electric_deg_mag_pilot` |
+| `obs` stepper | the course pointer, riding on the card | `hsi_obs_deg_mag_pilot` |
+| `hdg` stepper | the heading bug, riding on the card | `heading_dial_deg_mag_pilot` |
+| `cdiServo` | the lateral deviation bar | `nav1_hdef_dot` |
+| `fromToServo` | TO/FROM flag, three discrete positions | `nav1_fromto` |
+| `gs1Servo`, `gs2Servo` | the glideslope needle, driven from both ends | `nav1_vdef_dot` |
 
-`vsi1Servo` and `vsi2Servo` are **one logical channel**: `HSIDriver/src/HSI.cpp:285-288`
-feeds both with the same `-vsiOffset`, only the mechanical linkage differs
-(`kServoAdjustRatio` 2.0 against -10/7). Despite the name, "VSI" here means glideslope,
-not vertical speed.
+`gs1Servo` and `gs2Servo` are **one logical channel**: `HSIDriver/src/HSI.cpp:285-288`
+feeds both with the same offset, only the mechanical linkage differs
+(`kServoAdjustRatio` 2.0 against -10/7).
+
+## Renaming
+
+`HSIDriver` carries six identifiers that name the wrong thing, and this port is the
+only moment they are free to fix. They are renamed in `HSICAN`; `HSIDriver` is left
+alone.
+
+| Old | New | Why |
+|---|---|---|
+| `ServoId::vsi1Servo`, `vsi2Servo` | `gs1Servo`, `gs2Servo` | "VSI" here is the glideslope, not vertical speed |
+| `ServoId::vorServo` | `cdiServo` | it is the CDI deviation bar and works on a localizer too, not only a VOR |
+| `HSIAxis::cdi` | `obs` | it is the course pointer, following `hsi_obs_deg_mag_pilot`; the CDI is a servo |
+| `kCDIEncoder*` | `kObsEncoder*` | that knob sets the OBS course |
+| `kCompEncoder*` | `kHdgEncoder*` | that knob sets the **heading bug**, not the compass card |
+
+The VSI one matters beyond tidiness: `VerticalSpeedCAN`, `CanMessageId::altimeterVsi`,
+`SerialMessageAltimeterVsi` and `vsiFpm` are genuine vertical speed elsewhere in this
+repo. Two meanings for one abbreviation on one bus is the same class of confusion the
+root `CLAUDE.md` already warns about for the two CAN namespaces.
+
+`kCompEncoder*` is the most misleading of the set — that knob has nothing to do with
+the compass card. The old LUA confirms it: `SetDegreesCompass` writes
+`heading_dial_deg_mag_pilot`, and `0x341` control = 1 is HDG for the same knob.
+
+The renames pull in the ISR state (`obsEncoderState`, `hdgEncoder`,
+`currentHdgEncoderButtonState`, `lastHdgDebounceTime`, …), the `axisName()` and
+`servoName()` strings, the homing log lines and the comments in `Configuration.h`.
+No protocol impact — `0x104`, `0x105` and `0x341` are unchanged.
 
 ## Protocol additions (`shared/CANBase`)
 
@@ -121,7 +148,7 @@ unconditional resend every 5 s so the sim recovers knob positions after a restar
 `0x341` carries **deltas** and must therefore **never** resend — a resend would apply
 the clicks twice. It sends onChange only.
 
-Delta rather than absolute is deliberate: the CDI stepper already follows the sim's
+Delta rather than absolute is deliberate: the OBS stepper already follows the sim's
 OBS value via `0x104` bytes 2..3, so the loop closes through the sim and the board
 holds no state of its own. No seed value after homing is needed (the old AirManager
 chain needed `SetInitialDegrees` for exactly that reason), and a GPS or autopilot
@@ -204,16 +231,16 @@ three bits in one I2C transaction.
 | Pin | New use | Previously |
 |---|---|---|
 | D0/D1 | USB serial (DebugLog) | unchanged |
-| **D2** | MCP2515 `/INT` (INT0) | CDI hall |
-| D3/D4/D5 | CDI encoder A/B/push | unchanged |
+| **D2** | MCP2515 `/INT` (INT0) | OBS hall |
+| D3/D4/D5 | OBS encoder A/B/push | unchanged |
 | **D6** | panel light, PWM (Timer0/OC0A) | free |
-| **D7** | VSI1 servo | free |
-| **D8** | FromTo servo | HDG hall |
-| D9 | VOR servo | unchanged |
-| **D10** | MCP2515 `/CS` (= `/SS`) | VSI1 servo |
-| **D11/D12/D13** | MOSI / MISO / SCK | FromTo servo / VSI2 servo / free |
-| **A0** | VSI2 servo | compass hall |
-| A1/A2/A3 | compass encoder A/B/push | unchanged |
+| **D7** | `gs1Servo` | free |
+| **D8** | `fromToServo` | HDG hall |
+| D9 | `cdiServo` (was `vorServo`) | unchanged |
+| **D10** | MCP2515 `/CS` (= `/SS`) | `vsi1Servo` |
+| **D11/D12/D13** | MOSI / MISO / SCK | `fromToServo` / `vsi2Servo` / free |
+| **A0** | `gs2Servo` | compass hall |
+| A1/A2/A3 | HDG encoder A/B/push | unchanged |
 | A4/A5 | I2C → MCP23017 | unchanged |
 | A6/A7 | free (spare) | free |
 
@@ -221,10 +248,10 @@ three bits in one I2C transaction.
 
 | Port | New use | Previously |
 |---|---|---|
-| GPA0..3 | CDI stepper coils | unchanged |
+| GPA0..3 | OBS stepper coils | unchanged |
 | GPA4..7 | HDG stepper coils | unchanged |
 | GPB0..3 | compass stepper coils | unchanged |
-| **GPB4** | CDI hall | — |
+| **GPB4** | OBS hall | — |
 | **GPB5** | compass hall | — |
 | **GPB6** | HDG hall | — |
 | GPB7 | free | — |
@@ -307,7 +334,7 @@ build_src_filter = -<*>
 card**, because the course pointer and the heading bug ride on the rotating disc:
 
 ```cpp
-cdi  = fmod(compassDegree - cdiDegree + 360, 360)
+cdi  = fmod(compassDegree - cdiDegree + 360, 360)   // the obs axis, in old naming
 comp = compassDegree
 hdg  = fmod(compassDegree - hdgDegree + 360, 360)
 ```
@@ -318,15 +345,16 @@ value before sending it: `compassDegree = -h`, `cdiDegree = (360-o)%360`,
 pointers**:
 
 ```
-comp = (-h) mod 360        only the card is mirrored
-cdi  = (o - h) mod 360     a plain difference
-hdg  = (b - h) mod 360     a plain difference
+compass axis = (-h) mod 360        only the card is mirrored
+obs     axis = (o - h) mod 360     a plain difference
+hdg     axis = (b - h) mod 360     a plain difference
 ```
 
 HSICAN receives the raw sim values over `0x104` and does this itself:
 
 ```cpp
-struct AxisTargets { uint16_t comp100, cdi100, hdg100; };
+// Inputs are sim values, outputs are motor angles for the three axes.
+struct AxisTargets { uint16_t compassAxis100, obsAxis100, hdgAxis100; };
 AxisTargets axisTargets(uint16_t heading100, uint16_t obs100, uint16_t hdgBug100);
 ```
 
@@ -383,7 +411,7 @@ makes `calculateShortestPath` and the homing captures correct. Partial reversals
 handled correctly too: having travelled 30 of 75 slack steps and reversing yields
 `75 - 30 = 45`, not a full 75.
 
-Configured values are 15 (compass), 28 (CDI) and 75 (HDG) steps out of 4096, i.e.
+Configured values are 15 (compass), 28 (OBS) and 75 (HDG) steps out of 4096, i.e.
 **1.3° / 2.5° / 6.6°** of play.
 
 Four improvements, all agreed:
@@ -407,8 +435,8 @@ if (abs(steps) < limit) return success;   // do nothing
 ```
 
 Bench starting values: `moveDeadband = 2` steps (~0.18°),
-`reversalDeadband = stepsBacklash / 3` (5 / 9 / 25 steps). Both live in EEPROM.
-`reversalDeadband = 0` disables the behaviour.
+`reversalDeadband = stepsBacklash / 3` (9 / 5 / 25 steps for obs / compass / hdg).
+Both live in EEPROM. `reversalDeadband = 0` disables the behaviour.
 
 ### b) Timed slack take-up
 
@@ -445,19 +473,28 @@ Arduino-free headers under `include/`, `src/` stays Arduino-coupled.
 Same shape as `AltimeterCAN`: a struct with a magic word, `EEPROM.get`/`EEPROM.put`,
 defaults written when the magic does not match.
 
+All arrays are indexed by the enums, so `[hsiAxisCount]` is `{ obs, compass, hdg }` and
+`[servoCount]` is `{ cdiServo, fromToServo, gs1Servo, gs2Servo }`.
+
 ```cpp
 struct HsiConfig {
     uint16_t magic;
-    int16_t  zeroAdjustDegree[hsiAxisCount];      // -90, 85, 11
+    //                                               obs  comp   hdg
+    int16_t  zeroAdjustDegree[hsiAxisCount];      // -90,   85,   11
+    uint16_t stepsBacklash[hsiAxisCount];         //  28,   15,   75
+    uint16_t moveDeadband[hsiAxisCount];          //   2,    2,    2
+    uint16_t reversalDeadband[hsiAxisCount];      //   9,    5,   25
+    //                                               cdi  frTo   gs1    gs2
+    int16_t  servoAdjustDegree100[servoCount];    // 8000,    0, 7100,  8900
+    int16_t  servoAdjustRatio1000[servoCount];    // 2000, 1000, 2000, -1429
     int16_t  cdiDegPerDot100;                     // 1000 = 10.0 deg/dot
     int16_t  gsDegPerDot100;                      // 1000
-    int16_t  servoAdjustDegree100[servoCount];    // 8000, 0, 7100, 8900
-    int16_t  servoAdjustRatio1000[servoCount];    // 2000, 1000, 2000, -1429
-    uint16_t stepsBacklash[hsiAxisCount];         // 15, 28, 75
-    uint16_t moveDeadband[hsiAxisCount];          // 2, 2, 2
-    uint16_t reversalDeadband[hsiAxisCount];      // 5, 9, 25
 };
 ```
+
+Watch the backlash ordering: `HSIDriver/src/HSI.cpp:87-89` constructs the steppers in
+the order compass/cdi/hdg with 15/28/75, but the enum order is cdi (now obs) first, so
+the array reads **28, 15, 75**.
 
 Compiled-in defaults reproduce the values the AirManager firmware carried, so a
 freshly flashed board behaves like the old one.
@@ -484,8 +521,8 @@ edge.
 ### Park state
 
 `onGatewayHeartbeatTimeout()` reproduces what `bus_volts < 6` did in the LUA: compass
-card to 0, VOR and GS servos to 0, FromTo to `noNav`. CDI and HDG pointers are left
-where they are — the LUA did not blank those either.
+card to 0, `cdiServo` and both GS servos to 0, `fromToServo` to `noNav`. The OBS and
+HDG pointers are left where they are — the LUA did not blank those either.
 
 ### Flags
 
@@ -493,7 +530,7 @@ where they are — the LUA did not blank those either.
 bit0 TO    -> fromToServo = to    (90)
 bit1 FROM  -> fromToServo = from  (182)
 neither    -> fromToServo = noNav (0)
-bit2 == 0  -> vsi1/vsi2 to mechanical zero
+bit2 == 0  -> gs1Servo/gs2Servo to mechanical zero
 ```
 
 This replaces the broken float comparison in `HSIDriver/src/AirManager.cpp:98`, which
