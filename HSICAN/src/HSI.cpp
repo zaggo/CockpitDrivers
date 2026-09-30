@@ -251,6 +251,69 @@ bool HSI::calibrateZero(HSIAxis axis)
     return true;
 }
 
+uint32_t HSI::measureBacklashSteps(HSIAxis axis)
+{
+    // Creep one way until the hall sensor switches, then reverse and count how
+    // many steps pass before it switches back. Those are the steps the gear
+    // train swallows. Call only with stepsBacklash already set to 0, otherwise
+    // the compensation hides the very thing being measured.
+    const uint32_t limit = axes[axis]->getTotalSteps() / 4;
+
+    axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
+
+    readHalls();
+    fetchZeroedState(axis);
+    const bool startState = zeroedState[axis];
+
+    // Phase 1: drive forward onto the sensor edge.
+    axes[axis]->newMove(true, limit);
+    while (axes[axis]->getStepsLeft() != 0)
+    {
+        axes[axis]->run();
+        sendMotorData();
+        readHalls();
+        fetchZeroedState(axis);
+        if (zeroedState[axis] != startState)
+        {
+            break;
+        }
+    }
+    axes[axis]->stop();
+
+    if (zeroedState[axis] == startState)
+    {
+        DEBUGLOG_PRINTLN(F("HSI: no edge found, aborting"));
+        axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
+        return 0;
+    }
+
+    const bool edgeState = zeroedState[axis];
+
+    // Phase 2: reverse and count until the edge comes back. The slack is
+    // crossed before the output moves, so those steps are the measurement.
+    uint32_t steps = 0;
+    axes[axis]->newMove(false, limit);
+    while (axes[axis]->getStepsLeft() != 0)
+    {
+        axes[axis]->run();
+        sendMotorData();
+        steps++;
+        readHalls();
+        fetchZeroedState(axis);
+        if (zeroedState[axis] != edgeState)
+        {
+            break;
+        }
+    }
+    axes[axis]->stop();
+
+    // Put the speed back: leaving the axis at minRpm would make every later
+    // move on it crawl until the next homing pass.
+    axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
+
+    return steps;
+}
+
 void HSI::loop()
 {
     if(instance == NULL)

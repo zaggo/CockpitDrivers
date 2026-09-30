@@ -80,6 +80,9 @@ public:
     void setServoAdjust(ServoId id, int16_t degree100, int16_t ratio1000);
     void setDegPerDot(bool isGs, int16_t degPerDot100);
 
+    // Bench only: blocking, and there is no CAN loop running in a bench build.
+    uint32_t measureBacklashSteps(HSIAxis axis);
+
     int16_t getObsEncoder() { return obsEncoder; }
     int16_t getHdgEncoder() { return hdgEncoder; }
     bool getObsEncoderButtonState() { return obsEncoderButtonState; }
