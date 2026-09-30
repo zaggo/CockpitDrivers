@@ -111,6 +111,12 @@ private:
     static constexpr float HSI_HEADING_RATE = 50.0f; // Hz
     static constexpr float HSI_NAV_RATE = 10.0f;     // Hz
 
+    // The old AirManager chain fed its raw encoder counter straight into the
+    // dataref as degrees, so one detent is one degree. Kept identical so the
+    // knobs feel the way they always have.
+    static constexpr float OBS_DEG_PER_CLICK = 1.0f;
+    static constexpr float HDG_DEG_PER_CLICK = 1.0f;
+
     // ============ Rudder Override Watchdog ============
 
     // Time without a rudder frame after which the joystick override is released.

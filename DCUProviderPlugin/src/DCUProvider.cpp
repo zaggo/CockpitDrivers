@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cmath>
 #include <SerialMessageId.h>
 #include <HsiWire.h>
 
@@ -564,6 +565,47 @@ void DCUProvider::updateUplink()
                 float inHg = 0.0f;
                 std::memcpy(&inHg, msg->payload.data(), sizeof(float));
                 dataRefMgr_->setBarometerSetting(inHg);
+            }
+            break;
+
+        case MessageType::SerialMessageHsiInput:
+            // Gateway -> Plugin: OBS and HDG knobs on the HSI (CAN 0x341).
+            // The payload is a *delta*, never an absolute position: the board
+            // displays whatever the sim reports back over 0x104, so the loop
+            // closes here and a GPS or autopilot moving OBS causes no fight.
+            if (msg->payload.size() >= sizeof(HsiInputToDcuMessage))
+            {
+                HsiInputToDcuMessage in;
+                std::memcpy(&in, msg->payload.data(), sizeof(in));
+
+                auto wrap360 = [](float deg) {
+                    deg = std::fmod(deg, 360.0f);
+                    if (deg < 0.0f)
+                        deg += 360.0f;
+                    return deg;
+                };
+
+                if (in.action == 0)
+                {
+                    if (in.control == 0)
+                    {
+                        const float next = dataRefMgr_->getHsiObsDeg() +
+                                           static_cast<float>(in.delta) * OBS_DEG_PER_CLICK;
+                        dataRefMgr_->setHsiObsDeg(wrap360(next));
+                    }
+                    else if (in.control == 1)
+                    {
+                        const float next = dataRefMgr_->getHsiHeadingBugDeg() +
+                                           static_cast<float>(in.delta) * HDG_DEG_PER_CLICK;
+                        dataRefMgr_->setHeadingBug(wrap360(next));
+                    }
+                }
+                else if (in.action == 1 && in.pushState == 1 && in.control == 1)
+                {
+                    // HDG knob press syncs the bug onto the current heading.
+                    dataRefMgr_->setHeadingBug(wrap360(dataRefMgr_->getHsiHeadingDegMag()));
+                }
+                // control 0 with action 1 is the OBS push: reserved, no-op.
             }
             break;
 
