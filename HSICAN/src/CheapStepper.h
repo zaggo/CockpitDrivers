@@ -29,6 +29,7 @@
 
 #include "Arduino.h"
 #include <MCP23017.h>
+#include "Backlash.h"
 
 class CheapStepper
 {
@@ -82,19 +83,17 @@ private:
   } // returns position + offset wrapped to totalSteps
 
   void incrementPosition() {
-    if (unusedBacklashSteps > 0) {
-      unusedBacklashSteps--;
-    } else {
-      position = (position + 1) % totalSteps;
+    if (consumeBacklashStep(&unusedBacklashSteps)) {
+      return;
     }
+    position = (position + 1) % totalSteps;
   }
 
   void decrementPosition() {
-    if (unusedBacklashSteps > 0) {
-      unusedBacklashSteps--;
-    } else {
-      position = (position == 0) ? (totalSteps - 1) : (position - 1);
-    } 
+    if (consumeBacklashStep(&unusedBacklashSteps)) {
+      return;
+    }
+    position = (position == 0) ? (totalSteps - 1) : (position - 1);
   }
 
   void seqCW();

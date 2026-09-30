@@ -37,7 +37,8 @@ public:
         axisStateReached
         };
     enum HomingPhase {
-        unknown = 0,
+        takeUpBacklash = 0,
+        unknown,
         leaveZero,
         searchZero,
         searchZeroEnd,
@@ -104,7 +105,6 @@ private:
     HSIDriveResult nextHomingState(HSIAxis axis);
     bool checkAllHomed();
     HSIDriveResult lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZeroedState);
-    void resetPositionAndBacklash(HSIAxis axis);
     void loadConfig();
 
 private:

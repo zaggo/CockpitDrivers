@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <EEPROM.h>
 #include "DebugLog.h"
+#include "Backlash.h"
 
 HSI *HSI::instance = nullptr;
 ISR(PCINT1_vect) // HDG Interrupt
@@ -337,8 +338,10 @@ HSI::HSIDriveResult HSI::homeAllAxis()
     for (int axisIndex = 0; axisIndex < hsiAxisCount; axisIndex++)
     {
         HSIAxis axis = static_cast<HSIAxis>(axisIndex);
-        resetPositionAndBacklash(axis); // sync
-        homingState[axis] = unknown;
+        axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
+        axes[axis]->newMove(axes[axis]->lastDirectionIsClockwise(),
+                            axes[axis]->getBacklashSteps());
+        homingState[axis] = takeUpBacklash;
         nextHomingState(axis);
     }
 
@@ -403,14 +406,17 @@ HSI::HSIDriveResult HSI::moveToDegree(HSIAxis axis, double degree)
     int32_t targetPosition = static_cast<int32_t>(degree * static_cast<double>(axes[axis]->getTotalSteps()) / static_cast<double>(DEGREE_FULL_ROTATION));
     int32_t stepsToMove = calculateShortestPath(axis, targetPosition);
 
-    // DEBUGLOG_PRINT(" Current Pos: ");
-    // DEBUGLOG_PRINT(axes[axis]->getPosition());
-    // DEBUGLOG_PRINT(" Target Pos: ");
-    // DEBUGLOG_PRINT(targetPosition);
-    // DEBUGLOG_PRINT(" dist: ");
-    // DEBUGLOG_PRINT(stepsToMove);
-    // DEBUGLOG_PRINT(" RPM: ");
-    // DEBUGLOG_PRINTLN(axes[axis]->getRpm());
+    // 0x104 arrives at 50 Hz in hundredths of a degree, so the integer target
+    // jitters by +-1 step continuously. Issuing those would append a full slack
+    // crossing on every flip - up to 75 steps on the heading bug - and a
+    // standing pointer would buzz back and forth forever.
+    if (!moveIsWorthMaking(stepsToMove,
+                           axes[axis]->lastDirectionIsClockwise(),
+                           config.moveDeadband[axis],
+                           config.reversalDeadband[axis]))
+    {
+        return success;
+    }
 
     moveSteps(axis, stepsToMove);
     return success;
@@ -479,19 +485,18 @@ uint32_t HSI::normalizePosition(int32_t position, uint32_t totalSteps)
     return static_cast<uint32_t>((position % totalSteps + totalSteps) % totalSteps);
 }
 
-void HSI::resetPositionAndBacklash(HSIAxis axis)
-{
-    for (uint32_t n = 0; n < axes[axis]->getBacklashSteps(); n++)
-    {
-        axes[axis]->step(axes[axis]->lastDirectionIsClockwise());
-        sendMotorData();
-    }
-    axes[axis]->resetPosition();
-}
-
 HSI::HSIDriveResult HSI::homeAxis(HSIAxis axis)
 {
-    resetPositionAndBacklash(axis);
+    // Press the gear train against one flank before anything is measured, as a
+    // normal timed move so the motor can actually follow it (see takeUpBacklash
+    // in nextHomingState for why the old tight-loop version slipped).
+    axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
+    moveSteps(axis,
+              axes[axis]->lastDirectionIsClockwise()
+                  ? static_cast<int16_t>(axes[axis]->getBacklashSteps())
+                  : -static_cast<int16_t>(axes[axis]->getBacklashSteps()),
+              true);
+    axes[axis]->resetPosition();
 
     axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
 
@@ -598,6 +603,17 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
     HSI::HSIDriveResult zeroState;
     switch (homingState[axis])
     {
+    case takeUpBacklash:
+        // Press the gear train against one flank before anything is measured.
+        // Issued as a normal timed move so the motor can actually follow it;
+        // the old tight-loop version outran the motor and slipped.
+        if (axes[axis]->getStepsLeft() != 0)
+        {
+            return success;
+        }
+        axes[axis]->resetPosition();
+        homingState[axis] = unknown;
+        return success;
     case unknown:
         fetchZeroedState(axis);
         DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Leave zero state, current state: ")) + (zeroedState[axis] ? "true" : "false"));

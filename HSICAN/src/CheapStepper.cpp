@@ -68,7 +68,7 @@ void CheapStepper::newMove(bool clockwise, uint32_t numSteps, uint32_t currentMi
 
   if (clockwise != lastDirectionClockwise)
   { // direction change
-    unusedBacklashSteps = stepsBacklash - unusedBacklashSteps;
+    unusedBacklashSteps = backlashOnReversal(unusedBacklashSteps, stepsBacklash);
   }
 
   if (clockwise)
