@@ -2,6 +2,7 @@
 #include "DebugLog.h"
 #include "WireEncoding.h"
 #include "Heartbeat.h"
+#include "HsiWire.h"
 #include <math.h>
 
 DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
@@ -21,6 +22,8 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   airspeedMeta = {0, 5000};
   altimeterVsiMeta = {0, 5000};
   compassMeta = {0, 5000};
+  hsiHeadingMeta = {0, 5000};
+  hsiNavMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -283,6 +286,50 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageHsiHeading:
+  {
+    if (len != sizeof(HsiHeadingMessage))
+      return;
+
+    HsiHeadingMessage msg;
+    memcpy(&msg, payload, sizeof(msg));
+
+    const uint16_t heading100 = hsiWrapDeg100(msg.headingDegMag);
+    const uint16_t obs100 = hsiWrapDeg100(msg.obsDeg);
+    const uint16_t bug100 = hsiWrapDeg100(msg.hdgBugDeg);
+
+    if (heading100 != hsiHeadingDeg100 || obs100 != hsiObsDeg100 ||
+        bug100 != hsiHdgBugDeg100 || msg.flags != hsiFlags)
+    {
+      hsiHeadingDeg100 = heading100;
+      hsiObsDeg100 = obs100;
+      hsiHdgBugDeg100 = bug100;
+      hsiFlags = msg.flags;
+      sendHsiHeading();
+    }
+    break;
+  }
+
+  case MessageType::SerialMessageHsiNav:
+  {
+    if (len != sizeof(HsiNavMessage))
+      return;
+
+    HsiNavMessage msg;
+    memcpy(&msg, payload, sizeof(msg));
+
+    const int16_t cdi1000 = static_cast<int16_t>(msg.cdiDots * 1000.0f);
+    const int16_t gs1000 = static_cast<int16_t>(msg.gsDots * 1000.0f);
+
+    if (cdi1000 != hsiCdiDots1000 || gs1000 != hsiGsDots1000)
+    {
+      hsiCdiDots1000 = cdi1000;
+      hsiGsDots1000 = gs1000;
+      sendHsiNav();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -409,6 +456,35 @@ void DCUReceiver::sendCompass()
   compassMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendHsiHeading()
+{
+  byte data[8] = {0};
+
+  // [0..1] heading, [2..3] OBS, [4..5] HDG bug, all degrees * 100.
+  // [6] flags, [7] reserved.
+  packBE16(data + 0, hsiHeadingDeg100);
+  packBE16(data + 2, hsiObsDeg100);
+  packBE16(data + 4, hsiHdgBugDeg100);
+  data[6] = hsiFlags;
+
+  canBus->sendMessage(CanMessageId::hsiHeading, 8, data);
+
+  hsiHeadingMeta.lastSendTimestamp = millis();
+}
+
+void DCUReceiver::sendHsiNav()
+{
+  byte data[8] = {0};
+
+  // [0..1] CDI deviation, [2..3] GS deviation, both dots * 1000, signed.
+  packBE16(data + 0, static_cast<uint16_t>(hsiCdiDots1000));
+  packBE16(data + 2, static_cast<uint16_t>(hsiGsDots1000));
+
+  canBus->sendMessage(CanMessageId::hsiNav, 8, data);
+
+  hsiNavMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -467,5 +543,17 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for compass")));
     sendCompass();
+  }
+
+  if (isStale(hsiHeadingMeta.lastSendTimestamp, now, hsiHeadingMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for hsiHeading")));
+    sendHsiHeading();
+  }
+
+  if (isStale(hsiNavMeta.lastSendTimestamp, now, hsiNavMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for hsiNav")));
+    sendHsiNav();
   }
 }

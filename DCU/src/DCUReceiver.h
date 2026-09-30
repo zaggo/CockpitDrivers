@@ -32,6 +32,8 @@ class DCUReceiver {
         void sendAirspeed();
         void sendAltimeterVsi();
         void sendCompass();
+        void sendHsiHeading();
+        void sendHsiNav();
 
         // RX state machine
         // Fuel Gauge
@@ -70,6 +72,14 @@ class DCUReceiver {
         // Magnetic compass (whiskey compass)
         uint16_t compassDeg100 = 0;
 
+        // HSI (CAN 0x104 / 0x105)
+        uint16_t hsiHeadingDeg100 = 0;
+        uint16_t hsiObsDeg100 = 0;
+        uint16_t hsiHdgBugDeg100 = 0;
+        uint8_t  hsiFlags = 0;
+        int16_t  hsiCdiDots1000 = 0;
+        int16_t  hsiGsDots1000 = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
@@ -79,6 +89,8 @@ class DCUReceiver {
         MessageMeta airspeedMeta;
         MessageMeta altimeterVsiMeta;
         MessageMeta compassMeta;
+        MessageMeta hsiHeadingMeta;
+        MessageMeta hsiNavMeta;
 
         // Reference to CAN bus
         CAN* canBus;
