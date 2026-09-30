@@ -84,6 +84,7 @@ void CAN::handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t *
             const uint16_t panelDim1000 = (static_cast<uint16_t>(data[0]) << 8) | data[1];
             float ratio = constrain(static_cast<float>(panelDim1000) / 1000., 0., 1.);
             panelPwm = static_cast<uint8_t>(ratio * 255.);
+            panelPwmKnown = true;
             if (!hsi->homingFailed())
             {
                 hsi->setBrightness(panelPwm);
@@ -107,7 +108,11 @@ void CAN::onGatewayHeartbeatTimeout()
 void CAN::onGatewayHeartbeatDiscovered()
 {
     DEBUGLOG_PRINTLN(F("Gateway heartbeat OK"));
-    hsi->setBrightness(panelPwm ? panelPwm : 255);
+
+    // First contact with no lights frame yet: come up lit so the instrument
+    // visibly joins the bus. After that, honour whatever we were last told,
+    // including zero.
+    hsi->setBrightness(panelPwmKnown ? panelPwm : 255);
 
     // First contact with the gateway is what starts the needles: homing before
     // that would drive the instrument with no sim running.

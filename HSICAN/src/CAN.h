@@ -34,7 +34,12 @@ class CAN : public InstrumentCAN {
         uint32_t lastBlinkMs = 0;
         uint32_t homingFailedAtMs = 0;
         bool blinkOn = false;
+
+        // 0 is a legitimate dimmer setting, so it cannot double as "unknown".
+        // Without this flag a reconnect with the dimmer at zero flashes the
+        // panel to full until the gateway's next lights resync.
         uint8_t panelPwm = 0;
+        bool panelPwmKnown = false;
 };
 
 #endif
