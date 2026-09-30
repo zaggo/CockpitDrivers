@@ -14,6 +14,7 @@ enum class CanNodeId : uint8_t {
   asiNodeId = 0x07,
   vsiNodeId = 0x08,
   altimeterNodeId = 0x09,
-  compassNodeId = 0x0A
+  compassNodeId = 0x0A,
+  hsiNodeId = 0x0B
 };
 #endif // CAN_NODE_ID_H

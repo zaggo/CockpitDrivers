@@ -26,6 +26,28 @@ enum class CanMessageId : uint16_t {
   // [2..7] reserved
   compass = 0x107,
 
+  // 0x104: HSI heading / OBS / bug / flags (Gateway -> Instrument, 50Hz)
+  // [0..1] compass heading uint16, degrees * 100, 0..35999
+  //        (sim/cockpit2/gauges/indicators/heading_electric_deg_mag_pilot)
+  // [2..3] OBS course    uint16, degrees * 100
+  //        (sim/cockpit2/radios/actuators/hsi_obs_deg_mag_pilot)
+  // [4..5] HDG bug       uint16, degrees * 100
+  //        (sim/cockpit2/autopilot/heading_dial_deg_mag_pilot)
+  // [6]    flags uint8: bit0 TO, bit1 FROM, bit2 GS valid, bits 3..7 reserved.
+  //        TO/FROM come from sim/cockpit/radios/nav1_fromto (1 = TO, 2 = FROM);
+  //        GS valid is sim/cockpit/radios/nav1_CDI, whose name is misleading —
+  //        Laminar documents it as "Are we receiving an expected glide slope".
+  // [7]    reserved
+  hsiHeading = 0x104,
+
+  // 0x105: HSI deviation needles (Gateway -> Instrument, 10Hz)
+  // [0..1] CDI deviation int16, dots * 1000 (sim/cockpit/radios/nav1_hdef_dot)
+  // [2..3] GS  deviation int16, dots * 1000 (sim/cockpit/radios/nav1_vdef_dot)
+  // [4..7] reserved
+  // int16 at dots*1000 spans +-32.7 dots; nav1_hdef_dot reaches +-2.5. The
+  // dots -> servo degree conversion happens on the board and is calibratable.
+  hsiNav = 0x105,
+
   rpm = 0x106,
 
   odometer = 0x1F0,
@@ -62,7 +84,21 @@ enum class CanMessageId : uint16_t {
   // [0..1] baro   uint16, inHg * 100 (sim/cockpit2/gauges/actuators/barometer_setting_in_hg_pilot)
   // [2]    unit   uint8, 0 = hPa, 1 = inHg — AltimeterCAN always sends 1
   // [3..7] reserved
-  altimeterBaro = 0x340
+  altimeterBaro = 0x340,
+
+  // 0x341: HSI knob input (Instrument -> Gateway, onChange)
+  // [0]    control   uint8, 0 = OBS knob, 1 = HDG knob
+  // [1]    action    uint8, 0 = delta, 1 = push
+  // [2..3] delta     int16 BE, encoder clicks, signed (0 when action = push)
+  // [4]    pushState uint8, 0/1 (0 when action = delta)
+  // [5..7] reserved
+  //
+  // EXCEPTION to the block rule above: this message carries *deltas*, so it
+  // must NOT take part in the unconditional 5s resend. A resend would apply
+  // the same clicks a second time. onChange only, never on a timer.
+  // The board holds no absolute state: the OBS pointer follows the sim's own
+  // value via 0x104 bytes 2..3, so the loop closes through X-Plane.
+  hsiInput = 0x341
 };
 
 // Filtering

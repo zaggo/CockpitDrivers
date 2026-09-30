@@ -31,6 +31,17 @@ enum class MessageType : uint8_t {
     // magnetic. Repacked by the DCU into CAN 0x107 as a big-endian uint16 of
     // degrees * 100.
     SerialMessageCompass = 0x0B,
+    // Plugin -> DCU. Payload: HsiHeadingMessage (13 bytes, host order).
+    // Repacked by the DCU into CAN 0x104 as three big-endian uint16 of
+    // degrees * 100 plus the flags byte.
+    SerialMessageHsiHeading = 0x0C,
+    // Plugin -> DCU. Payload: HsiNavMessage (8 bytes, host order).
+    // Repacked into CAN 0x105 as two big-endian int16 of dots * 1000.
+    SerialMessageHsiNav = 0x0D,
+    // DCU -> Plugin. Payload: HsiInputToDcuMessage (5 bytes, host order).
+    // Decoded from CAN 0x341. Deltas, so the plugin accumulates; there is no
+    // resend behind this and a dropped frame simply loses those clicks.
+    SerialMessageHsiInput = 0x0E,
 };
 
 // Message Payload for Transponder > DCU
@@ -74,4 +85,51 @@ enum class TransponderToDCUCommand : uint8_t {
         uint16_t rightBrake;  //     0..1000 (right_brake_ratio * 1000)
     };
 #endif
+
+// Message payload for Plugin > DCU, repacked into CAN 0x104.
+#if defined(_MSC_VER)
+    #pragma pack(push, 1)
+    struct HsiHeadingMessage {
+        float   headingDegMag;  // heading_electric_deg_mag_pilot
+        float   obsDeg;         // hsi_obs_deg_mag_pilot
+        float   hdgBugDeg;      // heading_dial_deg_mag_pilot
+        uint8_t flags;          // bit0 TO, bit1 FROM, bit2 GS valid
+    };
+    struct HsiNavMessage {
+        float cdiDots;          // nav1_hdef_dot
+        float gsDots;           // nav1_vdef_dot
+    };
+    struct HsiInputToDcuMessage {
+        uint8_t control;        // 0 = OBS, 1 = HDG
+        uint8_t action;         // 0 = delta, 1 = push
+        int16_t delta;          // encoder clicks, signed
+        uint8_t pushState;      // 0/1
+    };
+    #pragma pack(pop)
+#else
+    struct __attribute__((packed)) HsiHeadingMessage {
+        float   headingDegMag;
+        float   obsDeg;
+        float   hdgBugDeg;
+        uint8_t flags;
+    };
+    struct __attribute__((packed)) HsiNavMessage {
+        float cdiDots;
+        float gsDots;
+    };
+    struct __attribute__((packed)) HsiInputToDcuMessage {
+        uint8_t control;
+        uint8_t action;
+        int16_t delta;
+        uint8_t pushState;
+    };
+#endif
+
+// The DCU dispatches on payload length, so these sizes are the wire contract.
+// Without the packing attribute above, HsiHeadingMessage would be padded to 16
+// and every frame would be rejected as malformed.
+static_assert(sizeof(HsiHeadingMessage) == 13, "HsiHeadingMessage must be 13 bytes on the wire");
+static_assert(sizeof(HsiNavMessage) == 8, "HsiNavMessage must be 8 bytes on the wire");
+static_assert(sizeof(HsiInputToDcuMessage) == 5, "HsiInputToDcuMessage must be 5 bytes on the wire");
+static_assert(sizeof(RudderToDcuMessage) == 6, "RudderToDcuMessage must be 6 bytes on the wire");
 #endif // SERIAL_MESSAGE_ID_H
