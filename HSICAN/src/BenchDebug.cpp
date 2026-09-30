@@ -28,14 +28,9 @@ bool BenchDebug::handleHSIInput(String command) {
         hsi->moveSteps(obs, steps, true);
         return true;
     } else if (command.startsWith("ho")) {
-        String rString = command.substring(2);
-        rString.trim();
-        if (rString.length() == 0) {
-            hsi->homeAllAxis();
-            return true;
-        }
-        HSIAxis axis = static_cast<HSIAxis>(rString.toInt());
-        hsi->homeAxis(axis);
+        // Per-axis homing is gone with the blocking path; the state machine
+        // sweeps all three together now.
+        hsi->beginHoming();
         return true;
     } else if (command.startsWith("co")) {
         String rString = command.substring(2);
@@ -109,21 +104,27 @@ bool BenchDebug::handleHSIInput(String command) {
         rString.trim();
         double degrees = rString.toDouble();
         combiCdiDegree = degrees;
-        hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
+        hsi->applyHeading(static_cast<uint16_t>(combiCompassDegree * 100.0),
+                          static_cast<uint16_t>(combiCdiDegree * 100.0),
+                          static_cast<uint16_t>(combiHdgDegree * 100.0));
         return true;
     } else if (command.startsWith("xo")) {
         String rString = command.substring(2);
         rString.trim();
         double degrees = rString.toDouble();
         combiCompassDegree = degrees;
-        hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
+        hsi->applyHeading(static_cast<uint16_t>(combiCompassDegree * 100.0),
+                          static_cast<uint16_t>(combiCdiDegree * 100.0),
+                          static_cast<uint16_t>(combiHdgDegree * 100.0));
         return true;
     } else if (command.startsWith("xh")) {
         String rString = command.substring(2);
         rString.trim();
         double degrees = rString.toDouble();
         combiHdgDegree = degrees;
-        hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
+        hsi->applyHeading(static_cast<uint16_t>(combiCompassDegree * 100.0),
+                          static_cast<uint16_t>(combiCdiDegree * 100.0),
+                          static_cast<uint16_t>(combiHdgDegree * 100.0));
         return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("HSI Commands:"));

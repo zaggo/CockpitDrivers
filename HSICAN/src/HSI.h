@@ -60,9 +60,13 @@ public:
     void stopAllAxes();
     void offAllAxes();
 
-    HSIDriveResult homeAllAxis(); // Synchronous
-    HSIDriveResult homeAxis(HSIAxis axis); // Synchronous
-    HSIDriveResult moveToDegree(double obsDegree, double compassDegree, double hdgDegree, double cdiOffset, FromTo fromTo, double gsOffset); // Ansyc
+    void beginHoming();
+    bool isHoming() const;
+    bool homingFailed() const;
+    void applyHeading(uint16_t heading100, uint16_t obs100, uint16_t hdgBug100);
+    void applyFlags(uint8_t flags);
+    void applyDeviation(int16_t cdiDots1000, int16_t gsDots1000);
+    void park();
     HSIDriveResult moveToDegree(HSIAxis axis, double degree);
     void moveSteps(HSIAxis axis, int16_t steps, bool synchron = false);
     HSIDriveResult moveServo(ServoId id, double degree);
@@ -93,7 +97,6 @@ public:
     String errorName(HSIDriveResult result);
 
 private:
-    HSIDriveResult lookForZeroChange(HSIAxis axis, int32_t degree, bool targetZeroedState); // Synchronous
     void fetchZeroedState(HSIAxis axis);
     void readHalls();
     void moveDegree(HSIAxis axis, int16_t degree, bool synchron = false);
@@ -103,6 +106,7 @@ private:
     String servoName(ServoId id);
     void sendMotorData();
     HSIDriveResult nextHomingState(HSIAxis axis);
+    void runHoming();
     bool checkAllHomed();
     HSIDriveResult lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZeroedState);
     void loadConfig();
@@ -132,6 +136,8 @@ private:
 
     bool zeroedState[hsiAxisCount] = {false, false, false};
     uint8_t hallBits = 0;
+    bool homingFailure = false;
+    bool gsValid = false;
 
     const int32_t DEGREE_FULL_ROTATION = 360L;
 };

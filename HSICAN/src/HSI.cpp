@@ -3,6 +3,7 @@
 #include <EEPROM.h>
 #include "DebugLog.h"
 #include "Backlash.h"
+#include "HSIGeometry.h"
 
 HSI *HSI::instance = nullptr;
 ISR(PCINT1_vect) // HDG Interrupt
@@ -264,6 +265,12 @@ void HSI::loop()
     {
         axes[axis]->run(uS);
     }
+
+    if (isHoming())
+    {
+        runHoming();
+    }
+
     sendMotorData();
 
     if (hdgEncoder != currentHdgEncoder)
@@ -292,7 +299,7 @@ void HSI::loop()
     {
         hdgEncoderButtonState = currentHdgEncoderButtonState;
         if ((uS - lastHdgDebounceTime) > longPressDelay && hdgEncoderButtonState) {
-            homeAllAxis();
+            beginHoming();
         }
         lastHdgDebounceTime = uS;
        //DEBUGLOG_PRINTLN(" [hdgEncoderButtonState:" + String(hdgEncoderButtonState) + "] ");
@@ -331,67 +338,126 @@ void HSI::offAllAxes()
     }
 }
 
-HSI::HSIDriveResult HSI::homeAllAxis()
+void HSI::beginHoming()
 {
+    DEBUGLOG_PRINTLN(F("HSI: homing"));
     isHomed = false;
-    stopAllAxes();
+    homingFailure = false;
     for (int axisIndex = 0; axisIndex < hsiAxisCount; axisIndex++)
     {
         HSIAxis axis = static_cast<HSIAxis>(axisIndex);
+        axes[axis]->stop();
         axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
         axes[axis]->newMove(axes[axis]->lastDirectionIsClockwise(),
                             axes[axis]->getBacklashSteps());
         homingState[axis] = takeUpBacklash;
-        nextHomingState(axis);
     }
-
-    while (!checkAllHomed())
-    {
-        for (int axisIndex = 0; axisIndex < hsiAxisCount; axisIndex++)
-        {
-            HSIAxis axis = static_cast<HSIAxis>(axisIndex);
-            HSIDriveResult result = nextHomingState(axis);
-            if (result != success)
-            {
-                DEBUGLOG_PRINTLN(String(F("*** Error homing '")) + errorName(result) + String(F("' on axis ")) + axisName(axis));
-                return result;
-            }
-            axes[axisIndex]->run();
-        }
-        sendMotorData();
-    }
-
-    // homeAxis(compass);
-    // homeAxis(hdg);
-    isHomed = true;
-    return success;
 }
 
-HSI::HSIDriveResult HSI::moveToDegree(double obsDegree, double compassDegree, double hdgDegree, double cdiOffset, FromTo fromTo, double gsOffset)
+bool HSI::isHoming() const
 {
-    const double motorDegree[hsiAxisCount] = {
-        fmod(compassDegree- obsDegree + 360.0, 360.0),
-        compassDegree,
-        fmod(compassDegree - hdgDegree + 360.0, 360.0)
-    };
-
+    if (isHomed || homingFailure)
+    {
+        return false;
+    }
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
-        moveToDegree(static_cast<HSIAxis>(axis), motorDegree[axis]);
+        if (homingState[axis] != homed)
+        {
+            return true;
+        }
     }
+    return false;
+}
 
-    const double servoDegree[servoCount] = {
-        cdiOffset,
-        static_cast<double>(fromTo),
-        -gsOffset,
-        -gsOffset
-    };
+bool HSI::homingFailed() const
+{
+    return homingFailure;
+}
 
-    for (int servoId = 0; servoId < servoCount; servoId++)
+void HSI::runHoming()
+{
+    // Driven from loop(): a three-axis sweep takes seconds, and blocking
+    // through it would let both RX buffers fill and the gateway heartbeat
+    // expire.
+    for (int axisIndex = 0; axisIndex < hsiAxisCount; axisIndex++)
     {
-        moveServo(static_cast<ServoId>(servoId), servoDegree[servoId]);
+        HSIAxis axis = static_cast<HSIAxis>(axisIndex);
+        HSIDriveResult result = nextHomingState(axis);
+        if (result != success)
+        {
+            DEBUGLOG_PRINT(F("HSI: homing failed on axis "));
+            DEBUGLOG_PRINTLN(axisIndex);
+            homingFailure = true;
+            homingState[axis] = timeout;
+            return;
+        }
     }
-    return success;
+    if (checkAllHomed())
+    {
+        isHomed = true;
+        DEBUGLOG_PRINTLN(F("HSI: homed"));
+    }
+}
+
+void HSI::applyHeading(uint16_t heading100, uint16_t obs100, uint16_t hdgBug100)
+{
+    if (!isHomed)
+    {
+        return;
+    }
+    const AxisTargets t = axisTargets(heading100, obs100, hdgBug100);
+    moveToDegree(compass, t.compassAxis100 / 100.0);
+    moveToDegree(obs, t.obsAxis100 / 100.0);
+    moveToDegree(hdg, t.hdgAxis100 / 100.0);
+}
+
+void HSI::applyFlags(uint8_t flags)
+{
+    // bit0 TO, bit1 FROM, bit2 GS valid.
+    FromTo fromTo = noNav;
+    if (flags & 0x01)
+    {
+        fromTo = to;
+    }
+    else if (flags & 0x02)
+    {
+        fromTo = from;
+    }
+    moveServo(fromToServo, static_cast<double>(fromTo));
+
+    gsValid = (flags & 0x04) != 0;
+    if (!gsValid)
+    {
+        moveServo(gs1Servo, 0.0);
+        moveServo(gs2Servo, 0.0);
+    }
+}
+
+void HSI::applyDeviation(int16_t cdiDots1000, int16_t gsDots1000)
+{
+    moveServo(cdiServo, dotsToServoDegree(cdiDots1000, config.cdiDegPerDot100));
+
+    if (!gsValid)
+    {
+        return;
+    }
+    // Both GS servos carry one logical channel; only the linkage differs.
+    const double gs = -dotsToServoDegree(gsDots1000, config.gsDegPerDot100);
+    moveServo(gs1Servo, gs);
+    moveServo(gs2Servo, gs);
+}
+
+void HSI::park()
+{
+    // What bus_volts < 6 did in the old AirManager LUA: card to north, the
+    // deviation needles to zero, the flag to noNav. The two pointers keep their
+    // positions - the LUA did not blank those either.
+    moveToDegree(compass, 0.0);
+    moveServo(cdiServo, 0.0);
+    moveServo(gs1Servo, 0.0);
+    moveServo(gs2Servo, 0.0);
+    moveServo(fromToServo, static_cast<double>(noNav));
 }
 
 HSI::HSIDriveResult HSI::moveToDegree(HSIAxis axis, double degree)
@@ -483,104 +549,6 @@ int32_t HSI::calculateShortestPath(HSIAxis axis, int32_t targetPosition)
 uint32_t HSI::normalizePosition(int32_t position, uint32_t totalSteps)
 {
     return static_cast<uint32_t>((position % totalSteps + totalSteps) % totalSteps);
-}
-
-HSI::HSIDriveResult HSI::homeAxis(HSIAxis axis)
-{
-    // Press the gear train against one flank before anything is measured, as a
-    // normal timed move so the motor can actually follow it (see takeUpBacklash
-    // in nextHomingState for why the old tight-loop version slipped).
-    axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
-    moveSteps(axis,
-              axes[axis]->lastDirectionIsClockwise()
-                  ? static_cast<int16_t>(axes[axis]->getBacklashSteps())
-                  : -static_cast<int16_t>(axes[axis]->getBacklashSteps()),
-              true);
-    axes[axis]->resetPosition();
-
-    axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
-
-    // Move until zeroState is *not* triggered
-    DEBUGLOG_PRINTLN(String(F("- Leave zero state")));
-    if (lookForZeroChange(axis, 370, false) != success)
-    {
-        return homingError;
-    }
-
-    // Move until zeroState *is* triggered
-    DEBUGLOG_PRINTLN(String(F("- Search zero state")));
-    if (lookForZeroChange(axis, 370, true) != success)
-    {
-        return homingError;
-    }
-
-    axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
-
-    moveDegree(axis, 1, true);
-
-    DEBUGLOG_PRINTLN(String(F("- Slow search end of zero state")));
-    if (lookForZeroChange(axis, 60, false) != success)
-    {
-        return homingError;
-    }
-    int32_t zeroEndPosition = axes[axis]->getPosition();
-    moveDegree(axis, 1, true);
-
-    DEBUGLOG_PRINTLN(String(F("- Slow search start of zero state")));
-    if (lookForZeroChange(axis, -65, true) != success)
-    {
-        return homingError;
-    }
-    if (lookForZeroChange(axis, -65, false) != success)
-    {
-        return homingError;
-    }
-    int32_t zeroStartPosition = axes[axis]->getPosition();
-
-    axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
-
-    // The real zero is in the middle of the zeroStart and zeroEnd
-    int32_t zeroAdjust = (zeroEndPosition - zeroStartPosition) % static_cast<int32_t>(axes[axis]->getTotalSteps()) / 2L;
-
-    DEBUGLOG_PRINT(String(F("- Zero adjust: ")));
-    DEBUGLOG_PRINT(zeroAdjust);
-    DEBUGLOG_PRINT(String(F(" - Start: ")));
-    DEBUGLOG_PRINT(zeroStartPosition);
-    DEBUGLOG_PRINT(String(F(" - End: ")));
-    DEBUGLOG_PRINTLN(zeroEndPosition);
-    moveSteps(axis, zeroAdjust, true);
-
-    moveDegree(axis, config.zeroAdjustDegree[axis], true);
-    axes[axis]->resetPosition();
-    homingState[axis] = homed;
-    return success;
-}
-
-HSI::HSIDriveResult HSI::lookForZeroChange(HSIAxis axis, int32_t degree, bool targetZeroedState)
-{
-    DEBUGLOG_PRINT(String(F("    look4Zero on ")) + axisName(axis));
-    DEBUGLOG_PRINT(String(F(" - target: ")));
-    DEBUGLOG_PRINT(String(targetZeroedState ? F("true") : F("false")));
-    DEBUGLOG_PRINT(String(F(" - current: ")));
-    DEBUGLOG_PRINTLN(String(zeroedState[axis] ? F("true") : F("false")));
-
-    fetchZeroedState(axis);
-    moveDegree(axis, degree);
-    while (zeroedState[axis] != targetZeroedState && axes[axis]->getStepsLeft() != 0)
-    {
-        axes[axis]->run();
-        sendMotorData();
-        fetchZeroedState(axis);
-    }
-
-    if (zeroedState[axis] != targetZeroedState)
-    {
-        DEBUGLOG_PRINTLN(String(F("   *** Timeout")));
-        return homingError;
-    }
-
-    DEBUGLOG_PRINTLN(String(F("    reached: ")) + String(zeroedState[axis] ? String(F("true")) : String(F("false"))));
-    return success;
 }
 
 HSI::HSIDriveResult HSI::lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZeroedState)
@@ -683,8 +651,21 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
             axes[axis]->stop();
             axes[axis]->resetPosition();
             axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
-            int32_t zeroAdjust = static_cast<int32_t>(((zeroEndPosition[axis] - zeroStartPosition) % axes[axis]->getTotalSteps()) / 2L);
-            DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to true zero position, zero adjust steps: ")) + String(zeroAdjust));
+
+            // homingWindowCentre yields half the window *width* — a relative
+            // offset to move by from where the axis now stands, not an absolute
+            // position. moveSteps below consumes it as exactly that.
+            int32_t zeroAdjust = 0;
+            if (!homingWindowCentre(zeroEndPosition[axis], zeroStartPosition,
+                                    axes[axis]->getTotalSteps(), &zeroAdjust))
+            {
+                // The two edges came back in the wrong order or too far apart.
+                // The old unsigned expression would have wrapped that into half
+                // a turn and homed 180 degrees out while reporting success.
+                DEBUGLOG_PRINTLN(F("HSI: implausible hall window"));
+                return homingTimeout;
+            }
+
             moveSteps(axis, zeroAdjust);
             homingState[axis] = moveToTrueZero;
             return success;
