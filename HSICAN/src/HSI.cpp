@@ -13,7 +13,6 @@ ISR(PCINT1_vect) // HDG Interrupt
         bool buttonState = digitalRead(kHdgEncoderPushButtonPin) == LOW;
         bool aPinState = digitalRead(kHdgEncoderAPin) == LOW;
         bool bPinState = digitalRead(kHdgEncoderBPin) == LOW;
-       //DEBUGLOG_PRINTLN(" [PCINT1_vect (a|b|p): " + String(aPinState ? "T|":"F|") + String(bPinState ? "T|":"F|") + String(buttonState ? "T":"F") + "] ");
 
         if (HSI::instance->currentHdgEncoderButtonState != buttonState)
         {
@@ -36,7 +35,6 @@ ISR(PCINT1_vect) // HDG Interrupt
             default:
                 HSI::instance->currentHdgEncoder -= 2; break;
         }
-       //DEBUGLOG_PRINTLN(" [INT currentHdgEncoder:" + String(HSI::instance->currentHdgEncoder) + "] ");
     }
 }
 ISR(PCINT2_vect) // OBS Interrupt
@@ -46,7 +44,6 @@ ISR(PCINT2_vect) // OBS Interrupt
         bool buttonState = digitalRead(kObsEncoderPushButtonPin) == LOW;
         bool aPinState = digitalRead(kObsEncoderAPin) == LOW;
         bool bPinState = digitalRead(kObsEncoderBPin) == LOW;
-        //DEBUGLOG_PRINTLN(" [PCINT2_vect (a|b|p): " + String(aPinState ? "T|":"F|") + String(bPinState ? "T|":"F|") + String(buttonState ? "T":"F") + "] ");
         if (HSI::instance->currentObsEncoderButtonState != buttonState)
         {
             HSI::instance->currentObsEncoderButtonState = buttonState;
@@ -68,7 +65,6 @@ ISR(PCINT2_vect) // OBS Interrupt
             default:
                 HSI::instance->currentObsEncoder -= 2; break;
         }
-        //DEBUGLOG_PRINTLN(" [INT currentObsEncoder:" + String(HSI::instance->currentObsEncoder) + "] ");
     }
 }
 
@@ -101,18 +97,12 @@ HSI::HSI()
 
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
-        // DEBUGLOG_PRINTLN(String("Initializing ") + axisName(static_cast<HSIAxis>(axis)));
-        // DEBUGLOG_PRINT(String("Total Steps: ") + kTotalSteps[axis]);
-        // DEBUGLOG_PRINTLN(String(", MaxRPM: ") + static_cast<int>(kRpmLimits[axis][maxRpm]));
-
         axes[axis]->setTotalSteps(kTotalSteps[axis]);
         axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
     }
 
     for (int servoId = 0; servoId < servoCount; servoId++)
     {
-        // DEBUGLOG_PRINTLN(String("Initializing ") + servoName(static_cast<ServoId>(servoId)));
-        // DEBUGLOG_PRINTLN(String("Servo Pin: ") + static_cast<int>(kServoPins[servoId]));
         servos[servoId] = new Servo();
         servos[servoId]->attach(kServoPins[servoId]);
     }
@@ -150,7 +140,7 @@ HSI::HSI()
     analogWrite(kLightPin, 0);
 
     instance = this;
-    DEBUGLOG_PRINTLN(String(F("HSI initialized")));
+    DEBUGLOG_PRINTLN(F("HSI initialized"));
 }
 
 HSI::~HSI()
@@ -346,12 +336,10 @@ void HSI::loop()
     if (hdgEncoder != currentHdgEncoder)
     {
         hdgEncoder = currentHdgEncoder;
-        //DEBUGLOG_PRINTLN(" [hdgEncoder:" + String(hdgEncoder) + "] ");
     }
     if (obsEncoder != currentObsEncoder)
     {
         obsEncoder = currentObsEncoder;
-        //DEBUGLOG_PRINTLN(" [obsEncoder:" + String(obsEncoder) + "] ");
     }
     const uint32_t debounceDelay = 50000; // microseconds
     const uint32_t longPressDelay = 1500000; // microseconds
@@ -361,7 +349,6 @@ void HSI::loop()
     {
         lastObsDebounceTime = uS;
         obsEncoderButtonState = currentObsEncoderButtonState;
-        //DEBUGLOG_PRINTLN(" [obsEncoderButtonState:" + String(obsEncoderButtonState) + "] ");
     }
 
     if (currentHdgEncoderButtonState != hdgEncoderButtonState &&
@@ -591,10 +578,13 @@ void HSI::park()
 
 HSI::HSIDriveResult HSI::moveToDegree(HSIAxis axis, double degree)
 {
-    DEBUGLOG_PRINT(String("MoveToDegree: ")+axisName(axis)+String(" to ")+String(degree));
+    DEBUGLOG_PRINT(F("MoveToDegree axis "));
+    DEBUGLOG_PRINT(static_cast<int>(axis));
+    DEBUGLOG_PRINT(F(" to "));
+    DEBUGLOG_PRINTLN(degree);
     if (homingState[axis] != homed)
     {
-        DEBUGLOG_PRINTLN(String(F(" >> Not Homed")));
+        DEBUGLOG_PRINTLN(F(" >> Not Homed"));
         return HSIDriveResult::notHomed;
     }
 
@@ -628,7 +618,12 @@ HSI::HSIDriveResult HSI::moveServo(ServoId id, double degree)
                                               kServoMaximumDegree[id],
                                               config.servoAdjustRatio1000[id],
                                               config.servoAdjustDegree100[id]);
-    DEBUGLOG_PRINTLN(String(F("Move ")) + servoName(id) + String(F(" to ")) + String(degree) + String(F(" adjusted to ")) + String(adjusted));
+    DEBUGLOG_PRINT(F("Move servo "));
+    DEBUGLOG_PRINT(static_cast<int>(id));
+    DEBUGLOG_PRINT(F(" to "));
+    DEBUGLOG_PRINT(degree);
+    DEBUGLOG_PRINT(F(" adjusted to "));
+    DEBUGLOG_PRINTLN(adjusted);
 
     servos[id]->write(adjusted);
     return success;
@@ -637,6 +632,16 @@ HSI::HSIDriveResult HSI::moveServo(ServoId id, double degree)
 void HSI::setBrightness(uint8_t pwm)
 {
     analogWrite(kLightPin, pwm);
+}
+
+int HSI::freeRam()
+{
+    // The build-time RAM figure counts statics only. This is the gap between
+    // the top of the heap and the current stack pointer, which is what actually
+    // ran out on RPMGaugeCAN.
+    extern int __heap_start, *__brkval;
+    int v;
+    return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }
 
 void HSI::moveSteps(HSIAxis axis, int16_t steps, bool synchron)
@@ -689,7 +694,9 @@ HSI::HSIDriveResult HSI::lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZ
     }
     if (zeroedState[axis] != targetZeroedState)
     {
-        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("   *** Timeout")));
+        DEBUGLOG_PRINT(F("Axis "));
+        DEBUGLOG_PRINT(static_cast<int>(axis));
+        DEBUGLOG_PRINTLN(F("   *** Timeout"));
         return homingTimeout;
     }
     return axisStateReached;
@@ -713,7 +720,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         return success;
     case unknown:
         fetchZeroedState(axis);
-        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Leave zero state, current state: ")) + (zeroedState[axis] ? "true" : "false"));
+        DEBUGLOG_PRINT(F("Axis "));
+        DEBUGLOG_PRINT(static_cast<int>(axis));
+        DEBUGLOG_PRINT(F("- Leave zero state, current state: "));
+        DEBUGLOG_PRINTLN(zeroedState[axis] ? F("true") : F("false"));
         axes[axis]->stop();
         axes[axis]->resetPosition();
         axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
@@ -724,7 +734,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         zeroState = lookForZeroChangeNonBlocking(axis, false);
         if (zeroState == axisStateReached)
         {
-            DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Search zero state, current state: ")) + (zeroedState[axis] ? "true" : "false"));
+            DEBUGLOG_PRINT(F("Axis "));
+            DEBUGLOG_PRINT(static_cast<int>(axis));
+            DEBUGLOG_PRINT(F("- Search zero state, current state: "));
+            DEBUGLOG_PRINTLN(zeroedState[axis] ? F("true") : F("false"));
             axes[axis]->stop();
             axes[axis]->resetPosition();
             moveDegree(axis, 370);
@@ -737,7 +750,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         zeroState = lookForZeroChangeNonBlocking(axis, true);
         if (zeroState == axisStateReached)
         {
-            DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Slow search end of zero state, current state: ")) + (zeroedState[axis] ? "true" : "false"));
+            DEBUGLOG_PRINT(F("Axis "));
+            DEBUGLOG_PRINT(static_cast<int>(axis));
+            DEBUGLOG_PRINT(F("- Slow search end of zero state, current state: "));
+            DEBUGLOG_PRINTLN(zeroedState[axis] ? F("true") : F("false"));
             axes[axis]->stop();
             axes[axis]->resetPosition();
             axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
@@ -750,7 +766,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         zeroState = lookForZeroChangeNonBlocking(axis, false);
         if (zeroState == axisStateReached)
         {
-            DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Return to zero end position, current state: ")) + (zeroedState[axis] ? "true" : "false"));
+            DEBUGLOG_PRINT(F("Axis "));
+            DEBUGLOG_PRINT(static_cast<int>(axis));
+            DEBUGLOG_PRINT(F("- Return to zero end position, current state: "));
+            DEBUGLOG_PRINTLN(zeroedState[axis] ? F("true") : F("false"));
             zeroEndPosition[axis] = axes[axis]->getPosition();
             axes[axis]->stop();
             axes[axis]->resetPosition();
@@ -763,7 +782,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         zeroState = lookForZeroChangeNonBlocking(axis, true);
         if (zeroState == axisStateReached)
         {
-            DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Slow search start of zero state, current state: ")) + (zeroedState[axis] ? "true" : "false"));
+            DEBUGLOG_PRINT(F("Axis "));
+            DEBUGLOG_PRINT(static_cast<int>(axis));
+            DEBUGLOG_PRINT(F("- Slow search start of zero state, current state: "));
+            DEBUGLOG_PRINTLN(zeroedState[axis] ? F("true") : F("false"));
             zeroEndPosition[axis] = axes[axis]->getPosition();
             axes[axis]->stop();
             axes[axis]->resetPosition();
@@ -805,7 +827,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         {
             return success;
         }
-        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to adjusted zero position, adjustment degree: ")) + String(config.zeroAdjustDegree[axis]));
+        DEBUGLOG_PRINT(F("Axis "));
+        DEBUGLOG_PRINT(static_cast<int>(axis));
+        DEBUGLOG_PRINT(F("- Move to adjusted zero position, adjustment degree: "));
+        DEBUGLOG_PRINTLN(config.zeroAdjustDegree[axis]);
         axes[axis]->resetPosition();
         moveDegree(axis, config.zeroAdjustDegree[axis]);
         homingState[axis] = moveToAdjustedZero;
@@ -817,7 +842,9 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         }
         axes[axis]->resetPosition();
         homingState[axis] = homed;
-        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Homed")));
+        DEBUGLOG_PRINT(F("Axis "));
+        DEBUGLOG_PRINT(static_cast<int>(axis));
+        DEBUGLOG_PRINTLN(F("- Homed"));
         return success;
     case homed:
         return success;
@@ -853,57 +880,10 @@ void HSI::fetchZeroedState(HSIAxis axis)
     if (state != zeroedState[axis])
     {
         zeroedState[axis] = state;
-        DEBUGLOG_PRINTLN(String(F("    > Zeroed state changed on ")) + axisName(axis) + String(F(" axis: ")) + String(state ? F("true") : F("false")));
+        DEBUGLOG_PRINT(F("    > Zeroed state changed on axis "));
+        DEBUGLOG_PRINT(static_cast<int>(axis));
+        DEBUGLOG_PRINT(F(": "));
+        DEBUGLOG_PRINTLN(state ? F("true") : F("false"));
     }
 }
 
-String HSI::axisName(HSIAxis axis)
-{
-    switch (axis)
-    {
-    case obs:
-        return "OBS";
-    case compass:
-        return "Compass";
-    case hdg:
-        return "HDG";
-    default:
-        return "Unknown";
-    }
-}
-
-String HSI::servoName(ServoId id)
-{
-    switch (id)
-    {
-    case cdiServo:
-        return "CDI Servo";
-    case fromToServo:
-        return "FromTo Servo";
-    case gs1Servo:
-        return "GS1 Servo";
-    case gs2Servo:
-        return "GS2 Servo";
-    default:
-        return "Unknown";
-    }
-}
-
-String HSI::errorName(HSIDriveResult result)
-{
-    switch (result)
-    {
-    case success:
-        return "Success";
-    case homingError:
-        return "Homing Error";
-    case notHomed:
-        return "Not Homed";
-    case invalidId:
-        return "Invalid ID";
-    case homingTimeout:
-        return "Homing Timeout";
-    default:
-        return "Unknown Error";
-    }
-}

@@ -28,6 +28,9 @@ void setup() {
     DEBUGLOG_PRINTLN(F("HSI started up"));
   }
   #endif
+
+  DEBUGLOG_PRINT(F("Free RAM: "));
+  DEBUGLOG_PRINTLN(HSI::freeRam());
 }
 
 void loop() {

@@ -97,6 +97,11 @@ public:
     // True once per completed short press of the HDG knob.
     bool takeHdgShortPress();
 
+    // The build-time RAM figure counts statics only; this is the gap between
+    // the top of the heap and the current stack pointer at the time of the
+    // call - what actually ran out on RPMGaugeCAN.
+    static int freeRam();
+
     // Singleton instance
     static HSI* instance;
     volatile uint8_t obsEncoderState;
@@ -106,16 +111,12 @@ public:
     volatile bool currentObsEncoderButtonState;
     volatile bool currentHdgEncoderButtonState;
 
-    String errorName(HSIDriveResult result);
-
 private:
     void fetchZeroedState(HSIAxis axis);
     void readHalls();
     void moveDegree(HSIAxis axis, int16_t degree, bool synchron = false);
     int32_t calculateShortestPath(HSIAxis axis, int32_t targetPosition);
     uint32_t normalizePosition(int32_t position, uint32_t totalSteps);
-    String axisName(HSIAxis axis);
-    String servoName(ServoId id);
     void sendMotorData();
     HSIDriveResult nextHomingState(HSIAxis axis);
     void runHoming();
