@@ -20,7 +20,22 @@ void DataRefManager::onAircraftLoaded()
     dr_panelDim = XPLMFindDataRef("sim/cockpit2/switches/instrument_brightness_ratio");
     dr_domeLightDim = XPLMFindDataRef("sim/cockpit2/switches/panel_brightness_ratio");
 
-    dr_HeadingBug = XPLMFindDataRef("sim/cockpit/autopilot/heading_bug_deg_mag_pil");
+    // HSI. The bug used to point at sim/cockpit/autopilot/heading_bug_deg_mag_pil,
+    // which nothing ever called. The cockpit2 actuator below is the one the HSI
+    // wire protocol names for 0x104 bytes 4..5, and the one the old AirManager
+    // LUA wrote.
+    dr_HeadingBug = XPLMFindDataRef("sim/cockpit2/autopilot/heading_dial_deg_mag_pilot");
+    dr_HsiHeading = XPLMFindDataRef("sim/cockpit2/gauges/indicators/heading_electric_deg_mag_pilot");
+    dr_HsiObs = XPLMFindDataRef("sim/cockpit2/radios/actuators/hsi_obs_deg_mag_pilot");
+    dr_Nav1FromTo = XPLMFindDataRef("sim/cockpit/radios/nav1_fromto");
+    // Misleading name: Laminar documents nav1_CDI as "Are we receiving an
+    // expected glide slope for nav1", an int bool, read-only. It is the GS
+    // valid flag, not a CDI flag. sim/cockpit/radios/glideslope_signal_valid
+    // does not exist - do not reach for it.
+    dr_Nav1CDI = XPLMFindDataRef("sim/cockpit/radios/nav1_CDI");
+    dr_Nav1Hdef = XPLMFindDataRef("sim/cockpit/radios/nav1_hdef_dot");
+    dr_Nav1Vdef = XPLMFindDataRef("sim/cockpit/radios/nav1_vdef_dot");
+
     // The cockpit2 actuator, not the legacy sim/cockpit/misc/barometer_setting:
     // this is the per-pilot Kollsman setting the altimeter's own altitude_ft_pilot
     // is derived from, and it is what the wire protocol names for CAN 0x340.
@@ -178,11 +193,54 @@ void DataRefManager::setBarometerSetting(float inHg)
 }
 
 // HSI
+float DataRefManager::getHsiHeadingDegMag() const
+{
+    return dr_HsiHeading ? XPLMGetDataf(dr_HsiHeading) : 0.0f;
+}
+
+float DataRefManager::getHsiObsDeg() const
+{
+    return dr_HsiObs ? XPLMGetDataf(dr_HsiObs) : 0.0f;
+}
+
+float DataRefManager::getHsiHeadingBugDeg() const
+{
+    return dr_HeadingBug ? XPLMGetDataf(dr_HeadingBug) : 0.0f;
+}
+
+int DataRefManager::getNav1FromTo() const
+{
+    return dr_Nav1FromTo ? XPLMGetDatai(dr_Nav1FromTo) : 0;
+}
+
+int DataRefManager::getNav1GlideslopeValid() const
+{
+    return dr_Nav1CDI ? XPLMGetDatai(dr_Nav1CDI) : 0;
+}
+
+float DataRefManager::getNav1CdiDots() const
+{
+    return dr_Nav1Hdef ? XPLMGetDataf(dr_Nav1Hdef) : 0.0f;
+}
+
+float DataRefManager::getNav1GsDots() const
+{
+    return dr_Nav1Vdef ? XPLMGetDataf(dr_Nav1Vdef) : 0.0f;
+}
+
 void DataRefManager::setHeadingBug(float degrees)
 {
     if (dr_HeadingBug)
     {
         XPLMSetDataf(dr_HeadingBug, degrees);
+    }
+}
+
+void DataRefManager::setHsiObsDeg(float degrees)
+{
+    if (dr_HsiObs)
+    {
+        XPLMSetDataf(dr_HsiObs, degrees);
     }
 }
 

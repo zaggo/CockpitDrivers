@@ -53,6 +53,15 @@ public:
     // Magnetic compass (whiskey compass)
     float getCompassHeadingDegMag() const;  // degrees magnetic, 0..360
 
+    // HSI
+    float getHsiHeadingDegMag() const;   // heading_electric_deg_mag_pilot
+    float getHsiObsDeg() const;          // hsi_obs_deg_mag_pilot
+    float getHsiHeadingBugDeg() const;   // heading_dial_deg_mag_pilot
+    int   getNav1FromTo() const;         // 0 none, 1 TO, 2 FROM
+    int   getNav1GlideslopeValid() const;// nav1_CDI, nonzero when GS received
+    float getNav1CdiDots() const;        // nav1_hdef_dot
+    float getNav1GsDots() const;         // nav1_vdef_dot
+
     // Transponder
     uint16_t getTransponderCode() const;
     uint8_t getTransponderMode() const;
@@ -80,7 +89,9 @@ public:
     
     /// Sets autopilot heading bug (degrees)
     void setHeadingBug(float degrees);
-    
+
+    void setHsiObsDeg(float degrees);
+
     // TODO: Add more getters/setters based on CAN Message IDs
     // - Altimeter QNH setting
     // - VSI target
@@ -109,6 +120,12 @@ private:
     XPLMDataRef dr_panelDim = nullptr;
     XPLMDataRef dr_domeLightDim = nullptr;
     XPLMDataRef dr_HeadingBug = nullptr;
+    XPLMDataRef dr_HsiHeading = nullptr;
+    XPLMDataRef dr_HsiObs = nullptr;
+    XPLMDataRef dr_Nav1FromTo = nullptr;
+    XPLMDataRef dr_Nav1CDI = nullptr;
+    XPLMDataRef dr_Nav1Hdef = nullptr;
+    XPLMDataRef dr_Nav1Vdef = nullptr;
     XPLMDataRef dr_BarometerSetting = nullptr;
     XPLMDataRef dr_TransponderCode = nullptr;
     XPLMDataRef dr_TransponderModeR = nullptr;
