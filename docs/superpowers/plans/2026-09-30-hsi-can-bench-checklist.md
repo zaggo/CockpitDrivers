@@ -14,6 +14,11 @@ disconnected from the bus; step 7 onwards needs the DCU and X-Plane.
 - [ ] Photograph and write down the existing wiring. After the rewiring
       `HSIDriver` can no longer be flashed as a fallback — its `Configuration.h`
       expects servos on D10..D12 and halls on D2/D8/A0.
+- [ ] Reflashing this commit over an earlier build of this branch resets stored
+      calibration to defaults (the EEPROM magic now folds in the config layout).
+      The only sign is `HSI: No valid EEPROM config, writing defaults` at boot,
+      easy to mistake for routine first-boot chatter — if it appears after a
+      mid-checklist reflash, redo steps 9 and 11 (backlash, zero calibration).
 - [ ] Rewire: `gs1Servo` D10→D7, `fromToServo` D11→D8, `gs2Servo` D12→A0;
       OBS hall D2→GPB4, compass hall A0→GPB5, HDG hall D8→GPB6; new panel-light
       wire to D6.
