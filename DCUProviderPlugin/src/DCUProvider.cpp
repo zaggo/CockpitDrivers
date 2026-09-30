@@ -5,6 +5,7 @@
 #include <cstring>
 #include <ctime>
 #include <SerialMessageId.h>
+#include <HsiWire.h>
 
 DCUProvider::DCUProvider() = default;
 
@@ -428,6 +429,42 @@ void DCUProvider::updateDownlink(float dt)
         msgQueue_->enqueueTx(MessageType::SerialMessageCompass, &compass, sizeof(compass));
 
         compassAccumulator_ = 0.0f;
+    }
+
+    // ============ HSI heading / OBS / bug / flags (50 Hz) ============
+    hsiHeadingAccumulator_ += dt;
+    float hsiHeadingRate = 1.0f / HSI_HEADING_RATE;
+
+    if (hsiHeadingAccumulator_ >= hsiHeadingRate)
+    {
+        HsiHeadingMessage hsi;
+        hsi.headingDegMag = dataRefMgr_->getHsiHeadingDegMag();
+        hsi.obsDeg = dataRefMgr_->getHsiObsDeg();
+        hsi.hdgBugDeg = dataRefMgr_->getHsiHeadingBugDeg();
+
+        // Same helper the DCU uses, from shared/CANBase/include/HsiWire.h, so
+        // the flags semantics have one tested implementation rather than two.
+        hsi.flags = hsiFlagsByte(dataRefMgr_->getNav1FromTo(),
+                                 dataRefMgr_->getNav1GlideslopeValid());
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageHsiHeading, &hsi, sizeof(hsi));
+
+        hsiHeadingAccumulator_ = 0.0f;
+    }
+
+    // ============ HSI deviation needles (10 Hz) ============
+    hsiNavAccumulator_ += dt;
+    float hsiNavRate = 1.0f / HSI_NAV_RATE;
+
+    if (hsiNavAccumulator_ >= hsiNavRate)
+    {
+        HsiNavMessage nav;
+        nav.cdiDots = dataRefMgr_->getNav1CdiDots();
+        nav.gsDots = dataRefMgr_->getNav1GsDots();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageHsiNav, &nav, sizeof(nav));
+
+        hsiNavAccumulator_ = 0.0f;
     }
 
     // ============ Odometer Data (10 Hz) ============
