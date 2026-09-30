@@ -61,6 +61,7 @@ public:
     void offAllAxes();
 
     void beginHoming();
+    void beginHoming(HSIAxis axis);
     bool isHoming() const;
     bool homingFailed() const;
     void applyHeading(uint16_t heading100, uint16_t obs100, uint16_t hdgBug100);
@@ -82,6 +83,11 @@ public:
 
     // Bench only: blocking, and there is no CAN loop running in a bench build.
     uint32_t measureBacklashSteps(HSIAxis axis);
+
+    // Bench only: hall bits as last read in loop() (set = at zero), and the
+    // MCP's port B config read back from the chip.
+    uint8_t getHallBits() const { return hallBits; }
+    uint8_t readHallRegister(MCP23017Register reg) { return mcp->readRegister(reg); }
 
     int16_t getObsEncoder() { return obsEncoder; }
     int16_t getHdgEncoder() { return hdgEncoder; }
@@ -132,8 +138,10 @@ private:
     CheapStepper* axes[hsiAxisCount];
     // Idle until beginHoming() says otherwise. loop() evaluates isHoming() from
     // the very first iteration, and this object is heap-allocated, so an
-    // uninitialised phase here is read before anything writes it.
-    HomingPhase homingState[hsiAxisCount] = {homed, homed, homed};
+    // uninitialised phase here is read before anything writes it. timeout, not
+    // homed: with homed, homing a single axis after boot reported the whole
+    // instrument homed and let hd/ob/bg drive the two unreferenced axes.
+    HomingPhase homingState[hsiAxisCount] = {timeout, timeout, timeout};
     uint32_t zeroEndPosition[hsiAxisCount] = {0, 0, 0};
 
     uint8_t obsPattern = 0;

@@ -43,6 +43,13 @@ void test_a_backward_jog_reads_as_negative_degrees(void) {
     TEST_ASSERT_EQUAL_INT32(-10, jogDegreesFromPosition(4096 - 114, 4096));
 }
 
+// hd2 lands on 22 steps (22.75 truncated) = 1.93 degrees; that is a 2 degree
+// jog, not 1.
+void test_a_step_truncated_jog_rounds_to_the_commanded_degree(void) {
+    TEST_ASSERT_EQUAL_INT32(2, jogDegreesFromPosition(22, 4096));
+    TEST_ASSERT_EQUAL_INT32(-2, jogDegreesFromPosition(4096 - 22, 4096));
+}
+
 void test_a_zero_step_axis_cannot_divide_by_zero(void) {
     TEST_ASSERT_EQUAL_INT32(0, jogDegreesFromPosition(100, 0));
 }
@@ -109,6 +116,7 @@ int main(int, char **) {
     RUN_TEST(test_the_shipped_hsi_defaults_survive_a_round_trip);
     RUN_TEST(test_a_forward_jog_reads_as_positive_degrees);
     RUN_TEST(test_a_backward_jog_reads_as_negative_degrees);
+    RUN_TEST(test_a_step_truncated_jog_rounds_to_the_commanded_degree);
     RUN_TEST(test_a_zero_step_axis_cannot_divide_by_zero);
     RUN_TEST(test_the_shipped_cdi_servo_mapping_is_preserved);
     RUN_TEST(test_the_gs2_servo_negative_ratio_is_preserved);

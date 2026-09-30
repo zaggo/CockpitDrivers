@@ -253,6 +253,14 @@ uint32_t HSI::measureBacklashSteps(HSIAxis axis)
     // many steps pass before it switches back. Those are the steps the gear
     // train swallows. Call only with stepsBacklash already set to 0, otherwise
     // the compensation hides the very thing being measured.
+    //
+    // The search covers more than a full turn: after homing the axis stands
+    // zeroAdjustDegree away from its hall (up to 90 degrees with the defaults),
+    // so it can be anywhere relative to the magnet. Either window edge will
+    // do - the slack is the same whichever one is crossed.
+    const uint32_t searchLimit = axes[axis]->getTotalSteps() + axes[axis]->getTotalSteps() / 8;
+    // Slack is a few dozen steps; a quarter turn without the edge returning is
+    // a sensor problem, not backlash.
     const uint32_t limit = axes[axis]->getTotalSteps() / 4;
 
     axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
@@ -262,7 +270,7 @@ uint32_t HSI::measureBacklashSteps(HSIAxis axis)
     const bool startState = zeroedState[axis];
 
     // Phase 1: drive forward onto the sensor edge.
-    axes[axis]->newMove(true, limit);
+    axes[axis]->newMove(true, searchLimit);
     while (axes[axis]->getStepsLeft() != 0)
     {
         axes[axis]->run();
@@ -287,13 +295,14 @@ uint32_t HSI::measureBacklashSteps(HSIAxis axis)
 
     // Phase 2: reverse and count until the edge comes back. The slack is
     // crossed before the output moves, so those steps are the measurement.
-    uint32_t steps = 0;
+    // run() only steps once the step interval has elapsed, so a pass through
+    // this loop is not a step. Count what the stepper actually took instead.
     axes[axis]->newMove(false, limit);
+    const int32_t startLeft = axes[axis]->getStepsLeft(); // newMove may pad the move
     while (axes[axis]->getStepsLeft() != 0)
     {
         axes[axis]->run();
         sendMotorData();
-        steps++;
         readHalls();
         fetchZeroedState(axis);
         if (zeroedState[axis] != edgeState)
@@ -301,6 +310,8 @@ uint32_t HSI::measureBacklashSteps(HSIAxis axis)
             break;
         }
     }
+    // Counter-clockwise, so both are negative and count up towards zero.
+    const uint32_t steps = static_cast<uint32_t>(axes[axis]->getStepsLeft() - startLeft);
     axes[axis]->stop();
 
     if (zeroedState[axis] == edgeState)
@@ -462,29 +473,34 @@ void HSI::offAllAxes()
 
 void HSI::beginHoming()
 {
-    DEBUGLOG_PRINTLN(F("HSI: homing"));
-    isHomed = false;
-    homingFailure = false;
     for (int axisIndex = 0; axisIndex < hsiAxisCount; axisIndex++)
     {
-        HSIAxis axis = static_cast<HSIAxis>(axisIndex);
-        axes[axis]->stop();
-        axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
-        axes[axis]->newMove(axes[axis]->lastDirectionIsClockwise(),
-                            axes[axis]->getBacklashSteps());
-        homingState[axis] = takeUpBacklash;
+        beginHoming(static_cast<HSIAxis>(axisIndex));
     }
+}
+
+void HSI::beginHoming(HSIAxis axis)
+{
+    // The other axes keep their phase, so runHoming() passes straight over
+    // them and isHomed comes back once this one axis lands.
+    DEBUGLOG_PRINT(F("HSI: homing axis "));
+    DEBUGLOG_PRINTLN(static_cast<int>(axis));
+    isHomed = false;
+    homingFailure = false;
+    axes[axis]->stop();
+    axes[axis]->setRpm(kRpmLimits[axis][minRpm]);
+    axes[axis]->newMove(axes[axis]->lastDirectionIsClockwise(),
+                        axes[axis]->getBacklashSteps());
+    homingState[axis] = takeUpBacklash;
 }
 
 bool HSI::isHoming() const
 {
-    if (isHomed || homingFailure)
-    {
-        return false;
-    }
+    // A failed axis is idle, not homing: otherwise one dead hall sensor would
+    // keep every later single-axis run from ever finishing.
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
-        if (homingState[axis] != homed)
+        if (homingState[axis] != homed && homingState[axis] != timeout)
         {
             return true;
         }
@@ -505,13 +521,27 @@ void HSI::runHoming()
     for (int axisIndex = 0; axisIndex < hsiAxisCount; axisIndex++)
     {
         HSIAxis axis = static_cast<HSIAxis>(axisIndex);
+        if (homingState[axis] == homed || homingState[axis] == timeout)
+        {
+            continue;
+        }
         HSIDriveResult result = nextHomingState(axis);
         if (result != success)
         {
             DEBUGLOG_PRINT(F("HSI: homing failed on axis "));
             DEBUGLOG_PRINTLN(axisIndex);
             homingFailure = true;
-            homingState[axis] = timeout;
+            // Abort the whole run, including axes still mid-sweep: left in
+            // their phase they would resume on the next beginHoming(axis)
+            // against a position that no longer means anything.
+            for (int other = 0; other < hsiAxisCount; other++)
+            {
+                if (homingState[other] != homed)
+                {
+                    axes[other]->stop();
+                    homingState[other] = timeout;
+                }
+            }
             return;
         }
     }
@@ -822,6 +852,10 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
                 DEBUGLOG_PRINTLN(F("HSI: implausible hall window"));
                 return homingTimeout;
             }
+            DEBUGLOG_PRINT(F("Axis "));
+            DEBUGLOG_PRINT(static_cast<int>(axis));
+            DEBUGLOG_PRINT(F("- Hall window steps: "));
+            DEBUGLOG_PRINTLN(zeroAdjust * 2);
 
             moveSteps(axis, zeroAdjust);
             homingState[axis] = moveToTrueZero;

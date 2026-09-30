@@ -16,6 +16,7 @@ class BenchDebug {
         void handleUserInput();
         bool handleHSIInput(String command);
         void applyAll();
+        void resetHeadingMirror();
         void measureBacklash(HSIAxis axis);
         static uint16_t wrapDeg100(float degrees);
         static HSIAxis axisFromArg(const String& arg);
@@ -33,6 +34,13 @@ class BenchDebug {
         uint8_t  flags = 0;
         int16_t  cdiDots1000 = 0;
         int16_t  gsDots1000 = 0;
+
+        void monitorHalls();
+
+        bool hallMonitor = false;
+        uint8_t lastHallBits = 0;
+        uint16_t hallFlips = 0;
+        uint32_t lastHallPrintMs = 0;
 
         uint32_t pendingBacklash = 0;
         HSIAxis pendingBacklashAxis = obs;

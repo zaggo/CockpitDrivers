@@ -46,6 +46,18 @@ void BenchDebug::applyAll()
     hsi->applyDeviation(cdiDots1000, gsDots1000);
 }
 
+void BenchDebug::resetHeadingMirror()
+{
+    // Homing puts the axes back at zero, so the mirror has to follow. Left
+    // alone, the next hd/ob/bg reapplies the whole pre-homing picture and
+    // drives the untouched axes back to where they stood before. Reset all
+    // three even for a single-axis home: the obs and hdg axes are driven
+    // relative to the heading, so a stale heading would shift them too.
+    heading100 = 0;
+    obs100 = 0;
+    bug100 = 0;
+}
+
 void BenchDebug::measureBacklash(HSIAxis axis)
 {
     Serial.println(F("Measuring backlash - do not touch the panel"));
@@ -81,8 +93,29 @@ bool BenchDebug::handleHSIInput(String command) {
         applyAll();
     } else if (command.startsWith("li")) {
         hsi->setBrightness(static_cast<uint8_t>(command.substring(2).toInt()));
-    } else if (command == "hm") {
+    } else if (command == "hm" || command == "hm0") {
+        resetHeadingMirror();
         hsi->beginHoming();
+    } else if (command.length() == 3 && command.startsWith("hm")
+               && command.charAt(2) >= '1' && command.charAt(2) < '1' + hsiAxisCount) {
+        resetHeadingMirror();
+        hsi->beginHoming(static_cast<HSIAxis>(command.charAt(2) - '1'));
+    } else if (command == "hs") {
+        hallMonitor = !hallMonitor;
+        if (hallMonitor) {
+            // Expect 0x70 in all three: GPB4..6 input, pulled up, inverted.
+            Serial.print(F("Port B IODIR 0x"));
+            Serial.print(hsi->readHallRegister(MCP23017Register::IODIR_B), HEX);
+            Serial.print(F(" GPPU 0x"));
+            Serial.print(hsi->readHallRegister(MCP23017Register::GPPU_B), HEX);
+            Serial.print(F(" IPOL 0x"));
+            Serial.println(hsi->readHallRegister(MCP23017Register::IPOL_B), HEX);
+            lastHallBits = hsi->getHallBits();
+            hallFlips = 0;
+            lastHallPrintMs = 0; // print the current state right away
+        }
+        Serial.println(hallMonitor ? F("Hall monitor on - hs again to stop")
+                                   : F("Hall monitor off"));
     } else if (command == "st") {
         hsi->stopAllAxes();
         hsi->offAllAxes();
@@ -97,7 +130,21 @@ bool BenchDebug::handleHSIInput(String command) {
         Serial.print(F("Stored slack steps: "));
         Serial.println(pendingBacklash);
     } else if (command.startsWith("bl")) {
-        measureBacklash(axisFromArg(command.substring(2)));
+        // bl<axis> measures; bl<axis> <steps> sets directly. Compass and HDG
+        // carry their hall mid-train, so the measurement misses the stages
+        // after it and has to be topped up by hand.
+        const int sp = command.indexOf(' ');
+        if (sp < 0) {
+            measureBacklash(axisFromArg(command.substring(2)));
+        } else if (sp != 3 || !isDigit(command.charAt(sp + 1))) {
+            Serial.println(F("usage: bl<o|c|h> [<steps>]"));
+        } else {
+            const HSIAxis axis = axisFromArg(command.substring(2));
+            const uint16_t steps = static_cast<uint16_t>(command.substring(sp + 1).toInt());
+            hsi->setStepsBacklash(axis, steps);
+            Serial.print(F("Stored slack steps: "));
+            Serial.println(steps);
+        }
     } else if (command.startsWith("sa")) {
         // sa<servo> <deg100> <ratio1000>, e.g. "sa2 7100 2000" for gs1Servo.
         // Without this the EEPROM copies of the servo linkage could only ever
@@ -133,9 +180,12 @@ bool BenchDebug::handleHSIInput(String command) {
         Serial.println(F("HSI Commands (send hm first - hd/ob/bg do nothing until homed):"));
         Serial.println(F("hd<deg> heading   ob<deg> OBS      bg<deg> HDG bug"));
         Serial.println(F("cd<dots> CDI      gs<dots> GS      fl<bits> flags"));
-        Serial.println(F("hm home           li<0-255> light  st stop axes"));
+        Serial.println(F("hm[0] home all    hm1 OBS  hm2 compass  hm3 HDG"));
+        Serial.println(F("li<0-255> light   st stop axes     hs hall monitor"));
+        Serial.println(F("axis letters: o=OBS pointer  c=compass card  h=HDG bug"));
         Serial.println(F("cz<o|c|h> calibrate zero           bl<o|c|h> measure backlash"));
-        Serial.println(F("blsave store measured backlash     cw wipe calibration"));
+        Serial.println(F("blsave store measured backlash     bl<o|c|h> <steps> set backlash"));
+        Serial.println(F("cw wipe calibration"));
         Serial.println(F("sa<servo> <deg100> <ratio1000> servo adjust"));
         Serial.println(F("dp<c|g> <deg100PerDot> degrees per deviation dot"));
     } else {
@@ -172,6 +222,32 @@ void BenchDebug::handleUserInput()
     }
 }
 
+void BenchDebug::monitorHalls()
+{
+    // Count every change loop() sees, but print at most every 250 ms: a
+    // floating input can flip thousands of times a second, and printing each
+    // flip would stall the steppers.
+    const uint8_t bits = hsi->getHallBits();
+    if (bits != lastHallBits) {
+        lastHallBits = bits;
+        hallFlips++;
+    }
+    const uint32_t now = millis();
+    if (lastHallPrintMs != 0 && (hallFlips == 0 || now - lastHallPrintMs < 250)) {
+        return;
+    }
+    lastHallPrintMs = now == 0 ? 1 : now;
+    Serial.print(F("Hall obs:"));
+    Serial.print((bits & kHallBits[obs]) ? 1 : 0);
+    Serial.print(F(" compass:"));
+    Serial.print((bits & kHallBits[compass]) ? 1 : 0);
+    Serial.print(F(" hdg:"));
+    Serial.print((bits & kHallBits[hdg]) ? 1 : 0);
+    Serial.print(F("  flips:"));
+    Serial.println(hallFlips);
+    hallFlips = 0;
+}
+
 double degCDI= 0.;
 double degCompass= 0.;
 
@@ -186,6 +262,9 @@ void BenchDebug::loop()
 
     handleUserInput();
     hsi->loop();
+    if (hallMonitor) {
+        monitorHalls();
+    }
 
     int16_t obsEncoder = hsi->getObsEncoder();
     if (degCDI != (double)obsEncoder) {

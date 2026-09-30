@@ -51,7 +51,11 @@ inline int32_t jogDegreesFromPosition(uint32_t position, uint32_t totalSteps)
     {
         steps -= total;
     }
-    return steps * 360 / total;
+    // Round, don't truncate: moveToDegree already truncates the target to
+    // whole steps, so a 2 degree jog lands on 22 steps = 1.93 degrees, and
+    // truncating that again stored only 1.
+    const int32_t scaled = steps * 360;
+    return (scaled >= 0 ? scaled + total / 2 : scaled - total / 2) / total;
 }
 
 // --- servo travel -----------------------------------------------------------
