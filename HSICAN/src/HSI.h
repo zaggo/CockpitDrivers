@@ -117,8 +117,11 @@ private:
 
     Servo* servos[servoCount];
     CheapStepper* axes[hsiAxisCount];
-    HomingPhase homingState[hsiAxisCount];
-    uint32_t zeroEndPosition[hsiAxisCount];
+    // Idle until beginHoming() says otherwise. loop() evaluates isHoming() from
+    // the very first iteration, and this object is heap-allocated, so an
+    // uninitialised phase here is read before anything writes it.
+    HomingPhase homingState[hsiAxisCount] = {homed, homed, homed};
+    uint32_t zeroEndPosition[hsiAxisCount] = {0, 0, 0};
 
     uint8_t obsPattern = 0;
     uint8_t hdgPattern = 0;
