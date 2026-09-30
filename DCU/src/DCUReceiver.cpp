@@ -305,6 +305,7 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
       hsiObsDeg100 = obs100;
       hsiHdgBugDeg100 = bug100;
       hsiFlags = msg.flags;
+      DEBUGLOG_PRINTLN(String(F("Received MSG_HSI_HEADING Datagram heading*100: ")) + String(heading100) + String(F(" obs*100: ")) + String(obs100) + String(F(" bug*100: ")) + String(bug100));
       sendHsiHeading();
     }
     break;
@@ -325,6 +326,7 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     {
       hsiCdiDots1000 = cdi1000;
       hsiGsDots1000 = gs1000;
+      DEBUGLOG_PRINTLN(String(F("Received MSG_HSI_NAV Datagram cdi*1000: ")) + String(cdi1000) + String(F(" gs*1000: ")) + String(gs1000));
       sendHsiNav();
     }
     break;

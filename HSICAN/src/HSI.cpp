@@ -160,17 +160,23 @@ HSI::~HSI()
     delete mcp;
 }
 
+// Folds sizeof(HsiConfig) into the stored magic so a later schema change (a
+// field added/removed from HsiConfig) changes this value too, forcing a
+// resync to defaults instead of silently loading old EEPROM bytes as the new
+// layout.
+static const uint16_t kHsiConfigLayoutMagic = kHsiEepromMagic ^ static_cast<uint16_t>(sizeof(HSI::HsiConfig));
+
 void HSI::loadConfig()
 {
     EEPROM.get(kHsiEepromAddress, config);
-    if (config.magic == kHsiEepromMagic)
+    if (config.magic == kHsiConfigLayoutMagic)
     {
         DEBUGLOG_PRINTLN(F("HSI: EEPROM config loaded"));
         return;
     }
 
     DEBUGLOG_PRINTLN(F("HSI: No valid EEPROM config, writing defaults"));
-    config.magic = kHsiEepromMagic;
+    config.magic = kHsiConfigLayoutMagic;
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
         config.zeroAdjustDegree[axis] = kDefaultZeroAdjustDegree[axis];
