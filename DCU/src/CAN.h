@@ -38,6 +38,9 @@ class CAN : public BaseCAN {
         // Same tap for the baro knob (0x340). Hands out the raw inHg*100 the frame
         // carried, so the watch can compare samples as integers.
         bool takeBaroSample(uint16_t& inHg100);
+
+        // Same tap for HSI knob input (0x341).
+        bool takeHsiInputSample(HsiInputToDcuMessage& sample);
 #endif
 
     private:
@@ -72,6 +75,10 @@ class CAN : public BaseCAN {
         // Last decoded baro setting (inHg*100), drained by takeBaroSample().
         uint16_t baroSampleInHg100 = 0;
         bool baroSampleValid = false;
+
+        // Last decoded HSI knob event, drained by takeHsiInputSample().
+        HsiInputToDcuMessage hsiInputSample = {0, 0, 0, 0};
+        bool hsiInputSampleValid = false;
 #endif
 
         // Handle incoming Serial Message frames
@@ -80,6 +87,7 @@ class CAN : public BaseCAN {
         void updateHandbrake(uint8_t len, const uint8_t* data);
         void updateRudder(uint8_t len, const uint8_t* data);
         void updateBaro(uint8_t len, const uint8_t* data);
+        void updateHsiInput(uint8_t len, const uint8_t* data);
 
         void sendGatewayHeartbeat();
         void checkInstrumentHeartbeats();

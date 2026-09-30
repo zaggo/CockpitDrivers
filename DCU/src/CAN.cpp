@@ -160,6 +160,9 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     case CanMessageId::altimeterBaro:
         updateBaro(len, data);
         break;
+    case CanMessageId::hsiInput:
+        updateHsiInput(len, data);
+        break;
     default:
         // Unknown/unhandled CAN ID - ignore for now but log
         DEBUGLOG_PRINTLN(String(F("Received message with unknown CAN ID: 0x")) + String(id, HEX) + String(F(" len: ")) + String(len));
@@ -313,6 +316,44 @@ void CAN::updateBaro(uint8_t len, const uint8_t *data)
     }
 }
 
+void CAN::updateHsiInput(uint8_t len, const uint8_t *data)
+{
+    // CAN 0x341: [0] control, [1] action, [2..3] delta int16 BE, [4] pushState.
+    // The serial side carries the same fields in host order.
+    //
+    // No cache and no resend: these are deltas. Replaying one would turn the
+    // knob twice, which is why this message stays out of checkMaxAgeResync.
+    if (len < 5)
+        return;
+
+    HsiInputToDcuMessage msg;
+    msg.control = data[0];
+    msg.action = data[1];
+    msg.delta = static_cast<int16_t>(unpackBE16(data + 2));
+    msg.pushState = data[4];
+
+    // Every other decoded instrument input logs on arrival; this whole chain is
+    // debugged over the serial log at the bench.
+    DEBUGLOG_PRINTLN(String(F("Received HSI input control: ")) + String(msg.control) +
+                     String(F(" action: ")) + String(msg.action) +
+                     String(F(" delta: ")) + String(msg.delta) +
+                     String(F(" push: ")) + String(msg.pushState));
+
+#if BENCHDEBUG
+    // No DCUSender in bench builds - hand the event to BenchDebug's watch
+    // instead of dropping it below.
+    hsiInputSample = msg;
+    hsiInputSampleValid = true;
+#endif
+
+    if (dcuSender != nullptr)
+    {
+        dcuSender->sendFrame(MessageType::SerialMessageHsiInput,
+                             sizeof(msg),
+                             reinterpret_cast<const uint8_t *>(&msg));
+    }
+}
+
 #if BENCHDEBUG
 bool CAN::takeRudderSample(RudderToDcuMessage &sample)
 {
@@ -337,6 +378,17 @@ bool CAN::takeBaroSample(uint16_t &inHg100)
 
     inHg100 = baroSampleInHg100;
     baroSampleValid = false;
+    return true;
+}
+
+bool CAN::takeHsiInputSample(HsiInputToDcuMessage &sample)
+{
+    if (!hsiInputSampleValid)
+    {
+        return false;
+    }
+    sample = hsiInputSample;
+    hsiInputSampleValid = false;
     return true;
 }
 #endif
