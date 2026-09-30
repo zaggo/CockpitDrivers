@@ -24,32 +24,47 @@ disconnected from the bus; step 7 onwards needs the DCU and X-Plane.
 1. [ ] Build once with `DEBUGLOG_ENABLE 1` and read the `Free RAM:` line at boot
        (it is compiled away at the default `0`). Note the figure — anything under
        400 bytes is the stack/heap collision zone that froze RPMGaugeCAN. Set the
-       flag back to `0` afterwards.
+       flag back to `0` and rebuild before item 2 — otherwise the homing/state
+       log chatter interleaves with the bench console's own replies for the rest
+       of this section.
 2. [ ] `hm`, then home **ten times**. Watch specifically for a run that lands
        **~180° off**, not merely for scatter. Any such run means the window
        guard let something through.
-3. [ ] `hd0 ob0 bg0` — all three axes at zero. Card rotation direction: `hd90`
-       should turn the card so that 090 comes up under the lubber line.
-4. [ ] `hd0 ob90 bg270` — course pointer at 090, bug at 270 relative to the card.
+3. [ ] All three axes at zero — one command per line, the console does not
+       split a line on spaces:
+       - `hd0`
+       - `ob0`
+       - `bg0`
+
+       Card rotation direction: `hd90` should turn the card so that 090 comes
+       up under the lubber line.
+4. [ ] Course pointer at 090, bug at 270 relative to the card — again one
+       command per line:
+       - `hd0`
+       - `ob90`
+       - `bg270`
 5. [ ] `cd2.5` / `cd-2.5` and `gs2.5` / `gs-2.5` — full needle travel, both
        directions, no buzzing at the stops.
 6. [ ] `fl1` TO, `fl2` FROM, `fl0` noNav, `fl4` GS valid with `fl0` parking the
        GS needles. **FROM has never been seen on this rig** — confirm it appears.
 7. [ ] Backlash: send `ob90`, then `ob91`, then back to `ob90`. The pointer must
        return to where it started. Repeat approaching from the other side.
-8. [ ] Deadband: hold a steady `hd`, confirm the pointers are silent. Then
-       `hd1` — a 1° change must still move them.
-9. [ ] `bl o`, `bl c`, `bl h` — measured slack should land near 28 / 15 / 75.
-       `blsave` each, power-cycle, confirm they survived. A measurement that
-       aborts prints a message and stores nothing; treat a silent 0 as a
-       sensor problem, not a result.
+8. [ ] Deadband: hold a steady heading (send no further `hd` command), confirm
+       the pointers are silent. Then send `hd1` — a 1° change must still move
+       them.
+9. [ ] `blo`, `blc`, `blh` — no space before the axis letter, or the axis
+       argument silently falls through to `obs`. Measured slack should land
+       near 28 / 15 / 75. Send `blsave` after each one, power-cycle, confirm
+       they survived. A measurement that aborts prints a message and stores
+       nothing; treat a silent 0 as a sensor problem, not a result.
 10. [ ] **Known quirk, use one input at a time.** The physical OBS and HDG
         knobs drive their axis directly, while the serial commands work
         through a mirrored copy of the wire state. Turn a knob, then send any
         command, and the axis snaps back to the mirror's value. Drive the
         instrument either by knob or by console during a session, not both.
-11. [ ] `cz` on each axis after jogging onto the true mark; power-cycle and
-        confirm the zero held.
+11. [ ] `czo`, `czc`, `czh` — one per axis, no space before the axis letter,
+        after jogging that axis onto its true mark; power-cycle and confirm
+        the zero held.
 12. [ ] `li0`, `li128`, `li255` — panel light dims smoothly.
 13. [ ] Coils stay energised at rest by design. After an hour idle, confirm no
         pointer has drifted.
