@@ -8,6 +8,9 @@
 
 const CanNodeId kNodeId = CanNodeId::hsiNodeId;
 
+const uint16_t kHsiEepromMagic = 0x4853; // 'HS'
+const int kHsiEepromAddress = 0;
+
 // CAN (MCP2515 on hardware SPI: D11 MOSI, D12 MISO, D13 SCK).
 // /CS sits on D10: that is the AVR /SS pin and must be an output in master
 // mode, so making it the chip select means SPI.begin() drives it for us.
@@ -89,26 +92,24 @@ const uint32_t kTotalSteps[hsiAxisCount] = {
     4096L, 4096L, 4096L
 };
 
-const int16_t kZeroAdjustDegree[hsiAxisCount] = {
-    -90,85,11
-    // 92, // OBS
-    // 128, // Compass
-    // -115 // HDG
-};
+// Factory defaults. These are the values the AirManager firmware had compiled
+// in, so a freshly flashed board behaves like the old one. Live values come
+// from EEPROM (see HsiConfig in HSI.h).
+//                                                    obs  compass  hdg
+const int16_t kDefaultZeroAdjustDegree[hsiAxisCount] = { -90,    85,  11 };
 
-const double kServoAdjustDegree[servoCount] = {
-    80., // cdiServo
-    0., // From-To Servo
-    90.-19., // gs1Servo
-    90.-1. // gs2Servo
-};
+// HSIDriver constructed the steppers compass/obs/hdg with 15/28/75, but the
+// enum puts obs first - so in enum order the slack reads 28, 15, 75.
+const uint16_t kDefaultStepsBacklash[hsiAxisCount]   = {  28,    15,  75 };
+const uint16_t kDefaultMoveDeadband[hsiAxisCount]    = {   2,     2,   2 };
+const uint16_t kDefaultReversalDeadband[hsiAxisCount]= {   9,     5,  25 };
 
-const double kServoAdjustRatio[servoCount] = {
-    2., // cdiServo
-    1., // From-To Servo
-    2., // gs1Servo
-    -10./7.  // gs2Servo
-};
+//                                                      cdi  frTo   gs1    gs2
+const int16_t kDefaultServoAdjustDegree100[servoCount] = { 8000,   0, 7100,  8900 };
+const int16_t kDefaultServoAdjustRatio1000[servoCount] = { 2000, 1000, 2000, -1429 };
+
+const int16_t kDefaultCdiDegPerDot100 = 1000; // 10.0 deg per dot, as the LUA used
+const int16_t kDefaultGsDegPerDot100 = 1000;
 
 const double kServoMinimumDegree[servoCount] = {
     -40., // cdiServo

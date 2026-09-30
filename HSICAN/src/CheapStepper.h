@@ -65,6 +65,7 @@ public:
   void resetPosition(uint32_t position = 0L);
   void setDelay(uint32_t _delay) { delay = _delay; }
   uint32_t getBacklashSteps() { return stepsBacklash; }
+  void setBacklashSteps(uint32_t steps) { stepsBacklash = steps; }
   bool lastDirectionIsClockwise() { return lastDirectionClockwise; }
 
 private:

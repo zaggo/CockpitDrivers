@@ -1,5 +1,6 @@
 #include <HSI.h>
 #include <Wire.h>
+#include <EEPROM.h>
 #include "DebugLog.h"
 
 HSI *HSI::instance = nullptr;
@@ -71,6 +72,8 @@ ISR(PCINT2_vect) // OBS Interrupt
 
 HSI::HSI()
 {
+    loadConfig();
+
     // Setup zeroing pins & interrupts
     Wire.begin();
     // 100 kHz would make a one-byte register read cost roughly 400 us against a
@@ -90,9 +93,9 @@ HSI::HSI()
 
     // DEBUGLOG_PRINTLN("MCP23017 initialized");
 
-    axes[compass] = new CheapStepper(&compassPattern, 15, true);
-    axes[obs] = new CheapStepper(&obsPattern, 28, true);
-    axes[hdg] = new CheapStepper(&hdgPattern, 75, true);
+    axes[compass] = new CheapStepper(&compassPattern, config.stepsBacklash[compass], true);
+    axes[obs] = new CheapStepper(&obsPattern, config.stepsBacklash[obs], true);
+    axes[hdg] = new CheapStepper(&hdgPattern, config.stepsBacklash[hdg], true);
 
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
@@ -163,6 +166,87 @@ HSI::~HSI()
     mcp->writeRegister(MCP23017Register::GPIO_A, 0x00); // Reset port A
     mcp->writeRegister(MCP23017Register::GPIO_B, 0x00); // Reset port B
     delete mcp;
+}
+
+void HSI::loadConfig()
+{
+    EEPROM.get(kHsiEepromAddress, config);
+    if (config.magic == kHsiEepromMagic)
+    {
+        DEBUGLOG_PRINTLN(F("HSI: EEPROM config loaded"));
+        return;
+    }
+
+    DEBUGLOG_PRINTLN(F("HSI: No valid EEPROM config, writing defaults"));
+    config.magic = kHsiEepromMagic;
+    for (int axis = 0; axis < hsiAxisCount; axis++)
+    {
+        config.zeroAdjustDegree[axis] = kDefaultZeroAdjustDegree[axis];
+        config.stepsBacklash[axis] = kDefaultStepsBacklash[axis];
+        config.moveDeadband[axis] = kDefaultMoveDeadband[axis];
+        config.reversalDeadband[axis] = kDefaultReversalDeadband[axis];
+    }
+    for (int id = 0; id < servoCount; id++)
+    {
+        config.servoAdjustDegree100[id] = kDefaultServoAdjustDegree100[id];
+        config.servoAdjustRatio1000[id] = kDefaultServoAdjustRatio1000[id];
+    }
+    config.cdiDegPerDot100 = kDefaultCdiDegPerDot100;
+    config.gsDegPerDot100 = kDefaultGsDegPerDot100;
+    EEPROM.put(kHsiEepromAddress, config);
+}
+
+void HSI::saveConfig()
+{
+    EEPROM.put(kHsiEepromAddress, config);
+    DEBUGLOG_PRINTLN(F("HSI: EEPROM config saved"));
+}
+
+void HSI::wipeCalibration()
+{
+    config.magic = 0;
+    EEPROM.put(kHsiEepromAddress, config);
+    loadConfig();
+}
+
+void HSI::setStepsBacklash(HSIAxis axis, uint16_t steps)
+{
+    config.stepsBacklash[axis] = steps;
+    axes[axis]->setBacklashSteps(steps);
+    saveConfig();
+}
+
+void HSI::setServoAdjust(ServoId id, int16_t degree100, int16_t ratio1000)
+{
+    config.servoAdjustDegree100[id] = degree100;
+    config.servoAdjustRatio1000[id] = ratio1000;
+    saveConfig();
+}
+
+void HSI::setDegPerDot(bool isGs, int16_t degPerDot100)
+{
+    if (isGs)
+    {
+        config.gsDegPerDot100 = degPerDot100;
+    }
+    else
+    {
+        config.cdiDegPerDot100 = degPerDot100;
+    }
+    saveConfig();
+}
+
+bool HSI::calibrateZero(HSIAxis axis)
+{
+    // The axis was homed and then jogged onto its true mark by hand. Its
+    // reported position is that jog, so it is added to the stored offset -
+    // replacing would discard every earlier pass.
+    const int32_t jog = jogDegreesFromPosition(axes[axis]->getPosition(),
+                                               axes[axis]->getTotalSteps());
+    config.zeroAdjustDegree[axis] = accumulateZeroAdjust(config.zeroAdjustDegree[axis], jog);
+    saveConfig();
+    axes[axis]->resetPosition();
+    return true;
 }
 
 void HSI::loop()
@@ -338,11 +422,14 @@ HSI::HSIDriveResult HSI::moveServo(ServoId id, double degree)
     {
         return invalidId;
     }
-    double clampedDegree = max(kServoMinimumDegree[id], min(kServoMaximumDegree[id], degree));
-    double adjustedDegree = clampedDegree * kServoAdjustRatio[id] + kServoAdjustDegree[id];
-    DEBUGLOG_PRINTLN(String(F("Move ")) + servoName(id) + String(F(" to ")) + String(degree) + String(F(" adjusted to ")) + String(adjustedDegree));
+    const double adjusted = servoTargetDegree(degree,
+                                              kServoMinimumDegree[id],
+                                              kServoMaximumDegree[id],
+                                              config.servoAdjustRatio1000[id],
+                                              config.servoAdjustDegree100[id]);
+    DEBUGLOG_PRINTLN(String(F("Move ")) + servoName(id) + String(F(" to ")) + String(degree) + String(F(" adjusted to ")) + String(adjusted));
 
-    servos[id]->write(adjustedDegree);
+    servos[id]->write(adjusted);
     return success;
 }
 
@@ -458,7 +545,7 @@ HSI::HSIDriveResult HSI::homeAxis(HSIAxis axis)
     DEBUGLOG_PRINTLN(zeroEndPosition);
     moveSteps(axis, zeroAdjust, true);
 
-    moveDegree(axis, kZeroAdjustDegree[axis], true);
+    moveDegree(axis, config.zeroAdjustDegree[axis], true);
     axes[axis]->resetPosition();
     homingState[axis] = homed;
     return success;
@@ -592,9 +679,9 @@ HSI::HSIDriveResult HSI::nextHomingState(HSIAxis axis)
         {
             return success;
         }
-        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to adjusted zero position, adjustment degree: ")) + String(kZeroAdjustDegree[axis]));
+        DEBUGLOG_PRINTLN(String(axisName(axis)) + String(F("- Move to adjusted zero position, adjustment degree: ")) + String(config.zeroAdjustDegree[axis]));
         axes[axis]->resetPosition();
-        moveDegree(axis, kZeroAdjustDegree[axis]);
+        moveDegree(axis, config.zeroAdjustDegree[axis]);
         homingState[axis] = moveToAdjustedZero;
         return success;
     case moveToAdjustedZero:

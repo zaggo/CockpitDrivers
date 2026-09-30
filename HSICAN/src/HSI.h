@@ -5,10 +5,24 @@
 #include <MCP23017.h>
 #include <CheapStepper.h>
 #include "Configuration.h"
+#include "HSICalibration.h"
 
 class HSI
 {
 public:
+    struct HsiConfig
+    {
+        uint16_t magic;
+        int16_t  zeroAdjustDegree[hsiAxisCount];
+        uint16_t stepsBacklash[hsiAxisCount];
+        uint16_t moveDeadband[hsiAxisCount];
+        uint16_t reversalDeadband[hsiAxisCount];
+        int16_t  servoAdjustDegree100[servoCount];
+        int16_t  servoAdjustRatio1000[servoCount];
+        int16_t  cdiDegPerDot100;
+        int16_t  gsDegPerDot100;
+    };
+
     enum FromTo {
         noNav = 0,
         from = 182,
@@ -53,6 +67,14 @@ public:
     HSIDriveResult moveServo(ServoId id, double degree);
     void setBrightness(uint8_t pwm);
 
+    const HsiConfig& calibration() const { return config; }
+    void saveConfig();
+    void wipeCalibration();
+    bool calibrateZero(HSIAxis axis);
+    void setStepsBacklash(HSIAxis axis, uint16_t steps);
+    void setServoAdjust(ServoId id, int16_t degree100, int16_t ratio1000);
+    void setDegPerDot(bool isGs, int16_t degPerDot100);
+
     int16_t getObsEncoder() { return obsEncoder; }
     int16_t getHdgEncoder() { return hdgEncoder; }
     bool getObsEncoderButtonState() { return obsEncoderButtonState; }
@@ -83,8 +105,10 @@ private:
     bool checkAllHomed();
     HSIDriveResult lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZeroedState);
     void resetPositionAndBacklash(HSIAxis axis);
+    void loadConfig();
 
 private:
+    HsiConfig config;
     MCP23017 *mcp;
 
     Servo* servos[servoCount];
