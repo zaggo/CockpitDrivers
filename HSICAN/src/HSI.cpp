@@ -73,14 +73,20 @@ HSI::HSI()
 {
     // Setup zeroing pins & interrupts
     Wire.begin();
+    // 100 kHz would make a one-byte register read cost roughly 400 us against a
+    // 1.22 ms step interval at 12 rpm / 4096 steps. At 400 kHz it is about 100.
+    Wire.setClock(400000);
 
     mcp = new MCP23017(kMCP23017Address);
     mcp->init();
-    mcp->portMode(MCP23017Port::A, 0); // Port A as output
-    mcp->portMode(MCP23017Port::B, 0); // Port B as output
+    mcp->portMode(MCP23017Port::A, 0); // Port A as output: obs + hdg coils
+    // Port B: GPB0..3 compass coils (output), GPB4..6 hall inputs with pull-ups
+    // and IPOL inverted, so a set bit reads as "over the magnet". Writes to the
+    // input bits only land in OLAT, so writePort(B, pattern & 0x0F) stays valid.
+    mcp->portMode(MCP23017Port::B, kHallMask, kHallMask, kHallMask);
 
     mcp->writeRegister(MCP23017Register::GPIO_A, 0x00); // Reset port A
-    mcp->writeRegister(MCP23017Register::GPIO_B, 0x00); // Reset port B
+    mcp->writeRegister(MCP23017Register::GPIO_B, 0x00); // Reset port B (writes to the hall input bits just land in OLAT)
 
     // DEBUGLOG_PRINTLN("MCP23017 initialized");
 
@@ -96,7 +102,6 @@ HSI::HSI()
 
         axes[axis]->setTotalSteps(kTotalSteps[axis]);
         axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
-        pinMode(kHallPins[axis], INPUT_PULLUP);
     }
 
     for (int servoId = 0; servoId < servoCount; servoId++)
@@ -126,13 +131,18 @@ HSI::HSI()
     if(digitalRead(kHdgEncoderBPin)) hdgEncoderState |= 2;
     hdgEncoderButtonState = digitalRead(kHdgEncoderPushButtonPin) == LOW;
     currentHdgEncoderButtonState = hdgEncoderButtonState;
+
+    readHalls(); // seed the cache before the initial state sweep
     for (int axis = 0; axis < hsiAxisCount; axis++) {
-        zeroedState[axis] = digitalRead(kHallPins[axis]) == LOW;
+        fetchZeroedState(static_cast<HSIAxis>(axis));
     }
 
     PCICR = (1 << PCIE2) | (1 << PCIE1);
     PCMSK1 = kHdgEncoderInterruptMask;
     PCMSK2 = kObsEncoderInterruptMask;
+
+    pinMode(kLightPin, OUTPUT);
+    analogWrite(kLightPin, 0);
 
     instance = this;
     DEBUGLOG_PRINTLN(String(F("HSI initialized")));
@@ -161,6 +171,8 @@ void HSI::loop()
     {
         return;
     }
+
+    readHalls();
 
     uint32_t uS = micros();
     for (int axis = 0; axis < hsiAxisCount; axis++)
@@ -332,6 +344,11 @@ HSI::HSIDriveResult HSI::moveServo(ServoId id, double degree)
 
     servos[id]->write(adjustedDegree);
     return success;
+}
+
+void HSI::setBrightness(uint8_t pwm)
+{
+    analogWrite(kLightPin, pwm);
 }
 
 void HSI::moveSteps(HSIAxis axis, int16_t steps, bool synchron)
@@ -609,15 +626,22 @@ bool HSI::checkAllHomed()
     return true;
 }
 
+void HSI::readHalls()
+{
+    // One transaction serves all three axes. Called once per loop() rather than
+    // once per fetchZeroedState(), which used to poll a pin per axis.
+    hallBits = mcp->readPort(MCP23017Port::B) & kHallMask;
+}
+
 void HSI::fetchZeroedState(HSIAxis axis)
 {
-    bool state = digitalRead(kHallPins[axis]) == LOW;
+    // IPOL already inverted the active-low sensor, so a set bit is "at zero".
+    bool state = (hallBits & kHallBits[axis]) != 0;
     if (state != zeroedState[axis])
     {
         zeroedState[axis] = state;
         DEBUGLOG_PRINTLN(String(F("    > Zeroed state changed on ")) + axisName(axis) + String(F(" axis: ")) + String(state ? F("true") : F("false")));
     }
-    // return state;
 }
 
 String HSI::axisName(HSIAxis axis)

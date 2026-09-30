@@ -51,6 +51,7 @@ public:
     HSIDriveResult moveToDegree(HSIAxis axis, double degree);
     void moveSteps(HSIAxis axis, int16_t steps, bool synchron = false);
     HSIDriveResult moveServo(ServoId id, double degree);
+    void setBrightness(uint8_t pwm);
 
     int16_t getObsEncoder() { return obsEncoder; }
     int16_t getHdgEncoder() { return hdgEncoder; }
@@ -71,6 +72,7 @@ public:
 private:
     HSIDriveResult lookForZeroChange(HSIAxis axis, int32_t degree, bool targetZeroedState); // Synchronous
     void fetchZeroedState(HSIAxis axis);
+    void readHalls();
     void moveDegree(HSIAxis axis, int16_t degree, bool synchron = false);
     int32_t calculateShortestPath(HSIAxis axis, int32_t targetPosition);
     uint32_t normalizePosition(int32_t position, uint32_t totalSteps);
@@ -105,6 +107,7 @@ private:
     uint32_t lastHdgDebounceTime = 0;
 
     bool zeroedState[hsiAxisCount] = {false, false, false};
+    uint8_t hallBits = 0;
 
     const int32_t DEGREE_FULL_ROTATION = 360L;
 };
