@@ -47,30 +47,30 @@ public:
 
     HSIDriveResult homeAllAxis(); // Synchronous
     HSIDriveResult homeAxis(HSIAxis axis); // Synchronous
-    HSIDriveResult moveToDegree(double cdiDegree, double compassDegree, double hdgDegree, double vorOffset, FromTo fromTo, double vsiOffset); // Ansyc
+    HSIDriveResult moveToDegree(double obsDegree, double compassDegree, double hdgDegree, double cdiOffset, FromTo fromTo, double gsOffset); // Ansyc
     HSIDriveResult moveToDegree(HSIAxis axis, double degree);
     void moveSteps(HSIAxis axis, int16_t steps, bool synchron = false);
     HSIDriveResult moveServo(ServoId id, double degree);
 
-    int16_t getCdiEncoder() { return cdiEncoder; }
-    int16_t getCompEncoder() { return compEncoder; }
-    bool getCdiEncoderButtonState() { return cdiEncoderButtonState; }
-    bool getCompEncoderButtonState() { return compEncoderButtonState; }
+    int16_t getObsEncoder() { return obsEncoder; }
+    int16_t getHdgEncoder() { return hdgEncoder; }
+    bool getObsEncoderButtonState() { return obsEncoderButtonState; }
+    bool getHdgEncoderButtonState() { return hdgEncoderButtonState; }
 
     // Singleton instance
     static HSI* instance;
-    volatile uint8_t cdiEncoderState;
-    volatile int16_t currentCdiEncoder = 0;
-    volatile uint8_t compEncoderState;
-    volatile int16_t currentCompEncoder = 0;
-    volatile bool currentCdiEncoderButtonState;
-    volatile bool currentCompEncoderButtonState;
+    volatile uint8_t obsEncoderState;
+    volatile int16_t currentObsEncoder = 0;
+    volatile uint8_t hdgEncoderState;
+    volatile int16_t currentHdgEncoder = 0;
+    volatile bool currentObsEncoderButtonState;
+    volatile bool currentHdgEncoderButtonState;
 
     String errorName(HSIDriveResult result);
 
 private:
     HSIDriveResult lookForZeroChange(HSIAxis axis, int32_t degree, bool targetZeroedState); // Synchronous
-    void fetchZeroedState(HSIAxis axis); 
+    void fetchZeroedState(HSIAxis axis);
     void moveDegree(HSIAxis axis, int16_t degree, bool synchron = false);
     int32_t calculateShortestPath(HSIAxis axis, int32_t targetPosition);
     uint32_t normalizePosition(int32_t position, uint32_t totalSteps);
@@ -90,19 +90,19 @@ private:
     HomingPhase homingState[hsiAxisCount];
     uint32_t zeroEndPosition[hsiAxisCount];
 
-    uint8_t cdiPattern = 0;
+    uint8_t obsPattern = 0;
     uint8_t hdgPattern = 0;
-    uint8_t compPattern = 0;
+    uint8_t compassPattern = 0;
 
     uint8_t currentPortA = 0;
     uint8_t currentPortB = 0;
 
-    int16_t cdiEncoder = 0;
-    int16_t compEncoder = 0;
-    bool cdiEncoderButtonState = false;
-    bool compEncoderButtonState = false;
-    uint32_t lastCdiDebounceTime = 0;
-    uint32_t lastCompDebounceTime = 0;
+    int16_t obsEncoder = 0;
+    int16_t hdgEncoder = 0;
+    bool obsEncoderButtonState = false;
+    bool hdgEncoderButtonState = false;
+    uint32_t lastObsDebounceTime = 0;
+    uint32_t lastHdgDebounceTime = 0;
 
     bool zeroedState[hsiAxisCount] = {false, false, false};
 

@@ -19,13 +19,13 @@ bool BenchDebug::handleHSIInput(String command) {
         String rString = command.substring(2);
         rString.trim();
         float degrees = rString.toFloat();
-        hsi->moveToDegree(cdi, degrees);
+        hsi->moveToDegree(obs, degrees);
         return true;
     } else if (command.startsWith("sd")) {
         String rString = command.substring(2);
         rString.trim();
         int32_t steps = rString.toInt();
-        hsi->moveSteps(cdi, steps, true);
+        hsi->moveSteps(obs, steps, true);
         return true;
     } else if (command.startsWith("ho")) {
         String rString = command.substring(2);
@@ -65,26 +65,26 @@ bool BenchDebug::handleHSIInput(String command) {
         String rString = command.substring(2);
         rString.trim();
         float degrees = rString.toFloat();
-        hsi->moveServo(vorServo, degrees);
+        hsi->moveServo(cdiServo, degrees);
         return true;
     } else if (command.startsWith("gs")) {
         String rString = command.substring(2);
         rString.trim();
         float degrees = rString.toFloat();
-        hsi->moveServo(vsi1Servo, degrees);
-        hsi->moveServo(vsi2Servo, degrees);
+        hsi->moveServo(gs1Servo, degrees);
+        hsi->moveServo(gs2Servo, degrees);
         return true;
     } else if (command.startsWith("ga")) {
         String rString = command.substring(2);
         rString.trim();
         float degrees = rString.toFloat();
-        hsi->moveServo(vsi1Servo, degrees);
+        hsi->moveServo(gs1Servo, degrees);
         return true;
     } else if (command.startsWith("gb")) {
         String rString = command.substring(2);
         rString.trim();
         float degrees = rString.toFloat();
-        hsi->moveServo(vsi2Servo, degrees);
+        hsi->moveServo(gs2Servo, degrees);
         return true;
     } else if (command.startsWith("ft")) {
         String rString = command.substring(2);
@@ -124,7 +124,7 @@ bool BenchDebug::handleHSIInput(String command) {
         double degrees = rString.toDouble();
         combiHdgDegree = degrees;
         hsi->moveToDegree(combiCdiDegree, combiCompassDegree, combiHdgDegree, 0, HSI::FromTo::noNav, 0);
-        return true;  
+        return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("HSI Commands:"));
         Serial.println(F("ho <axis>: Home axis, no axis = all, 0 = CDI, 1 = Comp, 2 = HDG."));
@@ -143,7 +143,7 @@ bool BenchDebug::handleHSIInput(String command) {
         Serial.println(F("xo <degrees>: Move Compass to degrees in combined mode."));
         Serial.println(F("xh <degrees>: Move HDG to degrees in combined mode."));
         return true;
-    }       
+    }
     return false;
 }
 
@@ -216,16 +216,16 @@ void BenchDebug::loop()
     handleUserInput();
     hsi->loop();
 
-    int16_t cdiEncoder = hsi->getCdiEncoder();
-    if (degCDI != (double)cdiEncoder) {
-        degCDI = (double)cdiEncoder;
-        hsi->moveToDegree(cdi, -degCDI);
+    int16_t obsEncoder = hsi->getObsEncoder();
+    if (degCDI != (double)obsEncoder) {
+        degCDI = (double)obsEncoder;
+        hsi->moveToDegree(obs, -degCDI);
         Serial.print(F("Bench Debug CDIEncoder: "));
         Serial.println(degCDI);
     }
-    int16_t compEncoder = hsi->getCompEncoder();
-    if (degCompass != (double)compEncoder) {
-        degCompass = (double)compEncoder;
+    int16_t hdgEncoder = hsi->getHdgEncoder();
+    if (degCompass != (double)hdgEncoder) {
+        degCompass = (double)hdgEncoder;
         hsi->moveToDegree(hdg, -degCompass);
         Serial.print(F("Bench Debug CompassEncoder: "));
         Serial.println(degCompass);

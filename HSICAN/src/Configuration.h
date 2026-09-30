@@ -7,26 +7,29 @@
 
 const uint8_t kMCP23017Address = 0x20;
 
-const uint8_t kCDIEncoderAPin = 3;
-const uint8_t kCDIEncoderBPin = 4;
-const uint8_t kCDIEncoderPushButtonPin = 5;
-const uint8_t kCDIEncoderInterruptMask = (1 << PCINT19) | (1 << PCINT20) | (1 << PCINT21); // for PCSMSK2!
+// The OBS knob sets the course pointer.
+const uint8_t kObsEncoderAPin = 3;
+const uint8_t kObsEncoderBPin = 4;
+const uint8_t kObsEncoderPushButtonPin = 5;
+const uint8_t kObsEncoderInterruptMask = (1 << PCINT19) | (1 << PCINT20) | (1 << PCINT21); // for PCMSK2!
 
-const uint8_t kCompEncoderAPin = A1;
-const uint8_t kCompEncoderBPin = A2;
-const uint8_t kCompEncoderPushButtonPin = A3;
-const uint8_t kCompEncoderInterruptMask = (1 << PCINT9) | (1 << PCINT10) | (1 << PCINT11); // for PCSMSK1!
+// The HDG knob sets the heading bug. It was called the "compass" encoder, which
+// it never was - it does not touch the card.
+const uint8_t kHdgEncoderAPin = A1;
+const uint8_t kHdgEncoderBPin = A2;
+const uint8_t kHdgEncoderPushButtonPin = A3;
+const uint8_t kHdgEncoderInterruptMask = (1 << PCINT9) | (1 << PCINT10) | (1 << PCINT11); // for PCMSK1!
 
 enum ServoId {
-    vorServo = 0,
+    cdiServo = 0,
     fromToServo,
-    vsi1Servo,
-    vsi2Servo,
+    gs1Servo,
+    gs2Servo,
     servoCount
 };
 
 enum HSIAxis {
-    cdi = 0,
+    obs = 0,
     compass,
     hdg,
     hsiAxisCount
@@ -57,42 +60,42 @@ const uint32_t kTotalSteps[hsiAxisCount] = {
 
 const int16_t kZeroAdjustDegree[hsiAxisCount] = {
     -90,85,11
-    // 92, // CDI
+    // 92, // OBS
     // 128, // Compass
     // -115 // HDG
 };
 
 const double kServoAdjustDegree[servoCount] = {
-    80., // VOR Servo
+    80., // cdiServo
     0., // From-To Servo
-    90.-19., // VSI1 Servo
-    90.-1. // VSI2 Servo
+    90.-19., // gs1Servo
+    90.-1. // gs2Servo
 };
 
 const double kServoAdjustRatio[servoCount] = {
-    2., // VOR Servo
+    2., // cdiServo
     1., // From-To Servo
-    2., // VSI1 Servo
-    -10./7.  // VSI2 Servo
+    2., // gs1Servo
+    -10./7.  // gs2Servo
 };
 
 const double kServoMinimumDegree[servoCount] = {
-    -40., // VOR Servo
+    -40., // cdiServo
     -999., // From-To Servo
-    -40., // VSI1 Servo
-    -40.  // VSI2 Servo
+    -40., // gs1Servo
+    -40.  // gs2Servo
 };
 
 const double kServoMaximumDegree[servoCount] = {
-    40., // VOR Servo
+    40., // cdiServo
     999., // From-To Servo
-    40., // VSI1 Servo
-    40.  // VSI2 Servo
+    40., // gs1Servo
+    40.  // gs2Servo
 };
 
 
 const double kRpmLimits[hsiAxisCount][rpmKeyCount] = {
-    // CDI
+    // OBS
     {12.0, 10.0},
     // Compass
     {12.0, 10.0},

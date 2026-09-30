@@ -3,73 +3,73 @@
 #include "DebugLog.h"
 
 HSI *HSI::instance = nullptr;
-ISR(PCINT1_vect) // Comp Interrupt
+ISR(PCINT1_vect) // HDG Interrupt
 {
     if (HSI::instance)
     {
-        bool buttonState = digitalRead(kCompEncoderPushButtonPin) == LOW;
-        bool aPinState = digitalRead(kCompEncoderAPin) == LOW;
-        bool bPinState = digitalRead(kCompEncoderBPin) == LOW;
+        bool buttonState = digitalRead(kHdgEncoderPushButtonPin) == LOW;
+        bool aPinState = digitalRead(kHdgEncoderAPin) == LOW;
+        bool bPinState = digitalRead(kHdgEncoderBPin) == LOW;
        //DEBUGLOG_PRINTLN(" [PCINT1_vect (a|b|p): " + String(aPinState ? "T|":"F|") + String(bPinState ? "T|":"F|") + String(buttonState ? "T":"F") + "] ");
 
-        if (HSI::instance->currentCompEncoderButtonState != buttonState)
+        if (HSI::instance->currentHdgEncoderButtonState != buttonState)
         {
-            HSI::instance->currentCompEncoderButtonState = buttonState;
+            HSI::instance->currentHdgEncoderButtonState = buttonState;
         }
 
-        uint8_t s = HSI::instance->compEncoderState & 0b0011;
+        uint8_t s = HSI::instance->hdgEncoderState & 0b0011;
 		if (aPinState) s |= 0b0100;
 		if (bPinState) s |= 0b1000;
-        HSI::instance->compEncoderState = (s >> 2);
+        HSI::instance->hdgEncoderState = (s >> 2);
         switch (s) {
             case 0b0000: case 0b0101: case 0b1010: case 0b1111:
                 break;
             case 0b0001: case 0b0111: case 0b1000: case 0b1110:
-                HSI::instance->currentCompEncoder++; break;
+                HSI::instance->currentHdgEncoder++; break;
             case 0b0010: case 0b0100: case 0b1011: case 0b1101:
-                HSI::instance->currentCompEncoder--; break;
+                HSI::instance->currentHdgEncoder--; break;
             case 0b0011: case 0b1100:
-                HSI::instance->currentCompEncoder += 2; break;
+                HSI::instance->currentHdgEncoder += 2; break;
             default:
-                HSI::instance->currentCompEncoder -= 2; break;
+                HSI::instance->currentHdgEncoder -= 2; break;
         }
-       //DEBUGLOG_PRINTLN(" [INT currentCompEncoder:" + String(HSI::instance->currentCompEncoder) + "] ");
+       //DEBUGLOG_PRINTLN(" [INT currentHdgEncoder:" + String(HSI::instance->currentHdgEncoder) + "] ");
     }
 }
-ISR(PCINT2_vect) // CDI Interrupt
+ISR(PCINT2_vect) // OBS Interrupt
 {
     if (HSI::instance)
     {
-        bool buttonState = digitalRead(kCDIEncoderPushButtonPin) == LOW;
-        bool aPinState = digitalRead(kCDIEncoderAPin) == LOW;
-        bool bPinState = digitalRead(kCDIEncoderBPin) == LOW;
+        bool buttonState = digitalRead(kObsEncoderPushButtonPin) == LOW;
+        bool aPinState = digitalRead(kObsEncoderAPin) == LOW;
+        bool bPinState = digitalRead(kObsEncoderBPin) == LOW;
         //DEBUGLOG_PRINTLN(" [PCINT2_vect (a|b|p): " + String(aPinState ? "T|":"F|") + String(bPinState ? "T|":"F|") + String(buttonState ? "T":"F") + "] ");
-        if (HSI::instance->currentCdiEncoderButtonState != buttonState)
+        if (HSI::instance->currentObsEncoderButtonState != buttonState)
         {
-            HSI::instance->currentCdiEncoderButtonState = buttonState;
+            HSI::instance->currentObsEncoderButtonState = buttonState;
         }
 
-        uint8_t s = HSI::instance->cdiEncoderState & 0b0011;
+        uint8_t s = HSI::instance->obsEncoderState & 0b0011;
 		if (aPinState) s |= 0b0100;
 		if (bPinState) s |= 0b1000;
-        HSI::instance->cdiEncoderState = (s >> 2);
+        HSI::instance->obsEncoderState = (s >> 2);
         switch (s) {
             case 0b0000: case 0b0101: case 0b1010: case 0b1111:
                 break;
             case 0b0001: case 0b0111: case 0b1000: case 0b1110:
-                HSI::instance->currentCdiEncoder++; break;
+                HSI::instance->currentObsEncoder++; break;
             case 0b0010: case 0b0100: case 0b1011: case 0b1101:
-                HSI::instance->currentCdiEncoder--; break;
+                HSI::instance->currentObsEncoder--; break;
             case 0b0011: case 0b1100:
-                HSI::instance->currentCdiEncoder += 2; break;
+                HSI::instance->currentObsEncoder += 2; break;
             default:
-                HSI::instance->currentCdiEncoder -= 2; break;
+                HSI::instance->currentObsEncoder -= 2; break;
         }
-        //DEBUGLOG_PRINTLN(" [INT currentCdiEncoder:" + String(HSI::instance->currentCdiEncoder) + "] ");
+        //DEBUGLOG_PRINTLN(" [INT currentObsEncoder:" + String(HSI::instance->currentObsEncoder) + "] ");
     }
 }
 
-HSI::HSI()    
+HSI::HSI()
 {
     // Setup zeroing pins & interrupts
     Wire.begin();
@@ -84,8 +84,8 @@ HSI::HSI()
 
     // DEBUGLOG_PRINTLN("MCP23017 initialized");
 
-    axes[compass] = new CheapStepper(&compPattern, 15, true);
-    axes[cdi] = new CheapStepper(&cdiPattern, 28, true);
+    axes[compass] = new CheapStepper(&compassPattern, 15, true);
+    axes[obs] = new CheapStepper(&obsPattern, 28, true);
     axes[hdg] = new CheapStepper(&hdgPattern, 75, true);
 
     for (int axis = 0; axis < hsiAxisCount; axis++)
@@ -108,31 +108,31 @@ HSI::HSI()
     }
 
     // Enable Encoder Pins & Interrupts
-    pinMode(kCDIEncoderAPin, INPUT_PULLUP);
-    pinMode(kCDIEncoderBPin, INPUT_PULLUP);
-    pinMode(kCDIEncoderPushButtonPin, INPUT_PULLUP);
-    pinMode(kCompEncoderAPin, INPUT_PULLUP);
-    pinMode(kCompEncoderBPin, INPUT_PULLUP);
-    pinMode(kCompEncoderPushButtonPin, INPUT_PULLUP);
+    pinMode(kObsEncoderAPin, INPUT_PULLUP);
+    pinMode(kObsEncoderBPin, INPUT_PULLUP);
+    pinMode(kObsEncoderPushButtonPin, INPUT_PULLUP);
+    pinMode(kHdgEncoderAPin, INPUT_PULLUP);
+    pinMode(kHdgEncoderBPin, INPUT_PULLUP);
+    pinMode(kHdgEncoderPushButtonPin, INPUT_PULLUP);
 
     delay(2000); // Wait for the Pullup resistors to stabilize
-    cdiEncoderButtonState = digitalRead(kCDIEncoderPushButtonPin) == LOW;
-    currentCdiEncoderButtonState = cdiEncoderButtonState;
-    cdiEncoderState = 0;
-    if(digitalRead(kCDIEncoderAPin)) cdiEncoderState |= 1;
-    if(digitalRead(kCDIEncoderBPin)) cdiEncoderState |= 2;
-    compEncoderState = 0;
-    if(digitalRead(kCompEncoderAPin)) compEncoderState |= 1;
-    if(digitalRead(kCompEncoderBPin)) compEncoderState |= 2;
-    compEncoderButtonState = digitalRead(kCompEncoderPushButtonPin) == LOW;
-    currentCompEncoderButtonState = compEncoderButtonState;
+    obsEncoderButtonState = digitalRead(kObsEncoderPushButtonPin) == LOW;
+    currentObsEncoderButtonState = obsEncoderButtonState;
+    obsEncoderState = 0;
+    if(digitalRead(kObsEncoderAPin)) obsEncoderState |= 1;
+    if(digitalRead(kObsEncoderBPin)) obsEncoderState |= 2;
+    hdgEncoderState = 0;
+    if(digitalRead(kHdgEncoderAPin)) hdgEncoderState |= 1;
+    if(digitalRead(kHdgEncoderBPin)) hdgEncoderState |= 2;
+    hdgEncoderButtonState = digitalRead(kHdgEncoderPushButtonPin) == LOW;
+    currentHdgEncoderButtonState = hdgEncoderButtonState;
     for (int axis = 0; axis < hsiAxisCount; axis++) {
         zeroedState[axis] = digitalRead(kHallPins[axis]) == LOW;
     }
 
     PCICR = (1 << PCIE2) | (1 << PCIE1);
-    PCMSK1 = kCompEncoderInterruptMask;
-    PCMSK2 = kCDIEncoderInterruptMask;
+    PCMSK1 = kHdgEncoderInterruptMask;
+    PCMSK2 = kObsEncoderInterruptMask;
 
     instance = this;
     DEBUGLOG_PRINTLN(String(F("HSI initialized")));
@@ -161,7 +161,7 @@ void HSI::loop()
     {
         return;
     }
-    
+
     uint32_t uS = micros();
     for (int axis = 0; axis < hsiAxisCount; axis++)
     {
@@ -169,48 +169,48 @@ void HSI::loop()
     }
     sendMotorData();
 
-    if (compEncoder != currentCompEncoder)
+    if (hdgEncoder != currentHdgEncoder)
     {
-        compEncoder = currentCompEncoder;
-        //DEBUGLOG_PRINTLN(" [compEncoder:" + String(compEncoder) + "] ");
+        hdgEncoder = currentHdgEncoder;
+        //DEBUGLOG_PRINTLN(" [hdgEncoder:" + String(hdgEncoder) + "] ");
     }
-    if (cdiEncoder != currentCdiEncoder)
+    if (obsEncoder != currentObsEncoder)
     {
-        cdiEncoder = currentCdiEncoder;
-        //DEBUGLOG_PRINTLN(" [cdiEncoder:" + String(cdiEncoder) + "] ");
+        obsEncoder = currentObsEncoder;
+        //DEBUGLOG_PRINTLN(" [obsEncoder:" + String(obsEncoder) + "] ");
     }
     const uint32_t debounceDelay = 50000; // microseconds
     const uint32_t longPressDelay = 1500000; // microseconds
 
-    // Debouncing the CDI encoder push button state
-    if (currentCdiEncoderButtonState != cdiEncoderButtonState && (uS - lastCdiDebounceTime) > debounceDelay)
+    // Debouncing the OBS encoder push button state
+    if (currentObsEncoderButtonState != obsEncoderButtonState && (uS - lastObsDebounceTime) > debounceDelay)
     {
-        lastCdiDebounceTime = uS;
-        cdiEncoderButtonState = currentCdiEncoderButtonState;
-        //DEBUGLOG_PRINTLN(" [cdiEncoderButtonState:" + String(cdiEncoderButtonState) + "] ");
+        lastObsDebounceTime = uS;
+        obsEncoderButtonState = currentObsEncoderButtonState;
+        //DEBUGLOG_PRINTLN(" [obsEncoderButtonState:" + String(obsEncoderButtonState) + "] ");
     }
 
-    // Debouncing the Compass encoder push button state
-    if (currentCompEncoderButtonState != compEncoderButtonState && (uS - lastCompDebounceTime) > debounceDelay)
+    // Debouncing the HDG encoder push button state
+    if (currentHdgEncoderButtonState != hdgEncoderButtonState && (uS - lastHdgDebounceTime) > debounceDelay)
     {
-        compEncoderButtonState = currentCompEncoderButtonState;
-        if ((uS - lastCompDebounceTime) > longPressDelay && compEncoderButtonState) {
+        hdgEncoderButtonState = currentHdgEncoderButtonState;
+        if ((uS - lastHdgDebounceTime) > longPressDelay && hdgEncoderButtonState) {
             homeAllAxis();
         }
-        lastCompDebounceTime = uS;
-       //DEBUGLOG_PRINTLN(" [compEncoderButtonState:" + String(compEncoderButtonState) + "] ");
+        lastHdgDebounceTime = uS;
+       //DEBUGLOG_PRINTLN(" [hdgEncoderButtonState:" + String(hdgEncoderButtonState) + "] ");
     }
 }
 
 void HSI::sendMotorData()
 {
-    uint8_t portA = hdgPattern << 4 | (cdiPattern & 0x0F); // Combine the patterns for port A
+    uint8_t portA = hdgPattern << 4 | (obsPattern & 0x0F); // Combine the patterns for port A
     if (currentPortA != portA)
     {
         currentPortA = portA;
         mcp->writePort(MCP23017Port::A, portA);
     }
-    uint8_t portB = compPattern & 0x0F; // Combine the patterns for port B
+    uint8_t portB = compassPattern & 0x0F; // Combine the patterns for port B
     if (currentPortB != portB)
     {
         currentPortB = portB;
@@ -268,10 +268,10 @@ HSI::HSIDriveResult HSI::homeAllAxis()
     return success;
 }
 
-HSI::HSIDriveResult HSI::moveToDegree(double cdiDegree, double compassDegree, double hdgDegree, double vorOffset, FromTo fromTo, double vsiOffset)
+HSI::HSIDriveResult HSI::moveToDegree(double obsDegree, double compassDegree, double hdgDegree, double cdiOffset, FromTo fromTo, double gsOffset)
 {
     const double motorDegree[hsiAxisCount] = {
-        fmod(compassDegree- cdiDegree + 360.0, 360.0),
+        fmod(compassDegree- obsDegree + 360.0, 360.0),
         compassDegree,
         fmod(compassDegree - hdgDegree + 360.0, 360.0)
     };
@@ -282,10 +282,10 @@ HSI::HSIDriveResult HSI::moveToDegree(double cdiDegree, double compassDegree, do
     }
 
     const double servoDegree[servoCount] = {
-        vorOffset,
-        static_cast<double>(fromTo), 
-        -vsiOffset,
-        -vsiOffset
+        cdiOffset,
+        static_cast<double>(fromTo),
+        -gsOffset,
+        -gsOffset
     };
 
     for (int servoId = 0; servoId < servoCount; servoId++)
@@ -624,12 +624,12 @@ String HSI::axisName(HSIAxis axis)
 {
     switch (axis)
     {
-    case cdi:
-        return "CDI";
+    case obs:
+        return "OBS";
     case compass:
         return "Compass";
     case hdg:
-        return "Hdg";
+        return "HDG";
     default:
         return "Unknown";
     }
@@ -639,14 +639,14 @@ String HSI::servoName(ServoId id)
 {
     switch (id)
     {
-    case vorServo:
-        return "VOR Servo";
+    case cdiServo:
+        return "CDI Servo";
     case fromToServo:
-        return "From-To Servo";
-    case vsi1Servo:
-        return "VSI1 Servo";
-    case vsi2Servo:
-        return "VSI2 Servo";
+        return "FromTo Servo";
+    case gs1Servo:
+        return "GS1 Servo";
+    case gs2Servo:
+        return "GS2 Servo";
     default:
         return "Unknown";
     }
