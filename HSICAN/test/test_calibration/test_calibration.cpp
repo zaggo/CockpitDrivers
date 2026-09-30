@@ -66,10 +66,11 @@ void test_the_gs2_servo_negative_ratio_is_preserved(void) {
 }
 
 void test_travel_is_clamped_before_scaling_not_after(void) {
-    // Clamping after scaling would let a ratio of 2 double the travel limit.
-    double atLimit = servoTargetDegree(40.0, -40.0, 40.0, 2000, 8000);
-    double beyond = servoTargetDegree(400.0, -40.0, 40.0, 2000, 8000);
-    TEST_ASSERT_DOUBLE_WITHIN(0.001, atLimit, beyond);
+    // Clamping after scaling would let a ratio of 2 turn a +-40 limit into
+    // +-80: at the limit this returns 40*2 + 80 = 160, where scale-first
+    // would return 80 clamped to 40, then + 80 = 120.
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 160.0, servoTargetDegree(40.0, -40.0, 40.0, 2000, 8000));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 160.0, servoTargetDegree(400.0, -40.0, 40.0, 2000, 8000));
 }
 
 void test_the_fromto_servo_passes_its_discrete_positions_through(void) {
