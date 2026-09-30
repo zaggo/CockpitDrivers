@@ -294,16 +294,75 @@ void HSI::loop()
         //DEBUGLOG_PRINTLN(" [obsEncoderButtonState:" + String(obsEncoderButtonState) + "] ");
     }
 
-    // Debouncing the HDG encoder push button state
-    if (currentHdgEncoderButtonState != hdgEncoderButtonState && (uS - lastHdgDebounceTime) > debounceDelay)
+    if (currentHdgEncoderButtonState != hdgEncoderButtonState &&
+        (uS - lastHdgDebounceTime) > debounceDelay)
     {
-        hdgEncoderButtonState = currentHdgEncoderButtonState;
-        if ((uS - lastHdgDebounceTime) > longPressDelay && hdgEncoderButtonState) {
-            beginHoming();
-        }
         lastHdgDebounceTime = uS;
-       //DEBUGLOG_PRINTLN(" [hdgEncoderButtonState:" + String(hdgEncoderButtonState) + "] ");
+        hdgEncoderButtonState = currentHdgEncoderButtonState;
+
+        if (hdgEncoderButtonState)
+        {
+            // Press: remember when, decide on release. Measuring duration is the
+            // point - the old test compared against the last edge, so any press
+            // after 1.5s of quiet counted as long.
+            hdgPressStartedAt = uS;
+            hdgPressActive = true;
+        }
+        else if (hdgPressActive)
+        {
+            hdgPressActive = false;
+            if ((uS - hdgPressStartedAt) >= longPressDelay)
+            {
+                beginHoming();
+            }
+            else
+            {
+                hdgShortPressPending = true;
+            }
+        }
     }
+}
+
+bool HSI::takeObsDelta(int16_t *delta)
+{
+    noInterrupts();
+    const int16_t now = currentObsEncoder;
+    interrupts();
+
+    const int16_t diff = now - lastSentObsEncoder;
+    if (diff == 0)
+    {
+        return false;
+    }
+    lastSentObsEncoder = now;
+    *delta = diff;
+    return true;
+}
+
+bool HSI::takeHdgDelta(int16_t *delta)
+{
+    noInterrupts();
+    const int16_t now = currentHdgEncoder;
+    interrupts();
+
+    const int16_t diff = now - lastSentHdgEncoder;
+    if (diff == 0)
+    {
+        return false;
+    }
+    lastSentHdgEncoder = now;
+    *delta = diff;
+    return true;
+}
+
+bool HSI::takeHdgShortPress()
+{
+    if (!hdgShortPressPending)
+    {
+        return false;
+    }
+    hdgShortPressPending = false;
+    return true;
 }
 
 void HSI::sendMotorData()

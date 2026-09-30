@@ -85,6 +85,15 @@ public:
     bool getObsEncoderButtonState() { return obsEncoderButtonState; }
     bool getHdgEncoderButtonState() { return hdgEncoderButtonState; }
 
+    // Encoder movement since the last call, as signed clicks. Returns false
+    // when nothing moved. The board keeps no absolute position: the pointers
+    // follow whatever the sim reports back over 0x104.
+    bool takeObsDelta(int16_t* delta);
+    bool takeHdgDelta(int16_t* delta);
+
+    // True once per completed short press of the HDG knob.
+    bool takeHdgShortPress();
+
     // Singleton instance
     static HSI* instance;
     volatile uint8_t obsEncoderState;
@@ -136,6 +145,12 @@ private:
     bool hdgEncoderButtonState = false;
     uint32_t lastObsDebounceTime = 0;
     uint32_t lastHdgDebounceTime = 0;
+
+    int16_t lastSentObsEncoder = 0;
+    int16_t lastSentHdgEncoder = 0;
+    uint32_t hdgPressStartedAt = 0;
+    bool hdgPressActive = false;
+    bool hdgShortPressPending = false;
 
     bool zeroedState[hsiAxisCount] = {false, false, false};
     uint8_t hallBits = 0;

@@ -126,6 +126,20 @@ void CAN::loop()
 {
     InstrumentCAN::loop();
 
+    int16_t delta = 0;
+    if (hsi->takeObsDelta(&delta))
+    {
+        sendHsiInput(0, 0, delta, 0);
+    }
+    if (hsi->takeHdgDelta(&delta))
+    {
+        sendHsiInput(1, 0, delta, 0);
+    }
+    if (hsi->takeHdgShortPress())
+    {
+        sendHsiInput(1, 1, 0, 1);
+    }
+
     if (!hsi->homingFailed())
     {
         homingFailedAtMs = 0;
