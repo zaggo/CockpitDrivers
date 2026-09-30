@@ -105,7 +105,7 @@ bool BenchDebug::handleHSIInput(String command) {
         // stored: a re-seated servo horn gets retuned here instead of reflashed.
         const int sp1 = command.indexOf(' ');
         const int sp2 = command.indexOf(' ', sp1 + 1);
-        if (sp1 < 0 || sp2 < 0) {
+        if (sp1 <= 2 || sp2 < 0) {
             Serial.println(F("usage: sa<servo> <deg100> <ratio1000>"));
         } else {
             const int id = command.substring(2, sp1).toInt();
@@ -121,10 +121,11 @@ bool BenchDebug::handleHSIInput(String command) {
     } else if (command.startsWith("dp")) {
         // dp<c|g> <deg100PerDot>, e.g. "dpg 800" for 8.0 degrees per GS dot.
         const int sp = command.indexOf(' ');
-        if (sp < 0) {
+        const char selector = command.charAt(2);
+        if (sp < 0 || (selector != 'c' && selector != 'g')) {
             Serial.println(F("usage: dp<c|g> <deg100PerDot>"));
         } else {
-            const bool isGs = command.charAt(2) == 'g';
+            const bool isGs = selector == 'g';
             hsi->setDegPerDot(isGs, static_cast<int16_t>(command.substring(sp + 1).toInt()));
             Serial.println(F("deg per dot stored"));
         }

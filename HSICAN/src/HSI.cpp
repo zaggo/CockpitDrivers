@@ -307,6 +307,13 @@ uint32_t HSI::measureBacklashSteps(HSIAxis axis)
     }
     axes[axis]->stop();
 
+    if (zeroedState[axis] == edgeState)
+    {
+        DEBUGLOG_PRINTLN(F("HSI: edge did not return, aborting"));
+        axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
+        return 0;
+    }
+
     // Put the speed back: leaving the axis at minRpm would make every later
     // move on it crawl until the next homing pass.
     axes[axis]->setRpm(kRpmLimits[axis][maxRpm]);
