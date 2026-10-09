@@ -668,7 +668,7 @@ inline void coordinatedDelays(int32_t stepsRoll, int32_t stepsPitch,
     {
         *delayPitch = delayRollMax * r / p;
     }
-    else
+    else if (p > r)
     {
         *delayRoll = delayPitchMax * p / r;
     }
