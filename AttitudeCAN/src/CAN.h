@@ -8,16 +8,22 @@
 
 class CAN : public InstrumentCAN {
     public:
-        CAN(AttitudeIndicator* attitude)
-        : InstrumentCAN(kCanCSPin, kCanIntPin, CANFirmwareInfo{static_cast<uint16_t>(kNodeId), 1, 0}),
-          attitude(attitude) {}
+        CAN(AttitudeIndicator* attitude);
 
     protected:
-        bool instrumentBegin() override { return true; }
-        void handleFrame(CanMessageId, uint8_t, uint8_t, const uint8_t*) override {}
+        bool instrumentBegin() override;
+        void onStartupFail() override;
+        void handleFrame(CanMessageId id, uint8_t ext, uint8_t len, const uint8_t* data) override;
+        void onGatewayHeartbeatTimeout() override;
+        void onGatewayHeartbeatDiscovered() override;
 
     private:
         AttitudeIndicator* attitude;
+
+        // Last panel brightness from a lights frame. 0 is a legitimate dimmer
+        // setting, so "known" is tracked separately from the value.
+        uint8_t panelPwm = 0;
+        bool panelPwmKnown = false;
 };
 
 #endif
