@@ -63,6 +63,9 @@ const bool kStepperInversed[attitudeAxisCount] = { false, false };
 // The AirManager LUA sent -roll. Kept as the default so the instrument behaves
 // like before; flip if the horizon banks the wrong way on the rig.
 const bool kRollInversed = true;
+// Same for pitch: nose-up in the sim must read nose-up on the dial. Display
+// frame only - NOT the coil flag above, which both axes' counter-move relies on.
+const bool kPitchInversed = false;
 
 // Display pitch window (LUA capped at +-30) and the gearing between display
 // degrees and pitch-motor degrees (GyroDrive's kAdjustmentFactor).

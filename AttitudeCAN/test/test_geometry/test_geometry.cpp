@@ -111,9 +111,9 @@ void test_pitch_is_clamped_before_scaling(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, pitchDisplayDegree(0.0, 30.0, 0.76923077));
 }
 
-void test_roll_is_inverted_only_when_asked(void) {
-    TEST_ASSERT_DOUBLE_WITHIN(1e-9, -20.0, rollDisplayDegree(20.0, true));
-    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 20.0, rollDisplayDegree(20.0, false));
+void test_an_axis_is_inverted_only_when_asked(void) {
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, -20.0, axisDisplayDegree(20.0, true));
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 20.0, axisDisplayDegree(20.0, false));
 }
 
 // --- nested axes ------------------------------------------------------------
@@ -208,7 +208,7 @@ int main(int, char **) {
     RUN_TEST(test_a_backward_jog_reads_as_negative_degrees);
     RUN_TEST(test_signed_degrees_round_to_the_nearest_step);
     RUN_TEST(test_pitch_is_clamped_before_scaling);
-    RUN_TEST(test_roll_is_inverted_only_when_asked);
+    RUN_TEST(test_an_axis_is_inverted_only_when_asked);
     RUN_TEST(test_pitch_motor_delta_equals_display_change_when_roll_is_still);
     RUN_TEST(test_holding_pitch_while_roll_moves_counter_rotates_the_pitch_motor);
     RUN_TEST(test_a_half_turn_roll_with_a_pitch_swing_is_not_folded);

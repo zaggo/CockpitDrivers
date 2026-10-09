@@ -146,11 +146,11 @@ inline double pitchDisplayDegree(double pitchDeg, double maxDegree, double scale
     return pitchDeg * scale;
 }
 
-// The AirManager LUA sent -roll; whether that is needed depends on which way
-// the horizon disc is mounted, so it is a configuration flag.
-inline double rollDisplayDegree(double rollDeg, bool inversed)
+// The AirManager LUA sent -roll; whether an axis needs its sign flipped depends
+// on how the disc is mounted, so it is a per-axis configuration flag.
+inline double axisDisplayDegree(double deg, bool inversed)
 {
-    return inversed ? -rollDeg : rollDeg;
+    return inversed ? -deg : deg;
 }
 
 // --- nested axes ------------------------------------------------------------

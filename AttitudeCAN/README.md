@@ -27,7 +27,6 @@ the roll frame), one Hall sensor per axis, one panel LED. Design:
 
 1. Gateway heartbeat starts homing; LED comes up at the last panel brightness.
 2. Roll right in X-Plane: horizon banks the right way, else flip `kRollInversed`.
-3. Nose up: horizon moves the right way, else flip `kStepperInversed[pitch]` (and re-check
-   the homing search direction on the bench).
+3. Nose up: horizon moves the right way, else flip `kPitchInversed`. Never use `kStepperInversed[]` for this: both coil flags must match the physical gearing, which bench item 3 establishes (the pitch display stays put under `ro90`); a mismatch there shows as the display drifting with roll.
 4. From `CANDebugNode`, send `0x101` with len 2: the board must ignore it (no move, no reset).
 5. Pull the gateway: LED off; reconnect: LED back to the last brightness, no re-home.

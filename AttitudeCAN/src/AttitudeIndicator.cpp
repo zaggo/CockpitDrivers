@@ -195,9 +195,10 @@ AttitudeIndicator::AttitudeResult AttitudeIndicator::moveToAttitude(double pitch
     // onto its adjusted zero and reset the position there, so position 0 is
     // level / wings level. Adding them again would double-apply them.
     const uint32_t rollTarget = normalizeStepPosition(
-        signedDegreesToSteps(rollDisplayDegree(rollDeg, kRollInversed), kTotalSteps), kTotalSteps);
-    const int32_t pitchSteps =
-        signedDegreesToSteps(pitchDisplayDegree(pitchDeg, kPitchMaxDegree, kPitchScale), kTotalSteps);
+        signedDegreesToSteps(axisDisplayDegree(rollDeg, kRollInversed), kTotalSteps), kTotalSteps);
+    const int32_t pitchSteps = signedDegreesToSteps(
+        pitchDisplayDegree(axisDisplayDegree(pitchDeg, kPitchInversed), kPitchMaxDegree, kPitchScale),
+        kTotalSteps);
     moveToTargets(rollTarget, pitchSteps);
     return success;
 }
@@ -215,14 +216,14 @@ double AttitudeIndicator::displayRollDegree() const
 {
     const int32_t steps = jogDegreesFromPosition(
         normalizeStepPosition(axes[roll]->getPosition(), kTotalSteps), kTotalSteps);
-    return rollDisplayDegree((double)steps, kRollInversed);
+    return axisDisplayDegree((double)steps, kRollInversed);
 }
 
 double AttitudeIndicator::displayPitchDegree() const
 {
     const int32_t steps = pitchDisplaySteps(axes[pitch]->getPosition(),
                                             axes[roll]->getPosition(), kTotalSteps);
-    return ((double)steps * 360.0 / (double)kTotalSteps) / kPitchScale;
+    return axisDisplayDegree(((double)steps * 360.0 / (double)kTotalSteps) / kPitchScale, kPitchInversed);
 }
 
 // --- calibration ------------------------------------------------------------
