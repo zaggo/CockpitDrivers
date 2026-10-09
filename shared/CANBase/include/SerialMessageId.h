@@ -42,6 +42,9 @@ enum class MessageType : uint8_t {
     // Decoded from CAN 0x341. Deltas, so the plugin accumulates; there is no
     // resend behind this and a dropped frame simply loses those clicks.
     SerialMessageHsiInput = 0x0E,
+    // Plugin -> DCU. Payload: AttitudeMessage (8 bytes, host order).
+    // Repacked by the DCU into CAN 0x101 as two big-endian int16 of degrees * 100.
+    SerialMessageAttitude = 0x0F,
 };
 
 // Message Payload for Transponder > DCU
@@ -105,6 +108,10 @@ enum class TransponderToDCUCommand : uint8_t {
         int16_t delta;          // encoder clicks, signed
         uint8_t pushState;      // 0/1
     };
+    struct AttitudeMessage {
+        float pitchDeg;   // pitch_vacuum_deg_pilot
+        float rollDeg;    // roll_vacuum_deg_pilot
+    };
     #pragma pack(pop)
 #else
     struct __attribute__((packed)) HsiHeadingMessage {
@@ -123,6 +130,10 @@ enum class TransponderToDCUCommand : uint8_t {
         int16_t delta;
         uint8_t pushState;
     };
+    struct __attribute__((packed)) AttitudeMessage {
+        float pitchDeg;
+        float rollDeg;
+    };
 #endif
 
 // The DCU dispatches on payload length, so these sizes are the wire contract.
@@ -132,4 +143,5 @@ static_assert(sizeof(HsiHeadingMessage) == 13, "HsiHeadingMessage must be 13 byt
 static_assert(sizeof(HsiNavMessage) == 8, "HsiNavMessage must be 8 bytes on the wire");
 static_assert(sizeof(HsiInputToDcuMessage) == 5, "HsiInputToDcuMessage must be 5 bytes on the wire");
 static_assert(sizeof(RudderToDcuMessage) == 6, "RudderToDcuMessage must be 6 bytes on the wire");
+static_assert(sizeof(AttitudeMessage) == 8, "AttitudeMessage must be 8 bytes on the wire");
 #endif // SERIAL_MESSAGE_ID_H

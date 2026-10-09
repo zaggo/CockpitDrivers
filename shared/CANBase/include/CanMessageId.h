@@ -12,6 +12,15 @@ enum class CanMessageId : uint16_t {
   // [4..7] reserved
   airspeed = 0x100,
 
+  // 0x101: Attitude indicator (Gateway -> Instrument, 50Hz)
+  // [0..1] pitch int16, degrees * 100 (sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot)
+  // [2..3] roll  int16, degrees * 100 (sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot)
+  // [4..7] reserved
+  // Both signed. The board clamps pitch to its mechanical +-30 degree window
+  // itself; the gateway forwards whatever the sim says, including the tumble
+  // of a failed vacuum gyro.
+  attitude = 0x101,
+
   // 0x102: Altimeter + VSI (Gateway -> Instruments, 50Hz)
   // [0..3] altitude int32, feet     (sim/cockpit2/gauges/indicators/altitude_ft_pilot)
   // [4..5] vsi      int16, feet/min (sim/cockpit2/gauges/indicators/vvi_fpm_pilot)
