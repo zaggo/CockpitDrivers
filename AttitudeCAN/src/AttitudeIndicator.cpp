@@ -261,10 +261,12 @@ bool AttitudeIndicator::calibrateZero(AttitudeAxis axis)
     {
         axes[roll]->resetPosition();
         axes[pitch]->resetPosition(normalizeStepPosition(pitchPos + rollPos, kTotalSteps));
+        commandedRollDeg = 0.0;
     }
     else
     {
         axes[pitch]->resetPosition(normalizeStepPosition(-rollPos, kTotalSteps));
+        commandedPitchDeg = 0.0;
     }
     return true;
 }
