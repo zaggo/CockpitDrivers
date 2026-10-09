@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-attitude-can-design.md`
 
+> **Historischer Stand.** Task 3/4 beschreiben die Pitch-Kopplung als gefaltetes Absolutziel
+> (`pitchMotorTarget` + Shortest-Path auf dem Motor). Das war falsch: ab |Delta| > halbe Umdrehung
+> fährt die *Anzeige* durch die Anschläge. Der Branch nutzt seit `95da02e` GyroDrives
+> Delta-Formulierung (`pitchMotorDelta`), außerdem `axisDisplayDegree` statt `rollDisplayDegree`
+> und ein `kPitchInversed`-Flag (`058ab32`). Die Spec ist nachgezogen; dieser Plan nicht.
+
 ## Global Constraints
 
 - Branch `feature/attitude-can` existiert bereits (ab `feature/hsi-can`-HEAD). **Kein Worktree** — der Nutzer hat das explizit verneint. Die uncommittete Änderung an `HSICAN/src/Configuration.h` gehört nicht zu dieser Arbeit: nie `git add -A`, immer Dateien einzeln stagen.
