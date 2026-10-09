@@ -9,9 +9,9 @@ void test_degrees_scale_to_hundredths_with_rounding(void) {
     TEST_ASSERT_EQUAL_INT16(0, attitudeDeg100(0.0f));
     TEST_ASSERT_EQUAL_INT16(1234, attitudeDeg100(12.34f));
     TEST_ASSERT_EQUAL_INT16(-1234, attitudeDeg100(-12.34f));
-    // 0.005 rounds away from zero on both sides, not towards +inf.
-    TEST_ASSERT_EQUAL_INT16(1, attitudeDeg100(0.005f));
-    TEST_ASSERT_EQUAL_INT16(-1, attitudeDeg100(-0.005f));
+    // 0.125 is exact in binary, so 12.5 is exactly half and must round away from zero.
+    TEST_ASSERT_EQUAL_INT16(13, attitudeDeg100(0.125f));
+    TEST_ASSERT_EQUAL_INT16(-13, attitudeDeg100(-0.125f));
 }
 
 // A tumbling vacuum gyro reports +-90 pitch and the full +-180 roll; both fit.

@@ -3,7 +3,7 @@
 #include "WireEncoding.h"
 #include "Heartbeat.h"
 #include "HsiWire.h"
-#include <AttitudeWire.h>
+#include "AttitudeWire.h"
 #include <math.h>
 
 DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
