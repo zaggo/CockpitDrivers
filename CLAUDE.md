@@ -14,7 +14,7 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 - Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `AttitudeCAN`, `CANDebugNode`,
   `DCU`, `FuelGaugeCAN`, `HSICAN`, `HSIDriver`, `HandbrakeCAN`, `I2CBoard`,
   `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`,
-  `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`,
+  `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`, `TurnCoordinatorCAN`,
   `VerticalSpeedCAN`, `WhiskeyCompassCAN`): independent PlatformIO/Arduino projects, each with its own
   `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (`DCU`, `MotionActor`, `MotionGateway`)
   have their own `CLAUDE.md` with board-specific detail — read it too when working in that directory.
@@ -25,8 +25,10 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
   rewiring for `HSICAN` repurposed the pins `HSIDriver`'s `Configuration.h` expects (servos on
   D10–D12, hall sensors on D2/D8/A0), so `HSIDriver` can no longer actually be flashed.
   `StepperBoard` still carries the pre-CAN attitude-indicator driver (`GyroDrive`) next to its
-  X25 motors; `AttitudeCAN` supersedes that part. `StepperBoard` stays as the nominal fallback
-  until the CAN board is confirmed on the rig and keeps driving the X25 gauges regardless.
+  X25 motors; `AttitudeCAN` supersedes that part, and `TurnCoordinatorCAN` supersedes the two
+  X25 channels for turn rate and slip. `StepperBoard` stays as the nominal fallback for both
+  until the CAN boards are confirmed on the rig and keeps driving the remaining X25 gauges
+  regardless.
 - `shared/CANBase`: shared PlatformIO library with the CAN wire protocol (see Architecture below).
   Board projects pull it in via `lib_extra_dirs = ../shared` in `platformio.ini`.
 - `DCUProviderPlugin`: X-Plane 12 plugin (C++/CMake, not PlatformIO) bridging DCU serial data into
@@ -51,7 +53,7 @@ pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
 pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
                           # AirspeedCAN, AltimeterCAN, AttitudeCAN, DCU, HSICAN, RudderCAN,
-                          # VerticalSpeedCAN and WhiskeyCompassCAN have real
+                          # TurnCoordinatorCAN, VerticalSpeedCAN and WhiskeyCompassCAN have real
                           # Unity tests, run natively (no device needed):
 pio test -e native       # runs test/test_* against that board's include headers
 ```
@@ -61,7 +63,8 @@ RudderCAN's and AirspeedCAN's `platformio.ini` factor the AVR-common settings (`
 `extends = avr`, rather than repeating them per env as DCU's does — copy this shape for any future board
 that adds a native test env. The natively tested logic lives in Arduino-free headers under that board's
 `include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`, `VerticalSpeedCalibration.h`,
-`AltimeterCalibration.h`, `CompassGeometry.h`, `HSIGeometry.h`, `Backlash.h`, `HSICalibration.h`, `AttitudeGeometry.h`);
+`AltimeterCalibration.h`, `CompassGeometry.h`, `HSIGeometry.h`, `Backlash.h`, `HSICalibration.h`, `AttitudeGeometry.h`,
+`TurnCoordinatorCalibration.h`);
 `src/` stays Arduino-coupled.
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
@@ -111,6 +114,10 @@ Plugin logs go to X-Plane's `Log.txt` (`XPLMDebugString`).
   pitch motor rides on the roll frame). Its homing order — roll first, every roll move
   counter-moved on pitch, pitch last — is a mechanical constraint, not a style choice.
   See `docs/superpowers/specs/2026-10-09-attitude-can-design.md`.
+  `TurnCoordinatorCAN` is the two-needle X27 variant: CAN `0x103` carries signed turn rate and
+  slip, one AX1201728SG drives both motors through the vendored `vid6608` fork, and each needle
+  has its own taught calibration table (VSI-style, 0 is a taught mark, not the home stop).
+  See `docs/superpowers/specs/2026-10-09-turn-coordinator-can-design.md`.
 
 ### Motion chain (`MotionProviderPlugin` → `MotionGateway` → `MotionActor`)
 
