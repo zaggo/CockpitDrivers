@@ -189,7 +189,8 @@ inline int32_t pitchDisplaySteps(int32_t pitchMotorPos, int32_t rollPos, uint32_
 
 // The axis with more steps runs at its own max rate; the other gets its step
 // delay stretched by the ratio so both arrive at the same time. An idle axis
-// keeps its max delay — there is nothing to coordinate and nothing to divide by.
+// keeps its max delay — there is nothing to coordinate and nothing to divide by;
+// equal travel likewise leaves both at their own max.
 inline void coordinatedDelays(int32_t stepsRoll, int32_t stepsPitch,
                               uint32_t delayRollMax, uint32_t delayPitchMax,
                               uint32_t *delayRoll, uint32_t *delayPitch)
@@ -206,7 +207,7 @@ inline void coordinatedDelays(int32_t stepsRoll, int32_t stepsPitch,
     {
         *delayPitch = delayRollMax * r / p;
     }
-    else
+    else if (p > r)
     {
         *delayRoll = delayPitchMax * p / r;
     }
