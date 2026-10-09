@@ -26,6 +26,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   hsiHeadingMeta = {0, 5000};
   hsiNavMeta = {0, 5000};
   attitudeMeta = {0, 5000};
+  turnCoordinatorMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -354,6 +355,28 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageTurnCoordinator:
+  {
+    if (len != sizeof(TurnCoordinatorMessage))
+      return;
+
+    TurnCoordinatorMessage msg;
+    memcpy(&msg, payload, sizeof(msg));
+
+    // Same conversion as the attitude frame: signed, rounded away from zero,
+    // clamped to int16, NaN -> 0.
+    const int16_t turn100 = attitudeDeg100(msg.turnRateDeg);
+    const int16_t s100 = attitudeDeg100(msg.slipDeg);
+
+    if (turn100 != turnRate100 || s100 != slip100)
+    {
+      turnRate100 = turn100;
+      slip100 = s100;
+      sendTurnCoordinator();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -522,6 +545,19 @@ void DCUReceiver::sendAttitude()
   attitudeMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendTurnCoordinator()
+{
+  byte data[8] = {0};
+
+  // [0..1] turn rate, [2..3] slip, both int16 degrees * 100, [4..7] reserved.
+  packBE16(data + 0, static_cast<uint16_t>(turnRate100));
+  packBE16(data + 2, static_cast<uint16_t>(slip100));
+
+  canBus->sendMessage(CanMessageId::turnCoordinator, 8, data);
+
+  turnCoordinatorMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -598,5 +634,11 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for attitude")));
     sendAttitude();
+  }
+
+  if (isStale(turnCoordinatorMeta.lastSendTimestamp, now, turnCoordinatorMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for turnCoordinator")));
+    sendTurnCoordinator();
   }
 }

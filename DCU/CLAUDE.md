@@ -69,7 +69,8 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
 - **`DCUReceiver`**: byte state machine (via `SerialFrameParser`) parsing frames from the plugin
   (`SerialMessageFuel`, `SerialMessageLights`, `SerialMessageTransponder`, `SerialMessageHandbrake`,
   `SerialMessageRPM`, `SerialMessageOdometer`, `SerialMessageAirspeed`, `SerialMessageAltimeterVsi`,
-  `SerialMessageCompass`, `SerialMessageHsiHeading`, `SerialMessageHsiNav`, `SerialMessageAttitude`), converts them to CAN messages and sends them
+  `SerialMessageCompass`, `SerialMessageHsiHeading`, `SerialMessageHsiNav`, `SerialMessageAttitude`,
+  `SerialMessageTurnCoordinator`), converts them to CAN messages and sends them
   onward to instruments via `CAN::sendMessage`. Caches last-sent values per message type and resends on
   a 5000ms max-age timer (`checkMaxAgeResync`) even without new plugin input, so instruments recover
   after a dropped frame or a restart. `SerialMessageCompass` (`0x0B`) carries a single `float
@@ -79,6 +80,9 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
   `DCUReceiver` repacks it into CAN `0x101` as two big-endian `int16` of degrees × 100 via
   `attitudeDeg100()` from `shared/CANBase/include/AttitudeWire.h` (clamped, NaN-safe, tested in
   `test_attitude_wire`).
+  `SerialMessageTurnCoordinator` (`0x10`) carries `TurnCoordinatorMessage` (two floats, turn rate
+  then slip); `DCUReceiver` repacks it into CAN `0x103` as two big-endian `int16` of degrees × 100
+  through the same `attitudeDeg100()` — one helper for every signed-degrees frame.
 - **`DCUSender`**: formats outbound frames back to the plugin — used by `CAN` to relay instrument-side
   input (transponder knob commands, handbrake status) that arrived over CAN.
 - Adding a new serial message type touches three places: `SerialMessageId.h` (enum + payload struct),
@@ -109,10 +113,11 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
 serial-console simulator that drives fuel/light/RPM/odometer/airspeed CAN messages directly, for
 testing instruments on the CAN bus without the plugin/X-Plane attached. `?` lists the commands
-(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`co`/`rw`/`bw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
+(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`co`/`tc`/`rw`/`bw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
 AirspeedCAN. `al<feet>` and `vs<fpm>` both resend the same `altimeterVsi` (0x102) frame — altitude and
 climb rate share one message, so each command updates its half and ships both. `co<deg>` sends a
-`compass` (0x107) frame to WhiskeyCompassCAN. `hb` prints the
+`compass` (0x107) frame to WhiskeyCompassCAN. `tc<turn>,<slip>` sends a `turnCoordinator` (0x103)
+frame to TurnCoordinatorCAN — one frame carries both needles, so one command sets both. `hb` prints the
 instrument nodes that have gone quiet (backed by `InstrumentLiveness.h` above).
 
 Because no `DCUSender` exists in bench builds, instrument→plugin frames decoded by `CAN` have no sink.

@@ -25,6 +25,7 @@ class BenchDebug {
         void sendAirspeed();
         void sendAltimeterVsi();
         void sendCompass();
+        void sendTurnCoordinator();
 
         void startRudderWatch();
         void stopRudderWatch();
@@ -65,6 +66,11 @@ class BenchDebug {
         float vsiFpm = 0.;
 
         float compassHeadingDeg = 0.;
+
+        // Turn coordinator: one frame carries both needles, so one command
+        // sets both (tc<turn>,<slip>).
+        float turnRateDeg = 0.;
+        float slipDeg = 0.;
 
         // Rudder watch: prints incoming 0x303 frames until any key is pressed.
         bool rudderWatchActive = false;

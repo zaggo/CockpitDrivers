@@ -2,6 +2,7 @@
 #include "WireEncoding.h"
 #include "CommandTokenizer.h"
 #include "HsiWire.h"
+#include "AttitudeWire.h"
 #include <math.h>
 
 #if BENCHDEBUG
@@ -82,6 +83,17 @@ void BenchDebug::sendCompass() {
     Serial.println(String(F("Send Compass: ")) + compassHeadingDeg + F(" deg"));
 
     canBus->sendMessage(CanMessageId::compass, 8, data);
+}
+
+void BenchDebug::sendTurnCoordinator() {
+    byte data[8] = {0};
+    // [0..1] turn rate, [2..3] slip, both int16 degrees * 100. [4..7] reserved.
+    packBE16(data + 0, static_cast<uint16_t>(attitudeDeg100(turnRateDeg)));
+    packBE16(data + 2, static_cast<uint16_t>(attitudeDeg100(slipDeg)));
+
+    Serial.println(String(F("Send Turn Coordinator: turn ")) + turnRateDeg + F(" deg, slip ") + slipDeg + F(" deg"));
+
+    canBus->sendMessage(CanMessageId::turnCoordinator, 8, data);
 }
 
 void BenchDebug::sendHsiHeadingFrame() {
@@ -220,6 +232,20 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Compass heading set to "))+compassHeadingDeg+F(" deg"));
         sendCompass();
         return true;
+    } else if (command.startsWith("tc")) {
+        // tc<turn>,<slip> - e.g. tc-45,3.5. Missing slip keeps the old slip.
+        String rString = command.substring(2);
+        rString.trim();
+        const int comma = rString.indexOf(',');
+        if (comma < 0) {
+            turnRateDeg = rString.toFloat();
+        } else {
+            turnRateDeg = rString.substring(0, comma).toFloat();
+            slipDeg = rString.substring(comma + 1).toFloat();
+        }
+        Serial.println(String(F("Turn coordinator set to turn ")) + turnRateDeg + F(" deg, slip ") + slipDeg + F(" deg"));
+        sendTurnCoordinator();
+        return true;
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
@@ -302,6 +328,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("al<feet>: set altitude (shared 0x102 frame)"));
         Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
         Serial.println(F("co<deg>: set magnetic compass heading"));
+        Serial.println(F("tc<turn>,<slip>: set turn coordinator, degrees, negative = left"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         Serial.println(F("bw: watch altimeter baro setting (any key stops)"));
         Serial.println(F("hb: list instrument nodes that went quiet"));
