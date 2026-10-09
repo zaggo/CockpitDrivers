@@ -146,6 +146,7 @@ const double kRpmLimits[attitudeAxisCount][rpmKeyCount] = { {14.0, 4.0}, {14.0, 
 const double kPitchMaxDegree = 30.0;
 const double kPitchScale = 0.76923077;
 const bool kRollInversed = true;        // LUA sendete -roll
+const bool kPitchInversed = false;      // Anzeige-Frame, nicht das Spulen-Flag
 
 // Werkseinstellung der Nullpunkte; live in EEPROM.
 const int16_t kDefaultZeroAdjustDegree[attitudeAxisCount] = { 1, -1 };
@@ -166,7 +167,8 @@ Arduino-frei, reine Funktionen, alle mit Unity-Tests.
 - `signedDegreesToSteps(double deg, uint32_t total)` → `int32_t`, gerundet, **nicht**
   normalisiert (Pitch ist signed).
 - `pitchDisplayDegree(double pitchDeg)`: clamp auf `±kPitchMaxDegree`, dann `× kPitchScale`.
-- `rollDisplayDegree(double rollDeg)`: `kRollInversed ? −roll : roll`.
+- `axisDisplayDegree(double deg, bool inversed)`: `inversed ? −deg : deg`; Roll mit
+  `kRollInversed`, Pitch mit `kPitchInversed` (Anzeige-Frame, nie das Spulen-Flag).
 - **Kopplung:** Pitch-Motor sitzt auf dem Roll-Rahmen. Anzeige-Pitch = Pitch-Motor + Roll
   (in Steps, modular). Der Pitch-Motor fährt deshalb ein **Delta**:
   `pitchMotorDelta = (pitchDisplayZiel − pitchDisplayIst) − rollDelta` — GyroDrives
@@ -336,7 +338,7 @@ Ablauf am Tisch: `hm` (Sensoren prüfen), `ho`, dann `ro`/`pi` auf die optische 
 - `signedDegreesToSteps`: 0, ±90 → ±1024, Rundung, Vielfache von 360.
 - `shortestPathSteps`: Kopie der Compass-Fälle (359→1, Gleichstand bricht CW).
 - `pitchDisplayDegree`: Clamp ±30, Skalierung, negative Werte.
-- `rollDisplayDegree`: Inversion.
+- `axisDisplayDegree`: Inversion.
 - `pitchMotorDelta`: Roll still → Delta = Anzeigeänderung; Anzeige konstant bei Roll +64/−2048 → Motor −64/+2048; 180°-Roll mit Pitch-Schwenk → −2573 (keine Faltung); Roll 359→1 bei festem Pitch → −23; negative Positionen.
 - `coordinatedDelays`: gleich viele Steps → gleiche Delays; 2:1 → doppelter Delay auf der
   kurzen Achse; eine Achse 0 Steps → kein Division-by-zero, beide Max.
