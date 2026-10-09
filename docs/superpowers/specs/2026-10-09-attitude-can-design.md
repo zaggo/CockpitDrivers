@@ -167,12 +167,15 @@ Arduino-frei, reine Funktionen, alle mit Unity-Tests.
   normalisiert (Pitch ist signed).
 - `pitchDisplayDegree(double pitchDeg)`: clamp auf `±kPitchMaxDegree`, dann `× kPitchScale`.
 - `rollDisplayDegree(double rollDeg)`: `kRollInversed ? −roll : roll`.
-- `pitchMotorTarget(int32_t pitchDisplaySteps, uint32_t rollTargetSteps, uint32_t total)`
-  = `normalize(pitchDisplaySteps − rollTargetSteps)`. Das ist GyroDrives Kopplung, nur
-  als Zielposition statt als Delta-Korrektur. Beide Motoren fahren danach Shortest-Path
-  auf ihr Ziel. Zulässig, weil der *relative* Pitch nie über ±30° hinauskommt: der
-  Pitch-Motor-Delta ist immer `−rollDelta + pitchDelta`, und keiner der beiden kann den
-  Anschlag erreichen.
+- **Kopplung:** Pitch-Motor sitzt auf dem Roll-Rahmen. Anzeige-Pitch = Pitch-Motor + Roll
+  (in Steps, modular). Der Pitch-Motor fährt deshalb ein **Delta**:
+  `pitchMotorDelta = (pitchDisplayZiel − pitchDisplayIst) − rollDelta` — GyroDrives
+  `correctedPitchSteps = −numStepsRoll + numStepsPitch`. Bewusst kein gefaltetes
+  Absolutziel mit Shortest-Path auf dem Motor: die Anschläge sitzen an der *Anzeige*,
+  nicht am Motor, und ab |Delta| > halbe Umdrehung (Roll-Sprung > 134° bei Pitch am
+  Rand, oder ein glatter 180°-Roll) würde die Faltung den Motor kurz und die Anzeige
+  lang — durch beide Anschläge — schicken. Test: 180°-Roll mit Pitch +262 → −263 Steps
+  ergibt Motor −2573, nicht +1523.
 - `coordinatedDelays(int32_t stepsRoll, int32_t stepsPitch, uint32_t delayRollMax,
   uint32_t delayPitchMax, uint32_t *delayRoll, uint32_t *delayPitch)`: Achse mit mehr
   Steps bekommt ihren Max-Delay, die andere `delay × |mehr| / |weniger|`. Null-Steps auf
@@ -334,9 +337,7 @@ Ablauf am Tisch: `hm` (Sensoren prüfen), `ho`, dann `ro`/`pi` auf die optische 
 - `shortestPathSteps`: Kopie der Compass-Fälle (359→1, Gleichstand bricht CW).
 - `pitchDisplayDegree`: Clamp ±30, Skalierung, negative Werte.
 - `rollDisplayDegree`: Inversion.
-- `pitchMotorTarget`: Roll 0 → Motor = Anzeige; Anzeige konstant über eine volle
-  Roll-Umdrehung → Pitch-Motor-Delta exakt −4096; Roll 359→1 bei festem Pitch → kleiner
-  Pitch-Motor-Delta (kein Wrap-Sprung).
+- `pitchMotorDelta`: Roll still → Delta = Anzeigeänderung; Anzeige konstant bei Roll +64/−2048 → Motor −64/+2048; 180°-Roll mit Pitch-Schwenk → −2573 (keine Faltung); Roll 359→1 bei festem Pitch → −23; negative Positionen.
 - `coordinatedDelays`: gleich viele Steps → gleiche Delays; 2:1 → doppelter Delay auf der
   kurzen Achse; eine Achse 0 Steps → kein Division-by-zero, beide Max.
 - `homingWindowCentre`: Kopie der HSI-Fälle.

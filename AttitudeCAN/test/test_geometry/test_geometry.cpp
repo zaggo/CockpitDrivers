@@ -118,37 +118,37 @@ void test_roll_is_inverted_only_when_asked(void) {
 
 // --- nested axes ------------------------------------------------------------
 
-// Roll at zero: the pitch motor IS the pitch display.
-void test_pitch_motor_equals_display_when_roll_is_zero(void) {
-    TEST_ASSERT_EQUAL_UINT32(100, pitchMotorTarget(100, 0, 4096));
-    TEST_ASSERT_EQUAL_UINT32(4096 - 100, pitchMotorTarget(-100, 0, 4096));
+// Roll at zero and not moving: the pitch motor travels exactly the display change.
+void test_pitch_motor_delta_equals_display_change_when_roll_is_still(void) {
+    TEST_ASSERT_EQUAL_INT32(100, pitchMotorDelta(100, 0, 0, 0, 4096));
+    TEST_ASSERT_EQUAL_INT32(-150, pitchMotorDelta(-50, 100, 0, 0, 4096));
 }
 
-// The pitch motor rides on the roll frame, so holding the display still over
-// a full roll turn means the pitch motor counter-rotates exactly one turn.
-void test_holding_pitch_over_a_full_roll_counter_rotates_the_pitch_motor(void) {
-    int32_t pitchMotorTravel = 0;
-    uint32_t motorPos = pitchMotorTarget(0, 0, 4096);
-    for (uint32_t rollPos = 64; rollPos <= 4096; rollPos += 64) {
-        const uint32_t next = pitchMotorTarget(0, rollPos % 4096, 4096);
-        pitchMotorTravel += shortestPathSteps(motorPos, next, 4096);
-        motorPos = next;
-    }
-    TEST_ASSERT_EQUAL_INT32(-4096, pitchMotorTravel);
+// Holding the display still while roll moves R: the motor counter-rotates R.
+void test_holding_pitch_while_roll_moves_counter_rotates_the_pitch_motor(void) {
+    TEST_ASSERT_EQUAL_INT32(-64, pitchMotorDelta(0, 0, 0, 64, 4096));
+    TEST_ASSERT_EQUAL_INT32(2048, pitchMotorDelta(0, 0, 0, -2048, 4096));
 }
 
-// Roll crossing zero (359 -> 1 degree) with pitch held must not make the pitch
-// motor jump most of a turn.
+// The case that folding an absolute target gets wrong: a 180 degree roll
+// (tie, resolved CW = +2048) while pitch goes from +262 to -263 display steps.
+// The display must change by -525 and the motor by -525 - 2048 = -2573, even
+// though that is more than half a turn - the stops are on the display, not
+// on the motor.
+void test_a_half_turn_roll_with_a_pitch_swing_is_not_folded(void) {
+    TEST_ASSERT_EQUAL_INT32(-2573, pitchMotorDelta(-263, 262, 0, 2048, 4096));
+}
+
+// Roll crossing zero (359 -> 1 degree, delta +23) with the display held at 200.
 void test_roll_crossing_zero_keeps_the_pitch_motor_delta_small(void) {
-    const uint32_t before = pitchMotorTarget(200, 4085, 4096);
-    const uint32_t after = pitchMotorTarget(200, 12, 4096);
-    TEST_ASSERT_EQUAL_INT32(-23, shortestPathSteps(before, after, 4096));
+    // motor sits at 200 - 4085 folded = 211, roll at 4085
+    TEST_ASSERT_EQUAL_INT32(-23, pitchMotorDelta(200, 211, 4085, 23, 4096));
 }
 
-// getPosition() can be negative; a negative display request too.
-void test_pitch_motor_target_folds_negative_display_steps(void) {
-    TEST_ASSERT_EQUAL_UINT32(4096 - 300, pitchMotorTarget(-100, 200, 4096));
-    TEST_ASSERT_EQUAL_UINT32(0, pitchMotorTarget(-100, 200, 0));
+// Positions may be negative (CheapStepper counts down past zero).
+void test_pitch_motor_delta_accepts_negative_positions(void) {
+    TEST_ASSERT_EQUAL_INT32(0, pitchMotorDelta(-100, -300, 200, 0, 4096));
+    TEST_ASSERT_EQUAL_INT32(0, pitchMotorDelta(0, 0, 0, 0, 0));
 }
 
 void test_display_steps_are_recovered_from_motor_and_roll(void) {
@@ -209,10 +209,11 @@ int main(int, char **) {
     RUN_TEST(test_signed_degrees_round_to_the_nearest_step);
     RUN_TEST(test_pitch_is_clamped_before_scaling);
     RUN_TEST(test_roll_is_inverted_only_when_asked);
-    RUN_TEST(test_pitch_motor_equals_display_when_roll_is_zero);
-    RUN_TEST(test_holding_pitch_over_a_full_roll_counter_rotates_the_pitch_motor);
+    RUN_TEST(test_pitch_motor_delta_equals_display_change_when_roll_is_still);
+    RUN_TEST(test_holding_pitch_while_roll_moves_counter_rotates_the_pitch_motor);
+    RUN_TEST(test_a_half_turn_roll_with_a_pitch_swing_is_not_folded);
     RUN_TEST(test_roll_crossing_zero_keeps_the_pitch_motor_delta_small);
-    RUN_TEST(test_pitch_motor_target_folds_negative_display_steps);
+    RUN_TEST(test_pitch_motor_delta_accepts_negative_positions);
     RUN_TEST(test_display_steps_are_recovered_from_motor_and_roll);
     RUN_TEST(test_equal_travel_keeps_both_axes_at_their_max_rate);
     RUN_TEST(test_the_shorter_axis_is_slowed_proportionally);

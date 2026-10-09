@@ -155,21 +155,8 @@ inline double rollDisplayDegree(double rollDeg, bool inversed)
 
 // --- nested axes ------------------------------------------------------------
 
-// The pitch motor rides on the roll frame: turning roll by R steps turns the
-// pitch DISPLAY by R steps as well. In steps, display = motor + roll, so the
-// motor position that shows a given display pitch at a given roll is their
-// difference. This is GyroDrive's correctedPositionPitch, expressed as an
-// absolute target instead of a delta correction. Both axes then take the
-// shortest path to their target — safe, because the relative pitch never
-// exceeds the display window, so neither motor's travel can cross a stop.
-inline uint32_t pitchMotorTarget(int32_t pitchDisplaySteps, uint32_t rollTargetSteps,
-                                 uint32_t totalSteps)
-{
-    return normalizeStepPosition(pitchDisplaySteps - (int32_t)rollTargetSteps, totalSteps);
-}
-
-// Inverse of the above for status and calibration: what the display currently
-// shows, folded onto -total/2..total/2 so a small nose-down reads negative.
+// What the pitch display currently shows (display = motor + roll, in steps),
+// folded onto -total/2..total/2 so a small nose-down reads negative.
 inline int32_t pitchDisplaySteps(int32_t pitchMotorPos, int32_t rollPos, uint32_t totalSteps)
 {
     if (totalSteps == 0)
@@ -183,6 +170,23 @@ inline int32_t pitchDisplaySteps(int32_t pitchMotorPos, int32_t rollPos, uint32_
         display -= total;
     }
     return display;
+}
+
+// The pitch motor rides on the roll frame: turning roll by R steps turns the
+// pitch DISPLAY by R steps as well (display = motor + roll, in steps). So the
+// motor has to travel by the wanted change of the display MINUS whatever roll
+// is about to move. This is GyroDrive's `-numStepsRoll + numStepsPitch`.
+//
+// It is deliberately a delta, not a folded absolute target: the display has
+// stops, the motor does not, and folding the motor's target onto 0..total-1
+// would pick the short way for the MOTOR and send the DISPLAY the long way
+// round through both stops whenever |delta| exceeds half a turn (roll jumps
+// past 134 degrees with pitch at an extreme, or a plain 180 degree roll).
+inline int32_t pitchMotorDelta(int32_t pitchDisplayTarget, int32_t pitchMotorPos,
+                               int32_t rollPos, int32_t rollDelta, uint32_t totalSteps)
+{
+    const int32_t displayNow = pitchDisplaySteps(pitchMotorPos, rollPos, totalSteps);
+    return (pitchDisplayTarget - displayNow) - rollDelta;
 }
 
 // --- coordinated delays -----------------------------------------------------

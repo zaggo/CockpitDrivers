@@ -98,7 +98,7 @@ private:
 
     // Both motors, coordinated so they arrive together.
     void moveMotors(int32_t stepsRoll, int32_t stepsPitch);
-    void moveToTargets(uint32_t rollTarget, uint32_t pitchMotorTargetPos);
+    void moveToTargets(uint32_t rollTarget, int32_t pitchDisplayTarget);
 
     // Homing moves. Roll always drags the pitch motor the other way by the same
     // amount so the pitch display stays where it is.

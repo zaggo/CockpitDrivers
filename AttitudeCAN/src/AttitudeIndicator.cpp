@@ -168,14 +168,18 @@ void AttitudeIndicator::moveMotors(int32_t stepsRoll, int32_t stepsPitch)
     axes[pitch]->newMove(stepsPitch > 0, (uint32_t)labs(stepsPitch), now);
 }
 
-void AttitudeIndicator::moveToTargets(uint32_t rollTarget, uint32_t pitchMotorTargetPos)
+void AttitudeIndicator::moveToTargets(uint32_t rollTarget, int32_t pitchDisplayTarget)
 {
-    const uint32_t rollCurrent = normalizeStepPosition(axes[roll]->getPosition(), kTotalSteps);
-    const uint32_t pitchCurrent = normalizeStepPosition(axes[pitch]->getPosition(), kTotalSteps);
+    const int32_t rollPos = axes[roll]->getPosition();
+    const int32_t rollDelta =
+        shortestPathSteps(normalizeStepPosition(rollPos, kTotalSteps), rollTarget, kTotalSteps);
+    // Pitch is a delta on purpose - see pitchMotorDelta(): the stops are on the
+    // display, so the motor must never take "the short way" on its own.
+    const int32_t pitchDelta = pitchMotorDelta(pitchDisplayTarget, axes[pitch]->getPosition(),
+                                               rollPos, rollDelta, kTotalSteps);
     // A new setpoint replaces whatever move is in flight, recomputed from the
     // current positions. At 50Hz a queue would only pile up stale attitudes.
-    moveMotors(shortestPathSteps(rollCurrent, rollTarget, kTotalSteps),
-               shortestPathSteps(pitchCurrent, pitchMotorTargetPos, kTotalSteps));
+    moveMotors(rollDelta, pitchDelta);
 }
 
 AttitudeIndicator::AttitudeResult AttitudeIndicator::moveToAttitude(double pitchDeg, double rollDeg)
@@ -194,7 +198,7 @@ AttitudeIndicator::AttitudeResult AttitudeIndicator::moveToAttitude(double pitch
         signedDegreesToSteps(rollDisplayDegree(rollDeg, kRollInversed), kTotalSteps), kTotalSteps);
     const int32_t pitchSteps =
         signedDegreesToSteps(pitchDisplayDegree(pitchDeg, kPitchMaxDegree, kPitchScale), kTotalSteps);
-    moveToTargets(rollTarget, pitchMotorTarget(pitchSteps, rollTarget, kTotalSteps));
+    moveToTargets(rollTarget, pitchSteps);
     return success;
 }
 
