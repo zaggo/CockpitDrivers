@@ -99,6 +99,19 @@ class vid6608 {
     bool isStopped() { return !isMoving(); }
 
     /**
+     * @brief Test if the drive sits on its last requested position
+     *
+     * LOCAL FORK (TurnCoordinatorCAN): isMoving() only reports a move that
+     * loop() has already started. A moveTo() issued in the same loop pass is
+     * still only scheduled, so isMoving() reads false while the needle is
+     * about to leave. Calibration must not record getPosition() in that
+     * window - this is the check for it.
+     *
+     * @return true if idle and currentPosition equals the scheduled target
+     */
+    bool isSettled() { return moveState == STATE_IDLE && currentPosition == targetPositionNext; }
+
+    /**
      * @brief Returns current real absolute position
      *
      * @return uint16_t current real drive position in steps

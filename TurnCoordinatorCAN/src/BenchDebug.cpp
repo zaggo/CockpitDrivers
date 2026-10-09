@@ -89,6 +89,13 @@ bool BenchDebug::handleTurnCoordinatorInput(char* command) {
         // pt0 the level mark, which is nowhere near the mechanical home stop.
         const Needle needle = (command[1] == 't') ? turnRate : sideSlip;
         const int16_t deg = static_cast<int16_t>(atoi(command + 2));
+        // "ct90 pt90" on one line runs both before loop() has stepped once, and
+        // a fast-typed pt lands mid-travel - either would store the pre-move
+        // step for the mark. Refuse instead of recording a wrong point.
+        if (!turnCoordinator->isSettled(needle)) {
+            Serial.println(F("Needle still moving - wait until it stops, then repeat pt/ps."));
+            return true;
+        }
         if (!turnCoordinator->calibratePoint(needle, deg)) {
             Serial.println(F("Calibration table full. Wipe with 'cw' or reuse a point."));
             return true;

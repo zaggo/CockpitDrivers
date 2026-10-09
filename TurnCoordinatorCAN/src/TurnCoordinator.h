@@ -27,6 +27,11 @@ public:
     // is *not* the 0 mark - that one is taught like any other point.
     void home();
 
+    // True once the needle has arrived at its last requested position. A
+    // calibration point taken while the needle is still travelling records
+    // the wrong step silently, so the bench console checks this first.
+    bool isSettled(Needle needle);
+
     // Records the needle's current position as the calibration point for
     // `deg` (negative for left deflection). Returns false if the table is full.
     bool calibratePoint(Needle needle, int16_t deg);

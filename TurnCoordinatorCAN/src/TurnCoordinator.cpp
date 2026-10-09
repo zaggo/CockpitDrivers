@@ -126,6 +126,11 @@ void TurnCoordinator::home()
     }
 }
 
+bool TurnCoordinator::isSettled(Needle needle)
+{
+    return motors[needle]->isSettled();
+}
+
 bool TurnCoordinator::calibratePoint(Needle needle, int16_t deg)
 {
     const uint16_t step = motors[needle]->getPosition();

@@ -16,6 +16,8 @@ one AX1201728SG driving two X27.168. Design: `docs/superpowers/specs/2026-10-09-
 3. `cw`, reset the board, `?` — both tables show 0 points, needles sit on the stop.
 4. Calibrate turn rate: `ct<deg>` until the aircraft symbol sits on the left mark → `pt-90`
    (or whatever the dial says), centre → `pt0`, right mark → `pt90`. `?` lists the points.
+   Send `pt`/`ps` on its own line after the needle has stopped: a point requested while the
+   needle is still travelling is refused ("Needle still moving"), never stored wrong.
 5. Calibrate slip: `cs<deg>` onto the left mark → `ps-8`, centre → `ps0`, right → `ps8`.
 6. `tr0 sl0` — both needles on centre. `tr90`, `tr-90`, `sl8`, `sl-8` on their marks.
    `tr200` parks on the outermost taught point, no stop is hit.
