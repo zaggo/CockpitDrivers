@@ -167,6 +167,13 @@ void TurnCoordinator::moveNeedle(Needle needle, float deg, bool calibration)
 {
     if (calibration)
     {
+        // Raw degrees count from the home stop, so there is nothing below 0.
+        // A negative value (ct-5 typed for "left") would be a float->unsigned
+        // conversion out of range, which is undefined behaviour.
+        if (deg < 0.)
+        {
+            deg = 0.;
+        }
         motors[needle]->moveTo(static_cast<uint16_t>(deg * 12.)); // 12 steps per degree
         return;
     }

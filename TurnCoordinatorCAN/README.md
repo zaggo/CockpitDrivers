@@ -32,6 +32,7 @@ other way round.
 1. Gateway heartbeat: LED on; both needles on their taught centre.
 2. Right turn in X-Plane: aircraft symbol banks right; slip in a skid moves the ball the
    right way. Wrong direction → re-teach points, no code change.
-3. From the DCU bench console, `tc45,-4` moves both needles; `tc` alone keeps the slip.
+3. From the DCU bench console, `tc45,-4` moves both needles; `tc45` keeps the slip, bare `tc`
+   resends both cached values.
 4. From `CANDebugNode`, send `0x103` with len 2: the board must ignore it (no move).
 5. Pull the gateway: LED off; reconnect: LED on, needles follow the next frame.

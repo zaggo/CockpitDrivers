@@ -233,11 +233,14 @@ bool BenchDebug::handleAltimeterInput(String command) {
         sendCompass();
         return true;
     } else if (command.startsWith("tc")) {
-        // tc<turn>,<slip> - e.g. tc-45,3.5. Missing slip keeps the old slip.
+        // tc<turn>,<slip> - e.g. tc-45,3.5. Missing slip keeps the old slip;
+        // a bare tc resends both cached values (toFloat("") would read as 0).
         String rString = command.substring(2);
         rString.trim();
         const int comma = rString.indexOf(',');
-        if (comma < 0) {
+        if (rString.length() == 0) {
+            // keep both
+        } else if (comma < 0) {
             turnRateDeg = rString.toFloat();
         } else {
             turnRateDeg = rString.substring(0, comma).toFloat();
