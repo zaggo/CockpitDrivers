@@ -68,12 +68,16 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
 - **`DCUReceiver`**: byte state machine (via `SerialFrameParser`) parsing frames from the plugin
   (`SerialMessageFuel`, `SerialMessageLights`, `SerialMessageTransponder`, `SerialMessageHandbrake`,
   `SerialMessageRPM`, `SerialMessageOdometer`, `SerialMessageAirspeed`, `SerialMessageAltimeterVsi`,
-  `SerialMessageCompass`), converts them to CAN messages and sends them
+  `SerialMessageCompass`, `SerialMessageHsiHeading`, `SerialMessageHsiNav`, `SerialMessageAttitude`), converts them to CAN messages and sends them
   onward to instruments via `CAN::sendMessage`. Caches last-sent values per message type and resends on
   a 5000ms max-age timer (`checkMaxAgeResync`) even without new plugin input, so instruments recover
   after a dropped frame or a restart. `SerialMessageCompass` (`0x0B`) carries a single `float
   headingDegMag` in host order; `DCUReceiver` repacks it into CAN `0x107` as a big-endian `uint16` of
   degrees × 100.
+  `SerialMessageAttitude` (`0x0F`) carries `AttitudeMessage` (two floats, pitch then roll);
+  `DCUReceiver` repacks it into CAN `0x101` as two big-endian `int16` of degrees × 100 via
+  `attitudeDeg100()` from `shared/CANBase/include/AttitudeWire.h` (clamped, NaN-safe, tested in
+  `test_attitude_wire`).
 - **`DCUSender`**: formats outbound frames back to the plugin — used by `CAN` to relay instrument-side
   input (transponder knob commands, handbrake status) that arrived over CAN.
 - Adding a new serial message type touches three places: `SerialMessageId.h` (enum + payload struct),

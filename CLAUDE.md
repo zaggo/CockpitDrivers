@@ -11,7 +11,7 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 
 ## Repo layout
 
-- Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `CANDebugNode`,
+- Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `AttitudeCAN`, `CANDebugNode`,
   `DCU`, `FuelGaugeCAN`, `HSICAN`, `HSIDriver`, `HandbrakeCAN`, `I2CBoard`,
   `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`,
   `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`,
@@ -24,6 +24,9 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
   until the CAN board is confirmed on the rig — except the fallback is nominal only: the board's
   rewiring for `HSICAN` repurposed the pins `HSIDriver`'s `Configuration.h` expects (servos on
   D10–D12, hall sensors on D2/D8/A0), so `HSIDriver` can no longer actually be flashed.
+  `StepperBoard` still carries the pre-CAN attitude-indicator driver (`GyroDrive`) next to its
+  X25 motors; `AttitudeCAN` supersedes that part. `StepperBoard` stays as the nominal fallback
+  until the CAN board is confirmed on the rig and keeps driving the X25 gauges regardless.
 - `shared/CANBase`: shared PlatformIO library with the CAN wire protocol (see Architecture below).
   Board projects pull it in via `lib_extra_dirs = ../shared` in `platformio.ini`.
 - `DCUProviderPlugin`: X-Plane 12 plugin (C++/CMake, not PlatformIO) bridging DCU serial data into
@@ -47,7 +50,7 @@ pio run -t upload        # flash to connected board
 pio run -t upload -e <env>
 pio device monitor -b 115200   # serial monitor (matches monitor_speed in platformio.ini)
 pio test                 # PlatformIO unit tests — most board test/ dirs are still empty scaffolds;
-                          # AirspeedCAN, AltimeterCAN, DCU, HSICAN, RudderCAN,
+                          # AirspeedCAN, AltimeterCAN, AttitudeCAN, DCU, HSICAN, RudderCAN,
                           # VerticalSpeedCAN and WhiskeyCompassCAN have real
                           # Unity tests, run natively (no device needed):
 pio test -e native       # runs test/test_* against that board's include headers
@@ -58,7 +61,7 @@ RudderCAN's and AirspeedCAN's `platformio.ini` factor the AVR-common settings (`
 `extends = avr`, rather than repeating them per env as DCU's does — copy this shape for any future board
 that adds a native test env. The natively tested logic lives in Arduino-free headers under that board's
 `include/` (`AdaptiveFilter.h`, `AxisMapping.h`, `AirspeedCalibration.h`, `VerticalSpeedCalibration.h`,
-`AltimeterCalibration.h`, `CompassGeometry.h`, `HSIGeometry.h`, `Backlash.h`, `HSICalibration.h`);
+`AltimeterCalibration.h`, `CompassGeometry.h`, `HSIGeometry.h`, `Backlash.h`, `HSICalibration.h`, `AttitudeGeometry.h`);
 `src/` stays Arduino-coupled.
 
 `DCUProviderPlugin` uses its own scripts instead of PlatformIO:
@@ -103,6 +106,11 @@ Plugin logs go to X-Plane's `Log.txt` (`XPLMDebugString`).
   as resending every 5s — `0x341` is the exception: it carries encoder deltas, not absolute state,
   so resending it would double-apply a turn that already landed. See
   `docs/superpowers/specs/2026-09-30-hsi-can-design.md`.
+  `AttitudeCAN` is the nested-axis variant: CAN `0x101` carries signed pitch/roll, and the
+  board's `AttitudeGeometry.h` turns a display attitude into two coupled motor targets (the
+  pitch motor rides on the roll frame). Its homing order — roll first, every roll move
+  counter-moved on pitch, pitch last — is a mechanical constraint, not a style choice.
+  See `docs/superpowers/specs/2026-10-09-attitude-can-design.md`.
 
 ### Motion chain (`MotionProviderPlugin` → `MotionGateway` → `MotionActor`)
 
