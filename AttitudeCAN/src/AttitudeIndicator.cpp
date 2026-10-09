@@ -264,14 +264,328 @@ bool AttitudeIndicator::calibrateZero(AttitudeAxis axis)
     return true;
 }
 
-// --- homing (filled in by Task 5) -------------------------------------------
+// --- homing -----------------------------------------------------------------
+//
+// ORDER IS A MECHANICAL REQUIREMENT. Roll is homed first, and every roll move
+// drags the pitch motor the other way by the same amount, so the pitch display
+// does not move while roll searches its sensor. The pitch display has stops;
+// searching roll with the pitch motor standing still would turn the display
+// along with the frame and drive it into one. Pitch is homed only once roll
+// stands at 0, at which point pitch motor == pitch display and the pitch
+// phases need no correction. This is GyroDrive::homeAllAxis() made non-blocking.
 
-void AttitudeIndicator::homingMoveRollSteps(int32_t, RpmKeys) {}
-void AttitudeIndicator::homingMoveRoll(int16_t, RpmKeys) {}
-void AttitudeIndicator::homingMovePitch(int16_t, RpmKeys) {}
-void AttitudeIndicator::fetchHallStates() {}
-AttitudeIndicator::AttitudeResult AttitudeIndicator::lookForZeroChange(AttitudeAxis, bool) { return homingTimeout; }
-AttitudeIndicator::AttitudeResult AttitudeIndicator::nextHomingState() { return homingTimeout; }
-void AttitudeIndicator::runHomingStep() {}
-void AttitudeIndicator::logHomingPhase() {}
-void AttitudeIndicator::beginHoming() {}
+// A window of a step or two means two consecutive phases were satisfied with
+// essentially no travel between them (a chattering edge); its midpoint carries
+// no information. The upper bound lives in homingWindowCentre().
+static const int32_t kMinPlausibleWindowSteps = 4; // ~0.35 degrees
+
+void AttitudeIndicator::homingMoveRollSteps(int32_t steps, RpmKeys rate)
+{
+    // Same delay on both motors: they must stay in lockstep so a stop() in the
+    // middle of a phase leaves the pitch display exactly where it was.
+    axes[roll]->setDelay(stepDelay[roll][rate]);
+    axes[pitch]->setDelay(stepDelay[roll][rate]);
+    const uint32_t now = micros();
+    axes[roll]->newMove(steps > 0, (uint32_t)labs(steps), now);
+    axes[pitch]->newMove(steps < 0, (uint32_t)labs(steps), now);
+}
+
+void AttitudeIndicator::homingMoveRoll(int16_t degree, RpmKeys rate)
+{
+    homingMoveRollSteps(signedDegreesToSteps((double)degree, kTotalSteps), rate);
+}
+
+void AttitudeIndicator::homingMovePitch(int16_t degree, RpmKeys rate)
+{
+    const int32_t steps = signedDegreesToSteps((double)degree, kTotalSteps);
+    axes[pitch]->setDelay(stepDelay[pitch][rate]);
+    axes[pitch]->newMove(steps > 0, (uint32_t)labs(steps), micros());
+}
+
+void AttitudeIndicator::fetchHallStates()
+{
+    for (uint8_t i = 0; i < attitudeAxisCount; i++)
+    {
+        const bool state = (digitalRead(kHallPins[i]) == LOW);
+        // Log edges only: a print per poll would flood the line and stall the
+        // steppers; a print per edge is a handful of lines per run.
+        if (state != hallState[i])
+        {
+            DEBUGLOG_PRINT(i == roll ? F("ATT: hall roll ") : F("ATT: hall pitch "));
+            DEBUGLOG_PRINT(state ? F("ON") : F("OFF"));
+            DEBUGLOG_PRINT(F(" @ "));
+            DEBUGLOG_PRINTLN(axes[i]->getPosition());
+        }
+        hallState[i] = state;
+    }
+}
+
+AttitudeIndicator::AttitudeResult AttitudeIndicator::lookForZeroChange(AttitudeAxis axis, bool targetState)
+{
+    fetchHallStates();
+    if (hallState[axis] != targetState && axes[axis]->getStepsLeft() != 0)
+    {
+        return success; // still searching
+    }
+    if (hallState[axis] != targetState)
+    {
+        // Ran out of commanded travel: a stop, or a sensor that never changes.
+        DEBUGLOG_PRINTLN(F("ATT: homing timeout"));
+        return homingTimeout;
+    }
+    return axisStateReached;
+}
+
+AttitudeIndicator::AttitudeResult AttitudeIndicator::nextHomingState()
+{
+    AttitudeResult state;
+    switch (homingState)
+    {
+    // ---------------- roll ----------------
+    case unknown:
+        fetchHallStates();
+        stopAll();
+        resetAll();
+        homingMoveRoll(kRollHomingLeaveDegree, maxRpm);
+        homingState = rollLeaveZero;
+        return success;
+
+    case rollLeaveZero:
+        state = lookForZeroChange(roll, false);
+        if (state == axisStateReached)
+        {
+            stopAll();
+            resetAll();
+            homingMoveRoll(kRollHomingSearchDegree, maxRpm);
+            homingState = rollSearchZero;
+            return success;
+        }
+        return state;
+
+    case rollSearchZero:
+        state = lookForZeroChange(roll, true);
+        if (state == axisStateReached)
+        {
+            stopAll();
+            resetAll();
+            homingMoveRoll(kRollHomingSlowEndDegree, minRpm);
+            homingState = rollSearchZeroEnd;
+            return success;
+        }
+        return state;
+
+    case rollSearchZeroEnd:
+        state = lookForZeroChange(roll, false);
+        if (state == axisStateReached)
+        {
+            stopAll();
+            resetAll();
+            homingMoveRoll(kRollHomingSlowReturnDegree, minRpm);
+            homingState = rollReturnToZeroEnd;
+            return success;
+        }
+        return state;
+
+    case rollReturnToZeroEnd:
+        state = lookForZeroChange(roll, true);
+        if (state == axisStateReached)
+        {
+            // Position is reset ON the window's end edge here, so the start
+            // edge is captured in the next phase as a negative offset from it.
+            stopAll();
+            resetAll();
+            homingMoveRoll(kRollHomingSlowStartDegree, minRpm);
+            homingState = rollSearchZeroStart;
+            return success;
+        }
+        return state;
+
+    case rollSearchZeroStart:
+        state = lookForZeroChange(roll, false);
+        if (state == axisStateReached)
+        {
+            const uint32_t zeroStart = normalizeStepPosition(axes[roll]->getPosition(), kTotalSteps);
+            stopAll();
+            resetAll();
+            // End edge sits at 0 in this frame (see above), so the window is the
+            // modular distance from zeroStart forward to 0, and its centre is
+            // half of that. Bounded on both sides: see homingWindowCentre() and
+            // kMinPlausibleWindowSteps.
+            int32_t centre = 0;
+            const bool plausible = homingWindowCentre(0, zeroStart, kTotalSteps, &centre)
+                                   && centre * 2 >= kMinPlausibleWindowSteps;
+            DEBUGLOG_PRINT(F("ATT: roll window start "));
+            DEBUGLOG_PRINT(zeroStart);
+            DEBUGLOG_PRINT(F(" centre "));
+            DEBUGLOG_PRINTLN(centre);
+            if (!plausible)
+            {
+                DEBUGLOG_PRINTLN(F("ATT: implausible roll zero window, homing failed"));
+                return homingTimeout;
+            }
+            homingMoveRollSteps(centre, maxRpm);
+            homingState = rollMoveToTrueZero;
+            return success;
+        }
+        return state;
+
+    case rollMoveToTrueZero:
+        if (axes[roll]->getStepsLeft() != 0)
+        {
+            return success;
+        }
+        resetAll();
+        homingMoveRoll(config.zeroAdjustDegree[roll], maxRpm);
+        homingState = rollMoveToAdjustedZero;
+        return success;
+
+    case rollMoveToAdjustedZero:
+        if (axes[roll]->getStepsLeft() != 0)
+        {
+            return success;
+        }
+        // Roll now stands at 0. From here on pitch motor == pitch display.
+        resetAll();
+        homingMovePitch(kPitchHomingLeaveDegree, maxRpm);
+        homingState = pitchLeaveZero;
+        return success;
+
+    // ---------------- pitch ----------------
+    case pitchLeaveZero:
+        state = lookForZeroChange(pitch, false);
+        if (state == axisStateReached)
+        {
+            axes[pitch]->stop();
+            axes[pitch]->resetPosition();
+            homingMovePitch(kPitchHomingSearchDegree, maxRpm);
+            homingState = pitchSearchZero;
+            return success;
+        }
+        return state;
+
+    case pitchSearchZero:
+        state = lookForZeroChange(pitch, true);
+        if (state == axisStateReached)
+        {
+            axes[pitch]->stop();
+            axes[pitch]->resetPosition();
+            homingMovePitch(kPitchHomingBackOffDegree, maxRpm);
+            homingState = pitchBackOff;
+            return success;
+        }
+        return state;
+
+    case pitchBackOff:
+        if (axes[pitch]->getStepsLeft() != 0)
+        {
+            return success;
+        }
+        axes[pitch]->resetPosition();
+        homingMovePitch(kPitchHomingSlowSearchDegree, minRpm);
+        homingState = pitchSlowSearchZero;
+        return success;
+
+    case pitchSlowSearchZero:
+        state = lookForZeroChange(pitch, true);
+        if (state == axisStateReached)
+        {
+            axes[pitch]->stop();
+            axes[pitch]->resetPosition();
+            homingMovePitch(kPitchHomingParkDegree + config.zeroAdjustDegree[pitch], maxRpm);
+            homingState = pitchMoveToAdjustedZero;
+            return success;
+        }
+        return state;
+
+    case pitchMoveToAdjustedZero:
+        if (axes[pitch]->getStepsLeft() != 0)
+        {
+            return success;
+        }
+        resetAll();
+        homingState = homed;
+        return success;
+
+    case homed:
+        return success;
+
+    case timeout:
+        return homingTimeout;
+    }
+    return homingTimeout;
+}
+
+void AttitudeIndicator::beginHoming()
+{
+    if (homingActive)
+    {
+        return;
+    }
+    stopAll();
+    isHomed = false;
+    // A retry clears the fault blink and hands the light back to the panel
+    // brightness; a second failure switches it on again.
+    homingFailed = false;
+    failBlinkOn = false;
+    applyLight(commandedBrightness);
+    commandedPitchDeg = 0.0;
+    commandedRollDeg = 0.0;
+    homingState = unknown;
+    DEBUGLOG_PRINTLN(F("ATT: homing started"));
+    nextHomingState();
+    logHomingPhase();
+    homingActive = true;
+}
+
+void AttitudeIndicator::runHomingStep()
+{
+    // Phase transitions are the interesting events; log on change, not per loop.
+    const HomingPhase phaseBefore = homingState;
+    const AttitudeResult result = nextHomingState();
+    if (homingState != phaseBefore)
+    {
+        logHomingPhase();
+    }
+    if (result != success)
+    {
+        // A timeout leaves homingState on the phase that ran out of travel; log
+        // it before it is overwritten - that name is the whole diagnosis.
+        logHomingPhase();
+        DEBUGLOG_PRINTLN(F("ATT: homing failed"));
+        stopAll();
+        homingState = timeout;
+        homingActive = false;
+        homingFailed = true;
+        failBlinkOn = true;
+        failBlinkLastToggleMs = millis();
+        applyLight(max(commandedBrightness, kFailBlinkMinBrightness));
+        return;
+    }
+    if (homingState == homed)
+    {
+        homingActive = false;
+        isHomed = true;
+        DEBUGLOG_PRINTLN(F("ATT: homed"));
+    }
+}
+
+void AttitudeIndicator::logHomingPhase()
+{
+#if DEBUGLOG_ENABLE
+    static const char *const kPhaseNames[] = {
+        "unknown", "rollLeaveZero", "rollSearchZero", "rollSearchZeroEnd",
+        "rollReturnToZeroEnd", "rollSearchZeroStart", "rollMoveToTrueZero",
+        "rollMoveToAdjustedZero", "pitchLeaveZero", "pitchSearchZero", "pitchBackOff",
+        "pitchSlowSearchZero", "pitchMoveToAdjustedZero", "homed", "timeout"};
+    DEBUGLOG_PRINT(F("ATT: phase "));
+    DEBUGLOG_PRINT(kPhaseNames[homingState]);
+    DEBUGLOG_PRINT(F(" left r/p "));
+    DEBUGLOG_PRINT(axes[roll]->getStepsLeft());
+    DEBUGLOG_PRINT(F("/"));
+    DEBUGLOG_PRINT(axes[pitch]->getStepsLeft());
+    DEBUGLOG_PRINT(F(" hall r/p "));
+    DEBUGLOG_PRINT(hallState[roll] ? F("ON") : F("OFF"));
+    DEBUGLOG_PRINT(F("/"));
+    DEBUGLOG_PRINTLN(hallState[pitch] ? F("ON") : F("OFF"));
+#endif
+}
