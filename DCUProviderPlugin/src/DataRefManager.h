@@ -53,6 +53,10 @@ public:
     // Magnetic compass (whiskey compass)
     float getCompassHeadingDegMag() const;  // degrees magnetic, 0..360
 
+    // Attitude indicator (vacuum-driven gyro: tumbles on vacuum failure)
+    float getPitchVacuumDeg() const;  // pitch_vacuum_deg_pilot, degrees, nose up positive
+    float getRollVacuumDeg() const;   // roll_vacuum_deg_pilot, degrees, right wing down positive
+
     // HSI
     float getHsiHeadingDegMag() const;   // heading_electric_deg_mag_pilot
     float getHsiObsDeg() const;          // hsi_obs_deg_mag_pilot
@@ -153,6 +157,8 @@ private:
 
     XPLMDataRef dr_altitude = nullptr;
     XPLMDataRef dr_vsi = nullptr;
+    XPLMDataRef dr_pitch_vacuum = nullptr;
+    XPLMDataRef dr_roll_vacuum = nullptr;
 
     XPLMCommandRef cr_TransponderIdent = nullptr;
 };

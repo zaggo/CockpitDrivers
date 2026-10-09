@@ -468,6 +468,21 @@ void DCUProvider::updateDownlink(float dt)
         hsiNavAccumulator_ = 0.0f;
     }
 
+    // ============ Attitude indicator (50 Hz) ============
+    attitudeAccumulator_ += dt;
+    float attitudeRate = 1.0f / ATTITUDE_RATE;
+
+    if (attitudeAccumulator_ >= attitudeRate)
+    {
+        AttitudeMessage attitude;
+        attitude.pitchDeg = dataRefMgr_->getPitchVacuumDeg();
+        attitude.rollDeg = dataRefMgr_->getRollVacuumDeg();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageAttitude, &attitude, sizeof(attitude));
+
+        attitudeAccumulator_ = 0.0f;
+    }
+
     // ============ Odometer Data (10 Hz) ============
     odometerAccumulator_ += dt;
     float odometerRate = 1.0f / ODOMETER_RATE;

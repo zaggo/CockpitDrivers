@@ -93,6 +93,11 @@ void DataRefManager::onAircraftLoaded()
     // Altimeter + VSI (one downlink message, one CAN frame, two instrument boards)
     dr_altitude = XPLMFindDataRef("sim/cockpit2/gauges/indicators/altitude_ft_pilot");
     dr_vsi = XPLMFindDataRef("sim/cockpit2/gauges/indicators/vvi_fpm_pilot");
+
+    // Attitude indicator. The _vacuum variants already model the gyro spinning
+    // down on vacuum failure, so no separate failure flag goes over the wire.
+    dr_pitch_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot");
+    dr_roll_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot");
 }
 
 // Fuel
@@ -181,6 +186,17 @@ float DataRefManager::getVsiFpm() const
 float DataRefManager::getCompassHeadingDegMag() const
 {
     return readFloat(dr_compass_heading, 0.0f);
+}
+
+// Attitude indicator
+float DataRefManager::getPitchVacuumDeg() const
+{
+    return readFloat(dr_pitch_vacuum, 0.0f);
+}
+
+float DataRefManager::getRollVacuumDeg() const
+{
+    return readFloat(dr_roll_vacuum, 0.0f);
 }
 
 // Altimeter
