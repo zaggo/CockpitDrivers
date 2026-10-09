@@ -192,8 +192,8 @@ Each board's `src/` follows the same convention:
   without the full rig/CAN bus wired up.
 - `<Device>.cpp/h` (e.g. `Handbrake`, `FuelGauge`, `Transponder`) — the actual hardware/business logic,
   independent of CAN/BenchDebug.
-- `AirManager.cpp/h` (where present — `I2CBoard`, `MasterClock`, `ServoBoard`, `StepperBoard`,
-  `TransponderBoard`) — integration with X-Plane's AirManager gauge-output protocol, used instead of
+- `AirManager.cpp/h` (where present — `I2CBoard`, `MasterClock`, `ServoBoard`, `StepperBoard`)
+  — integration with X-Plane's AirManager gauge-output protocol, used instead of
   or alongside CAN.
 
 When adding a new board, follow this same file layout rather than inventing a new one.
