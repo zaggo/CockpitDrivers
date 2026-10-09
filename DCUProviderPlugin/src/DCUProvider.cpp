@@ -483,6 +483,21 @@ void DCUProvider::updateDownlink(float dt)
         attitudeAccumulator_ = 0.0f;
     }
 
+    // ============ Turn coordinator (50 Hz) ============
+    turnCoordinatorAccumulator_ += dt;
+    float turnCoordinatorRate = 1.0f / TURN_COORDINATOR_RATE;
+
+    if (turnCoordinatorAccumulator_ >= turnCoordinatorRate)
+    {
+        TurnCoordinatorMessage tc;
+        tc.turnRateDeg = dataRefMgr_->getTurnRateDeg();
+        tc.slipDeg = dataRefMgr_->getSlipDeg();
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageTurnCoordinator, &tc, sizeof(tc));
+
+        turnCoordinatorAccumulator_ = 0.0f;
+    }
+
     // ============ Odometer Data (10 Hz) ============
     odometerAccumulator_ += dt;
     float odometerRate = 1.0f / ODOMETER_RATE;

@@ -98,6 +98,11 @@ void DataRefManager::onAircraftLoaded()
     // down on vacuum failure, so no separate failure flag goes over the wire.
     dr_pitch_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot");
     dr_roll_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot");
+
+    // Turn coordinator. The gauge datarefs already follow electrical power in
+    // the sim, so no separate bus-voltage flag goes over the wire.
+    dr_turn_rate = XPLMFindDataRef("sim/cockpit2/gauges/indicators/turn_rate_roll_deg_pilot");
+    dr_slip = XPLMFindDataRef("sim/cockpit2/gauges/indicators/slip_deg");
 }
 
 // Fuel
@@ -197,6 +202,17 @@ float DataRefManager::getPitchVacuumDeg() const
 float DataRefManager::getRollVacuumDeg() const
 {
     return readFloat(dr_roll_vacuum, 0.0f);
+}
+
+// Turn coordinator
+float DataRefManager::getTurnRateDeg() const
+{
+    return readFloat(dr_turn_rate, 0.0f);
+}
+
+float DataRefManager::getSlipDeg() const
+{
+    return readFloat(dr_slip, 0.0f);
 }
 
 // Altimeter

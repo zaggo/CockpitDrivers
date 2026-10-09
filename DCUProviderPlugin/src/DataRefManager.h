@@ -57,6 +57,10 @@ public:
     float getPitchVacuumDeg() const;  // pitch_vacuum_deg_pilot, degrees, nose up positive
     float getRollVacuumDeg() const;   // roll_vacuum_deg_pilot, degrees, right wing down positive
 
+    // Turn coordinator
+    float getTurnRateDeg() const;  // turn_rate_roll_deg_pilot, degrees of the aircraft symbol, right turn positive
+    float getSlipDeg() const;      // slip_deg, degrees of slip
+
     // HSI
     float getHsiHeadingDegMag() const;   // heading_electric_deg_mag_pilot
     float getHsiObsDeg() const;          // hsi_obs_deg_mag_pilot
@@ -159,6 +163,8 @@ private:
     XPLMDataRef dr_vsi = nullptr;
     XPLMDataRef dr_pitch_vacuum = nullptr;
     XPLMDataRef dr_roll_vacuum = nullptr;
+    XPLMDataRef dr_turn_rate = nullptr;
+    XPLMDataRef dr_slip = nullptr;
 
     XPLMCommandRef cr_TransponderIdent = nullptr;
 };

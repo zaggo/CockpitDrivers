@@ -100,6 +100,7 @@ private:
     float hsiHeadingAccumulator_ = 0.0f;
     float hsiNavAccumulator_ = 0.0f;
     float attitudeAccumulator_ = 0.0f;
+    float turnCoordinatorAccumulator_ = 0.0f;
 
     static constexpr float FUEL_RATE = 5.0f;    // Hz
     static constexpr float LIGHTS_RATE = 10.0f;  // Hz
@@ -112,6 +113,7 @@ private:
     static constexpr float HSI_HEADING_RATE = 50.0f; // Hz
     static constexpr float HSI_NAV_RATE = 10.0f;     // Hz
     static constexpr float ATTITUDE_RATE = 50.0f;    // Hz
+    static constexpr float TURN_COORDINATOR_RATE = 50.0f; // Hz
 
     // The old AirManager chain fed its raw encoder counter straight into the
     // dataref as degrees, so one detent is one degree. Kept identical so the
