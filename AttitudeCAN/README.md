@@ -21,7 +21,7 @@ the roll frame), one Hall sensor per axis, one panel LED. Design:
 5. `at10,-20` — both axes arrive together.
 6. `li0`, `li255`.
 7. `zr` / `zp` after jogging onto the optical zero; `st` shows the accumulated offsets.
-   Note: an EEPROM wipe on reflash resets them — re-run after flashing a new firmware.
+   Note: a bootloader upload keeps EEPROM; only an ISP chip-erase without EESAVE wipes it. If the offsets look reset after flashing, that is why.
 
 ## Rig checklist (BENCHDEBUG 0)
 

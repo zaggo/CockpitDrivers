@@ -19,8 +19,9 @@ pio device monitor -b 115200 # serial monitor (debug log is on Serial1, not the 
 pio test -e native            # run Unity tests against DCU/include headers (no device needed)
 ```
 
-`test/` has real Unity suites (`test_can_id_error`, `test_command_tokenizer`, `test_heartbeat`,
-`test_serial_frame_parser`, `test_wire_encoding`) covering the header-only helpers in `DCU/include/`
+`test/` has real Unity suites (`test_attitude_wire`, `test_can_id_error`, `test_command_tokenizer`,
+`test_heartbeat`, `test_hsi_flags`, `test_instrument_liveness`, `test_serial_frame_parser`,
+`test_wire_encoding`) covering the header-only helpers in `DCU/include/`
 (see below) — the `env:native` PlatformIO env builds/runs them on the host.
 
 ## What DCU is
