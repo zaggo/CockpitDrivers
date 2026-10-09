@@ -137,7 +137,9 @@ enum AttitudeAxis { roll = 0, pitch, attitudeAxisCount };
 enum RpmKeys { maxRpm = 0, minRpm, rpmKeyCount };
 const uint8_t kStepperPins[attitudeAxisCount][4] = { {4, 7, 8, 9}, {A0, A1, A2, A3} };
 const uint8_t kHallPins[attitudeAxisCount] = { 3, 6 };
-const uint32_t kTotalSteps[attitudeAxisCount] = { 4096L, 4096L };
+// Ein Wert für beide Achsen: die Kopplung (Anzeige = Motor + Roll in Steps)
+// setzt gleiche Stepzahlen voraus. GyroDrives convertPosition() entfällt damit.
+const uint32_t kTotalSteps = 4096L;
 const double kRpmLimits[attitudeAxisCount][rpmKeyCount] = { {14.0, 4.0}, {14.0, 4.0} };
 
 // Anzeige-Grenzen und Übersetzung (aus LUA-Cap und kAdjustmentFactor).
