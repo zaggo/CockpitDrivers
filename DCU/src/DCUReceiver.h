@@ -34,6 +34,7 @@ class DCUReceiver {
         void sendCompass();
         void sendHsiHeading();
         void sendHsiNav();
+        void sendAttitude();
 
         // RX state machine
         // Fuel Gauge
@@ -80,6 +81,10 @@ class DCUReceiver {
         int16_t  hsiCdiDots1000 = 0;
         int16_t  hsiGsDots1000 = 0;
 
+        // Attitude indicator (CAN 0x101)
+        int16_t attitudePitch100 = 0;
+        int16_t attitudeRoll100 = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
@@ -91,6 +96,7 @@ class DCUReceiver {
         MessageMeta compassMeta;
         MessageMeta hsiHeadingMeta;
         MessageMeta hsiNavMeta;
+        MessageMeta attitudeMeta;
 
         // Reference to CAN bus
         CAN* canBus;

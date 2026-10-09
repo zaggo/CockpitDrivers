@@ -3,6 +3,7 @@
 #include "WireEncoding.h"
 #include "Heartbeat.h"
 #include "HsiWire.h"
+#include <AttitudeWire.h>
 #include <math.h>
 
 DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
@@ -24,6 +25,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   compassMeta = {0, 5000};
   hsiHeadingMeta = {0, 5000};
   hsiNavMeta = {0, 5000};
+  attitudeMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -332,6 +334,26 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageAttitude:
+  {
+    if (len != sizeof(AttitudeMessage))
+      return;
+
+    AttitudeMessage msg;
+    memcpy(&msg, payload, sizeof(msg));
+
+    const int16_t pitch100 = attitudeDeg100(msg.pitchDeg);
+    const int16_t roll100 = attitudeDeg100(msg.rollDeg);
+
+    if (pitch100 != attitudePitch100 || roll100 != attitudeRoll100)
+    {
+      attitudePitch100 = pitch100;
+      attitudeRoll100 = roll100;
+      sendAttitude();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -487,6 +509,19 @@ void DCUReceiver::sendHsiNav()
   hsiNavMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendAttitude()
+{
+  byte data[8] = {0};
+
+  // [0..1] pitch, [2..3] roll, both int16 degrees * 100, [4..7] reserved.
+  packBE16(data + 0, static_cast<uint16_t>(attitudePitch100));
+  packBE16(data + 2, static_cast<uint16_t>(attitudeRoll100));
+
+  canBus->sendMessage(CanMessageId::attitude, 8, data);
+
+  attitudeMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -557,5 +592,11 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for hsiNav")));
     sendHsiNav();
+  }
+
+  if (isStale(attitudeMeta.lastSendTimestamp, now, attitudeMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for attitude")));
+    sendAttitude();
   }
 }
