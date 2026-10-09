@@ -29,6 +29,14 @@ enum class CanMessageId : uint16_t {
   // reads bytes 4..5 only, the altimeter board reads bytes 0..3 only.
   altimeterVsi = 0x102,
 
+  // 0x103: Turn coordinator (Gateway -> Instrument, 50Hz)
+  // [0..1] turn rate int16, degrees * 100 (sim/cockpit2/gauges/indicators/turn_rate_roll_deg_pilot)
+  // [2..3] side slip int16, degrees * 100 (sim/cockpit2/gauges/indicators/slip_deg)
+  // [4..7] reserved
+  // Both signed; both needles rest mid-dial at 0. The gateway forwards whatever
+  // the sim says, the board clamps via its calibration table.
+  turnCoordinator = 0x103,
+
   // 0x107: Magnetic compass (Gateway -> Instrument, 50Hz)
   // [0..1] heading uint16, degrees * 100, 0..35999
   //        (sim/cockpit2/gauges/indicators/compass_heading_deg_mag)

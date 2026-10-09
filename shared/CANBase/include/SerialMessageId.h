@@ -45,6 +45,9 @@ enum class MessageType : uint8_t {
     // Plugin -> DCU. Payload: AttitudeMessage (8 bytes, host order).
     // Repacked by the DCU into CAN 0x101 as two big-endian int16 of degrees * 100.
     SerialMessageAttitude = 0x0F,
+    // Plugin -> DCU. Payload: TurnCoordinatorMessage (8 bytes, host order).
+    // Repacked by the DCU into CAN 0x103 as two big-endian int16 of degrees * 100.
+    SerialMessageTurnCoordinator = 0x10,
 };
 
 // Message Payload for Transponder > DCU
@@ -112,6 +115,10 @@ enum class TransponderToDCUCommand : uint8_t {
         float pitchDeg;   // pitch_vacuum_deg_pilot
         float rollDeg;    // roll_vacuum_deg_pilot
     };
+    struct TurnCoordinatorMessage {
+        float turnRateDeg;  // turn_rate_roll_deg_pilot
+        float slipDeg;      // slip_deg
+    };
     #pragma pack(pop)
 #else
     struct __attribute__((packed)) HsiHeadingMessage {
@@ -134,6 +141,10 @@ enum class TransponderToDCUCommand : uint8_t {
         float pitchDeg;
         float rollDeg;
     };
+    struct __attribute__((packed)) TurnCoordinatorMessage {
+        float turnRateDeg;
+        float slipDeg;
+    };
 #endif
 
 // The DCU dispatches on payload length, so these sizes are the wire contract.
@@ -144,4 +155,5 @@ static_assert(sizeof(HsiNavMessage) == 8, "HsiNavMessage must be 8 bytes on the 
 static_assert(sizeof(HsiInputToDcuMessage) == 5, "HsiInputToDcuMessage must be 5 bytes on the wire");
 static_assert(sizeof(RudderToDcuMessage) == 6, "RudderToDcuMessage must be 6 bytes on the wire");
 static_assert(sizeof(AttitudeMessage) == 8, "AttitudeMessage must be 8 bytes on the wire");
+static_assert(sizeof(TurnCoordinatorMessage) == 8, "TurnCoordinatorMessage must be 8 bytes on the wire");
 #endif // SERIAL_MESSAGE_ID_H
