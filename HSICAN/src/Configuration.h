@@ -41,8 +41,10 @@ const uint8_t kObsEncoderInterruptMask = (1 << PCINT19) | (1 << PCINT20) | (1 <<
 
 // The HDG knob sets the heading bug. It was called the "compass" encoder, which
 // it never was - it does not touch the card.
-const uint8_t kHdgEncoderAPin = A1;
-const uint8_t kHdgEncoderBPin = A2;
+// A/B are swapped against the OBS knob: wired the other way round on the rig,
+// so a clockwise turn counted down and drove the sim's bug CCW (2026-10-10).
+const uint8_t kHdgEncoderAPin = A2;
+const uint8_t kHdgEncoderBPin = A1;
 const uint8_t kHdgEncoderPushButtonPin = A3;
 const uint8_t kHdgEncoderInterruptMask = (1 << PCINT9) | (1 << PCINT10) | (1 << PCINT11); // for PCMSK1!
 
