@@ -20,6 +20,12 @@ class BenchDebug {
         void measureBacklash(HSIAxis axis);
         static uint16_t wrapDeg100(float degrees);
         static HSIAxis axisFromArg(const String& arg);
+        static int gsSideFromArg(const String& arg);
+        void printGsTable(int side);
+
+        // GS servo teaching: current ga deflection per servo, what gp stores.
+        static const ServoId kGsServoIds[2];
+        int8_t gaPercent[2] = {0, 0};
 
         String inputBuffer;
 

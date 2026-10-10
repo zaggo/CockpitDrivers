@@ -107,6 +107,75 @@ void test_a_zero_factor_parks_the_needle(void) {
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, dotsToServoDegree(2500, 0));
 }
 
+// --- GS servo table ---------------------------------------------------------
+//
+// Each GS servo is driven from a taught table of (dots, percent) points:
+// percent is the absolute servo deflection around the 50 % centre, so the
+// sign and the linkage ratio live in the table, not in code.
+
+void test_gs_percent_maps_minus100_to_100_onto_the_full_servo_range(void) {
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 90.0, gsPercentToServoDegree(0.0));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, gsPercentToServoDegree(-100.0));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 180.0, gsPercentToServoDegree(100.0));
+}
+
+void test_gs_table_interpolates_between_neighbouring_points(void) {
+    const GsPoint pts[] = { {-2000, -60}, {0, 5}, {2000, 70} };
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 5.0, interpolateGsPercent(pts, 3, 0));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 37.5, interpolateGsPercent(pts, 3, 1000));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, -27.5, interpolateGsPercent(pts, 3, -1000));
+}
+
+void test_gs_table_outermost_points_are_soft_endstops(void) {
+    const GsPoint pts[] = { {-2000, -60}, {0, 5}, {2000, 70} };
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 70.0, interpolateGsPercent(pts, 3, 3500));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, -60.0, interpolateGsPercent(pts, 3, -9000));
+}
+
+void test_gs_table_with_no_points_centres_the_servo(void) {
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, interpolateGsPercent(nullptr, 0, 1500));
+}
+
+void test_gs_table_with_one_point_holds_that_point(void) {
+    const GsPoint pts[] = { {500, -20} };
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, -20.0, interpolateGsPercent(pts, 1, 1500));
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, -20.0, interpolateGsPercent(pts, 1, -1500));
+}
+
+void test_gs_points_are_inserted_sorted_by_dots(void) {
+    GsPoint pts[4];
+    uint8_t count = 0;
+    TEST_ASSERT_TRUE(insertGsPoint(pts, &count, 4, 1000, 40));
+    TEST_ASSERT_TRUE(insertGsPoint(pts, &count, 4, -1000, -40));
+    TEST_ASSERT_TRUE(insertGsPoint(pts, &count, 4, 0, 0));
+    TEST_ASSERT_EQUAL_UINT8(3, count);
+    TEST_ASSERT_EQUAL_INT16(-1000, pts[0].dots1000);
+    TEST_ASSERT_EQUAL_INT16(0, pts[1].dots1000);
+    TEST_ASSERT_EQUAL_INT16(1000, pts[2].dots1000);
+    TEST_ASSERT_EQUAL_INT8(40, pts[2].percent);
+}
+
+void test_a_gs_point_at_the_same_dots_replaces_the_old_one(void) {
+    GsPoint pts[4];
+    uint8_t count = 0;
+    insertGsPoint(pts, &count, 4, 1000, 40);
+    TEST_ASSERT_TRUE(insertGsPoint(pts, &count, 4, 1000, 45));
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_INT8(45, pts[0].percent);
+}
+
+void test_a_full_gs_table_refuses_a_new_point(void) {
+    GsPoint pts[2];
+    uint8_t count = 0;
+    insertGsPoint(pts, &count, 2, 0, 0);
+    insertGsPoint(pts, &count, 2, 1000, 10);
+    TEST_ASSERT_FALSE(insertGsPoint(pts, &count, 2, 2000, 20));
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    // ... but still lets an existing dots value be retaught.
+    TEST_ASSERT_TRUE(insertGsPoint(pts, &count, 2, 1000, 15));
+    TEST_ASSERT_EQUAL_INT8(15, pts[1].percent);
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_small_values_pass_through_unchanged);
@@ -126,5 +195,13 @@ int main(int, char **) {
     RUN_TEST(test_a_negative_deviation_keeps_its_sign);
     RUN_TEST(test_a_recalibrated_factor_scales_the_whole_range);
     RUN_TEST(test_a_zero_factor_parks_the_needle);
+    RUN_TEST(test_gs_percent_maps_minus100_to_100_onto_the_full_servo_range);
+    RUN_TEST(test_gs_table_interpolates_between_neighbouring_points);
+    RUN_TEST(test_gs_table_outermost_points_are_soft_endstops);
+    RUN_TEST(test_gs_table_with_no_points_centres_the_servo);
+    RUN_TEST(test_gs_table_with_one_point_holds_that_point);
+    RUN_TEST(test_gs_points_are_inserted_sorted_by_dots);
+    RUN_TEST(test_a_gs_point_at_the_same_dots_replaces_the_old_one);
+    RUN_TEST(test_a_full_gs_table_refuses_a_new_point);
     return UNITY_END();
 }

@@ -109,7 +109,8 @@ const int16_t kDefaultServoAdjustDegree100[servoCount] = { 8000,   0, 7100,  890
 const int16_t kDefaultServoAdjustRatio1000[servoCount] = { 2000, 1000, 2000, -1429 };
 
 const int16_t kDefaultCdiDegPerDot100 = 1000; // 10.0 deg per dot, as the LUA used
-const int16_t kDefaultGsDegPerDot100 = 1000;
+// The GS servos have no deg-per-dot factor: they run from taught tables
+// (HsiConfig::gsPoints, see gm/ga/gp in BenchDebug), empty by default.
 
 const double kServoMinimumDegree[servoCount] = {
     -40., // cdiServo

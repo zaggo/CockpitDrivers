@@ -91,4 +91,81 @@ inline double dotsToServoDegree(int16_t dots1000, int16_t degPerDot100)
     return ((double)dots1000 / 1000.0) * ((double)degPerDot100 / 100.0);
 }
 
+// --- GS servo table ---------------------------------------------------------
+//
+// The two GS servos are not driven through servoTargetDegree: each has a
+// taught table of (dots, percent) points, percent being the absolute servo
+// deflection around the 50 % centre (-100 = 0 deg, 0 = 90 deg, 100 = 180 deg).
+// Sign, linkage ratio and non-linearity of the mechanism all live in the
+// taught points. Points are kept sorted by dots.
+
+struct GsPoint
+{
+    int16_t dots1000;
+    int8_t percent;
+};
+
+const uint8_t kGsPointCount = 9;
+
+inline double gsPercentToServoDegree(double percent)
+{
+    return 90.0 + percent * 0.9;
+}
+
+// Linear between neighbours; outside the table the outermost point holds, so
+// the taught extremes double as soft endstops. No points centres the servo.
+inline double interpolateGsPercent(const GsPoint* points, uint8_t count, int16_t dots1000)
+{
+    if (count == 0)
+    {
+        return 0.0;
+    }
+    if (dots1000 <= points[0].dots1000)
+    {
+        return points[0].percent;
+    }
+    if (dots1000 >= points[count - 1].dots1000)
+    {
+        return points[count - 1].percent;
+    }
+    uint8_t i = 1;
+    while (points[i].dots1000 < dots1000)
+    {
+        i++;
+    }
+    const GsPoint& a = points[i - 1];
+    const GsPoint& b = points[i];
+    const double t = (double)(dots1000 - a.dots1000) / (double)(b.dots1000 - a.dots1000);
+    return a.percent + (b.percent - a.percent) * t;
+}
+
+// Sorted insert. The same dots value re-teaches the existing point; a full
+// table refuses new ones.
+inline bool insertGsPoint(GsPoint* points, uint8_t* count, uint8_t capacity,
+                          int16_t dots1000, int8_t percent)
+{
+    uint8_t i = 0;
+    while (i < *count && points[i].dots1000 < dots1000)
+    {
+        i++;
+    }
+    if (i < *count && points[i].dots1000 == dots1000)
+    {
+        points[i].percent = percent;
+        return true;
+    }
+    if (*count >= capacity)
+    {
+        return false;
+    }
+    for (uint8_t j = *count; j > i; j--)
+    {
+        points[j] = points[j - 1];
+    }
+    points[i].dots1000 = dots1000;
+    points[i].percent = percent;
+    (*count)++;
+    return true;
+}
+
 #endif // HSICALIBRATION_H

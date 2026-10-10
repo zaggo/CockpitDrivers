@@ -190,7 +190,8 @@ void HSI::loadConfig()
         config.servoAdjustRatio1000[id] = kDefaultServoAdjustRatio1000[id];
     }
     config.cdiDegPerDot100 = kDefaultCdiDegPerDot100;
-    config.gsDegPerDot100 = kDefaultGsDegPerDot100;
+    config.gsPointCount[0] = 0;
+    config.gsPointCount[1] = 0;
     EEPROM.put(kHsiEepromAddress, config);
 }
 
@@ -221,17 +222,59 @@ void HSI::setServoAdjust(ServoId id, int16_t degree100, int16_t ratio1000)
     saveConfig();
 }
 
-void HSI::setDegPerDot(bool isGs, int16_t degPerDot100)
+void HSI::setDegPerDot(int16_t degPerDot100)
 {
-    if (isGs)
+    config.cdiDegPerDot100 = degPerDot100;
+    saveConfig();
+}
+
+// gs1Servo -> table 0, gs2Servo -> table 1; anything else is not a GS servo.
+static int gsTableIndex(ServoId id)
+{
+    return (id == gs1Servo) ? 0 : (id == gs2Servo) ? 1 : -1;
+}
+
+void HSI::setGsServoPercent(ServoId id, int8_t percent)
+{
+    if (gsTableIndex(id) < 0)
     {
-        config.gsDegPerDot100 = degPerDot100;
+        return;
     }
-    else
+    servos[id]->write(gsPercentToServoDegree(percent));
+}
+
+bool HSI::addGsPoint(ServoId id, int16_t dots1000, int8_t percent)
+{
+    const int t = gsTableIndex(id);
+    if (t < 0 || !insertGsPoint(config.gsPoints[t], &config.gsPointCount[t],
+                                kGsPointCount, dots1000, percent))
     {
-        config.cdiDegPerDot100 = degPerDot100;
+        return false;
     }
     saveConfig();
+    return true;
+}
+
+void HSI::clearGsPoints(ServoId id)
+{
+    const int t = gsTableIndex(id);
+    if (t < 0)
+    {
+        return;
+    }
+    config.gsPointCount[t] = 0;
+    saveConfig();
+}
+
+void HSI::moveGs(int16_t dots1000)
+{
+    // One logical channel, two servos, each with its own taught table.
+    const ServoId ids[2] = {gs1Servo, gs2Servo};
+    for (int t = 0; t < 2; t++)
+    {
+        servos[ids[t]]->write(gsPercentToServoDegree(
+            interpolateGsPercent(config.gsPoints[t], config.gsPointCount[t], dots1000)));
+    }
 }
 
 bool HSI::calibrateZero(HSIAxis axis)
@@ -581,8 +624,7 @@ void HSI::applyFlags(uint8_t flags)
     gsValid = (flags & 0x04) != 0;
     if (!gsValid)
     {
-        moveServo(gs1Servo, 0.0);
-        moveServo(gs2Servo, 0.0);
+        moveGs(0);
     }
 }
 
@@ -594,10 +636,7 @@ void HSI::applyDeviation(int16_t cdiDots1000, int16_t gsDots1000)
     {
         return;
     }
-    // Both GS servos carry one logical channel; only the linkage differs.
-    const double gs = -dotsToServoDegree(gsDots1000, config.gsDegPerDot100);
-    moveServo(gs1Servo, gs);
-    moveServo(gs2Servo, gs);
+    moveGs(gsDots1000);
 }
 
 void HSI::park()
@@ -607,8 +646,7 @@ void HSI::park()
     // positions - the LUA did not blank those either.
     moveToDegree(compass, 0.0);
     moveServo(cdiServo, 0.0);
-    moveServo(gs1Servo, 0.0);
-    moveServo(gs2Servo, 0.0);
+    moveGs(0);
     moveServo(fromToServo, static_cast<double>(noNav));
 }
 

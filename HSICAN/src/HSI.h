@@ -20,7 +20,9 @@ public:
         int16_t  servoAdjustDegree100[servoCount];
         int16_t  servoAdjustRatio1000[servoCount];
         int16_t  cdiDegPerDot100;
-        int16_t  gsDegPerDot100;
+        // Taught (dots, percent) tables, index 0 = gs1Servo, 1 = gs2Servo.
+        GsPoint  gsPoints[2][kGsPointCount];
+        uint8_t  gsPointCount[2];
     };
 
     enum FromTo {
@@ -79,7 +81,14 @@ public:
     bool calibrateZero(HSIAxis axis);
     void setStepsBacklash(HSIAxis axis, uint16_t steps);
     void setServoAdjust(ServoId id, int16_t degree100, int16_t ratio1000);
-    void setDegPerDot(bool isGs, int16_t degPerDot100);
+    void setDegPerDot(int16_t degPerDot100);
+
+    // GS servo table (gs1Servo / gs2Servo only). setGsServoPercent drives the
+    // servo to an absolute deflection around its 50 % centre, bypassing the
+    // sa clamp/ratio; addGsPoint stores (dots, percent) for interpolation.
+    void setGsServoPercent(ServoId id, int8_t percent);
+    bool addGsPoint(ServoId id, int16_t dots1000, int8_t percent);
+    void clearGsPoints(ServoId id);
 
     // Bench only: blocking, and there is no CAN loop running in a bench build.
     uint32_t measureBacklashSteps(HSIAxis axis);
@@ -129,6 +138,7 @@ private:
     bool checkAllHomed();
     HSIDriveResult lookForZeroChangeNonBlocking(HSIAxis axis, bool targetZeroedState);
     void loadConfig();
+    void moveGs(int16_t dots1000);
 
 private:
     HsiConfig config;

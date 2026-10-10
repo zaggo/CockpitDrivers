@@ -33,12 +33,12 @@ homed.
 | `compass`      | compass card      | `hm2`      | `c`                |
 | `hdg`          | heading bug       | `hm3`      | `h`                |
 
-| Servo index (`sa`) | Servo         | Driven by |
-|:------------------:|---------------|-----------|
-| `0`                | `cdiServo`    | `cd`      |
-| `1`                | `fromToServo` | `fl`      |
-| `2`                | `gs1Servo`    | `gs` (only while `fl` bit 2 is set) |
-| `3`                | `gs2Servo`    | `gs` (only while `fl` bit 2 is set) |
+| Servo index (`sa`) | Servo         | Driven by | Calibrated with |
+|:------------------:|---------------|-----------|-----------------|
+| `0`                | `cdiServo`    | `cd`      | `sa0`, `dpc`    |
+| `1`                | `fromToServo` | `fl`      | `sa1`           |
+| `2`                | `gs1Servo`    | `gs` (only while `fl` bit 2 is set) | `ga r`/`gp r` table (right needle) |
+| `3`                | `gs2Servo`    | `gs` (only while `fl` bit 2 is set) | `ga l`/`gp l` table (left needle) |
 
 ## Command reference
 
@@ -88,8 +88,12 @@ What the hall monitor tells you:
 | `bl<o\|c\|h>` | Measure gear backlash (slack) on that axis. Blocking. |
 | `blsave` | Store the last `bl` measurement. |
 | `bl<o\|c\|h> <steps>` | Set backlash directly, e.g. `blh 90`. |
-| `sa<servo> <deg100> <ratio1000>` | Servo mounting offset and linkage ratio. |
-| `dp<c\|g> <deg100PerDot>` | Servo input degrees per deviation dot, CDI or GS. |
+| `sa<servo> <deg100> <ratio1000>` | Servo mounting offset and linkage ratio (CDI, TO/FROM). |
+| `dpc <deg100PerDot>` | Servo input degrees per CDI deviation dot. |
+| `gm` | Both GS servos to their absolute 50 % centre. |
+| `ga<l\|r> <-100..100>` | Deflect one GS servo, percent of full travel from the centre. |
+| `gp<l\|r> <dots>` | Store (dots, current `ga` percent) as an interpolation point for that servo. |
+| `gpc<l\|r>` | Clear that servo's table. |
 | `cw` | Wipe the whole calibration back to the factory defaults. |
 
 **Every calibration command writes to EEPROM immediately.** There is no
@@ -109,8 +113,9 @@ Order that works:
 3. `hm` again: homing uses the backlash value to take up the slack before it
    measures
 4. Zero offsets: compass first (`czc`), then `czo`, `czh`
-5. Servos: offsets and ratios with `sa`, then scaling with `dp`
-6. Power-cycle, `hm`, and check everything held
+5. CDI and flag servos: offsets and ratios with `sa`, then scaling with `dpc`
+6. GS servos: teach each needle's table with `gm` / `ga` / `gp`
+7. Power-cycle, `hm`, and check everything held
 
 ### Zero offset — `cz`
 
@@ -232,8 +237,8 @@ servo angle = clamp(input, min, max) × ratio + offset
   servo angle at input 0, i.e. needle centred, GS parked, flag hidden.
 - `ratio1000` = linkage ratio × 1000 (`2000` = 2.0). **Negative reverses** the
   direction (the `gs2Servo` default `-1429` is mounted mirrored).
-- The clamp is on the *input*, before the ratio: ±40° for CDI and both GS servos,
-  effectively none (±999) for the flag.
+- The clamp is on the *input*, before the ratio: ±40° for CDI, effectively
+  none (±999) for the flag.
 
 Always send **both** values, even if you only change one. Current defaults:
 
@@ -241,18 +246,15 @@ Always send **both** values, even if you only change one. Current defaults:
 |---|---|---|
 | CDI | `sa0` | `sa0 8000 2000` |
 | TO/FROM flag | `sa1` | `sa1 0 1000` |
-| GS 1 | `sa2` | `sa2 7100 2000` |
-| GS 2 | `sa3` | `sa3 8900 -1429` |
+
+`sa2` / `sa3` are accepted and stored but **ignored**: the GS servos run from
+their taught tables (next section).
 
 `sa` stores the value but **does not move the servo**. Resend the command that
 drives it to see the effect:
 
 - **CDI:** `cd0`, then tune the `sa0` offset until the needle is centred. Then
   `cd2` / `cd-2` and check the span.
-- **GS:** `fl4` (GS valid), `gs0`, tune the `sa2` / `sa3` offsets until both
-  needles are centred. Then `gs2` / `gs-2`; if the two needles disagree on the
-  span, fix it with the ratio of **one** of them. The offset also sets the
-  parked position: `fl0` sends input 0.
 - **TO/FROM flag:** the input is a raw servo angle: `0` no nav, `90` TO,
   `182` FROM, with ratio `1000` and offset `0`. If all three positions are off
   by the same amount, move them with the offset (`sa1 <deg100> 1000`). Check
@@ -261,36 +263,71 @@ drives it to see the effect:
 Rejected input prints `usage: …` or `bad servo index`. A successful one prints
 `servo adjust stored`.
 
-### Deviation scale — `dp`
+### CDI scale — `dpc`
 
 ```
-dpc <deg100PerDot>    CDI
-dpg <deg100PerDot>    GS (both GS servos)
+dpc <deg100PerDot>
 ```
 
-Converts deviation dots into the servo *input* (before the ratio):
-`input = dots × deg100PerDot / 100`. Default `1000` = 10° per dot for both, the
-value the old AirManager script used.
+Converts CDI deviation dots into the servo *input* (before the ratio):
+`input = dots × deg100PerDot / 100`. Default `1000` = 10° per dot, the value
+the old AirManager script used.
 
 Use it to make the needle sit exactly on the dot marks of the face: `cd2`, and
 if the needle stops short of the second dot, raise `dpc`; if it overshoots,
-lower it. Same with `gs2` / `dpg` (GS valid first: `fl4`).
-
-`dp` vs. ratio: both scale the deflection. `dp` is per needle (one for CDI, one
-for both GS servos); the `sa` ratio is per servo. Rule of thumb: match the two
-GS servos to each other with the ratio, set the overall scale with `dp`.
+lower it.
 
 **Watch the clamp.** The ±40° clamp applies to the input, so it caps the
 reachable deflection at `40 / (deg100PerDot / 100)` dots: 4 dots at the
 default. With `dpc 1600` the needle stops at 2.5 dots. If full scale runs out
-early, lower `dp` and raise the ratio instead.
+early, lower `dpc` and raise the ratio instead.
 
-`dp` also only takes effect with the next `cd` / `gs`. Reply: `deg per dot stored`.
+`dpc` only takes effect with the next `cd`. Reply: `deg per dot stored`.
+
+### GS needles — `gm` / `ga` / `gp`
+
+The two GS servos have no offset, ratio or deg-per-dot. Each has its own
+**taught table** of up to 9 `(dots → percent)` points, and `gs<dots>`
+interpolates linearly between them. `percent` is the absolute servo
+deflection around its 50 % centre: `-100` = 0°, `0` = 90°, `100` = 180°.
+Sign, linkage ratio and any non-linearity of the mechanism end up in the
+points, so there is nothing to compute by hand.
+
+Outside the table the **outermost point holds**: with `-2.5` and `2.5` dots
+taught, `gs9` stays at the `2.5` position. The taught extremes are the soft
+endstops. An empty table centres the servo (0 %).
+
+```
+gm                    both GS servos to 50 % (90°)
+ga<l|r> <-100..100>   deflect one servo, absolute percent from the centre
+gp<l|r> <dots>        store (dots, current ga percent) for that servo
+gpc<l|r>              clear that servo's table
+```
+
+`l` is the left needle (`gs2Servo`, pin A0), `r` the right one (`gs1Servo`,
+D7). `ga` and `gp` take a space: `gal 30`, `gpl 1.5`. `gm` resets the
+remembered `ga` percent to 0 for both servos.
+
+Teaching, one needle at a time:
+
+1. `gm`, then `gal <pct>` until the left needle is centred, `gpl 0`.
+2. `gal <pct>` until the needle sits on the top (fly-down) mark, `gpl -2`
+   (or whatever dots that mark is; sign as X-Plane reports it).
+3. Same for the bottom mark, `gpl 2`. Add intermediate marks (`gpl 1`,
+   `gpl -1`) if the linkage is visibly non-linear.
+4. `gpr …` for the right needle.
+5. `fl4` `gs0`, `gs2`, `gs-2`, `gs9`: both needles should agree on every mark,
+   and `gs9` must not push past the taught end.
+
+Every `gp` prints the servo's table, e.g. `GS l (gs2): -2.00->-62% 0.00->3% 2.00->70%`.
+Storing a point at a dots value already in the table replaces it; a full
+table answers `GS table full - gpc<l|r> clears it`.
 
 ### Reset — `cw`
 
 `cw` resets **all** calibration to the defaults in `src/Configuration.h`: zero
-offsets, backlash, servo offsets/ratios and deg-per-dot. It cannot be undone.
+offsets, backlash, servo offsets/ratios, CDI deg-per-dot and both GS tables
+(emptied). It cannot be undone.
 Reboot afterwards. Until then the steppers keep the backlash compensation they
 already had.
 

@@ -39,6 +39,30 @@ HSIAxis BenchDebug::axisFromArg(const String &arg)
     return obs;
 }
 
+// l = left needle = gs2Servo, r = right needle = gs1Servo; same order as the
+// HsiConfig tables (index 0 = gs1, 1 = gs2).
+const ServoId BenchDebug::kGsServoIds[2] = {gs1Servo, gs2Servo};
+
+int BenchDebug::gsSideFromArg(const String &arg)
+{
+    if (arg == "r") return 0;
+    if (arg == "l") return 1;
+    return -1;
+}
+
+void BenchDebug::printGsTable(int side)
+{
+    const HSI::HsiConfig &cfg = hsi->calibration();
+    Serial.print(side == 0 ? F("GS r (gs1): ") : F("GS l (gs2): "));
+    for (uint8_t i = 0; i < cfg.gsPointCount[side]; i++) {
+        Serial.print(cfg.gsPoints[side][i].dots1000 / 1000.0f, 2);
+        Serial.print(F("->"));
+        Serial.print(cfg.gsPoints[side][i].percent);
+        Serial.print(F("% "));
+    }
+    Serial.println();
+}
+
 void BenchDebug::applyAll()
 {
     hsi->applyFlags(flags);
@@ -166,15 +190,53 @@ bool BenchDebug::handleHSIInput(String command) {
             }
         }
     } else if (command.startsWith("dp")) {
-        // dp<c|g> <deg100PerDot>, e.g. "dpg 800" for 8.0 degrees per GS dot.
+        // dpc <deg100PerDot>, e.g. "dpc 800" for 8.0 degrees per CDI dot.
+        // The GS servos run from their taught tables (gp), not a factor.
         const int sp = command.indexOf(' ');
-        const char selector = command.charAt(2);
-        if (sp < 0 || (selector != 'c' && selector != 'g')) {
-            Serial.println(F("usage: dp<c|g> <deg100PerDot>"));
+        if (sp < 0 || command.charAt(2) != 'c') {
+            Serial.println(F("usage: dpc <deg100PerDot> (GS: use gm/ga/gp)"));
         } else {
-            const bool isGs = selector == 'g';
-            hsi->setDegPerDot(isGs, static_cast<int16_t>(command.substring(sp + 1).toInt()));
+            hsi->setDegPerDot(static_cast<int16_t>(command.substring(sp + 1).toInt()));
             Serial.println(F("deg per dot stored"));
+        }
+    } else if (command == "gm") {
+        // Both GS servos to their absolute 50 % centre; ga moves from here.
+        for (int i = 0; i < 2; i++) {
+            gaPercent[i] = 0;
+            hsi->setGsServoPercent(kGsServoIds[i], 0);
+        }
+        Serial.println(F("GS servos centred"));
+    } else if (command.startsWith("gpc")) {
+        const int i = gsSideFromArg(command.substring(3));
+        if (i < 0) {
+            Serial.println(F("usage: gpc<l|r>"));
+        } else {
+            hsi->clearGsPoints(kGsServoIds[i]);
+            Serial.println(F("GS table cleared"));
+        }
+    } else if (command.startsWith("ga") || command.startsWith("gp")) {
+        // ga<l|r> <-100..100>  absolute deflection from the 50 % centre
+        // gp<l|r> <dots>       store (dots, current ga percent) for that servo
+        const bool isPoint = command.charAt(1) == 'p';
+        const int sp = command.indexOf(' ');
+        const int i = sp < 0 ? -1 : gsSideFromArg(command.substring(2, sp));
+        if (i < 0) {
+            Serial.println(isPoint ? F("usage: gp<l|r> <dots>") : F("usage: ga<l|r> <-100..100>"));
+        } else if (isPoint) {
+            const int16_t dots1000 = static_cast<int16_t>(command.substring(sp + 1).toFloat() * 1000.0f);
+            if (!hsi->addGsPoint(kGsServoIds[i], dots1000, gaPercent[i])) {
+                Serial.println(F("GS table full - gpc<l|r> clears it"));
+            } else {
+                printGsTable(i);
+            }
+        } else {
+            const long pct = command.substring(sp + 1).toInt();
+            if (pct < -100 || pct > 100) {
+                Serial.println(F("percent out of range -100..100"));
+            } else {
+                gaPercent[i] = static_cast<int8_t>(pct);
+                hsi->setGsServoPercent(kGsServoIds[i], gaPercent[i]);
+            }
         }
     } else if (command.startsWith("?")) {
         Serial.println(F("HSI Commands (send hm first - hd/ob/bg do nothing until homed):"));
@@ -186,8 +248,11 @@ bool BenchDebug::handleHSIInput(String command) {
         Serial.println(F("cz<o|c|h> calibrate zero           bl<o|c|h> measure backlash"));
         Serial.println(F("blsave store measured backlash     bl<o|c|h> <steps> set backlash"));
         Serial.println(F("cw wipe calibration"));
-        Serial.println(F("sa<servo> <deg100> <ratio1000> servo adjust"));
-        Serial.println(F("dp<c|g> <deg100PerDot> degrees per deviation dot"));
+        Serial.println(F("sa<servo> <deg100> <ratio1000> servo adjust (CDI, TO/FROM)"));
+        Serial.println(F("dpc <deg100PerDot> degrees per CDI dot"));
+        Serial.println(F("GS servos (l=left=gs2, r=right=gs1):"));
+        Serial.println(F("gm centre both   ga<l|r> <-100..100> deflect   gp<l|r> <dots> store point"));
+        Serial.println(F("gpc<l|r> clear table"));
     } else {
         return false;
     }
