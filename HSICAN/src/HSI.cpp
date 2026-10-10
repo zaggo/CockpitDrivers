@@ -106,6 +106,14 @@ HSI::HSI()
         servos[servoId] = new Servo();
         servos[servoId]->attach(kServoPins[servoId]);
     }
+    // attach() idles a servo at 1500 us (90 deg) until its first write. For
+    // the GS needles that is an arbitrary position - their taught 0-dot
+    // percent is not 0 - and on the bus nothing writes them until a heading
+    // frame has set gsValid: applyDeviation drops GS before that. Start every
+    // servo at its rest position instead of waiting for the right frame.
+    moveServo(cdiServo, 0.0);
+    moveServo(fromToServo, static_cast<double>(noNav));
+    moveGs(0);
 
     // Enable Encoder Pins & Interrupts
     pinMode(kObsEncoderAPin, INPUT_PULLUP);
