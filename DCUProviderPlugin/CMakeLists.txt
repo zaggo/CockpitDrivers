@@ -84,6 +84,7 @@ set(SOURCES
     src/SerialPortUtils.cpp
     src/ConfigUtils.cpp
     src/AxisCurve.cpp
+    src/CurveWindow.cpp
 )
 
 # Plugin headers
@@ -98,6 +99,7 @@ set(HEADERS
     src/SerialPortUtils.h
     src/ConfigUtils.h
     src/AxisCurve.h
+    src/CurveWindow.h
 )
 
 # Create plugin library
