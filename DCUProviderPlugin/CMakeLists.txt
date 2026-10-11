@@ -313,7 +313,8 @@ endif()
 # Optional: Enable testing
 enable_testing()
 
-# Optional: Add unit tests (if tests exist)
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+# Optional: Add unit tests (if tests exist). The tests are host-only
+# (POSIX mkdtemp/setenv in test_config.cpp) - never part of a Windows build.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests" AND NOT WIN32)
     add_subdirectory(tests)
 endif()

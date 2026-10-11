@@ -35,7 +35,9 @@ cmake -S tests -B tests/build && cmake --build tests/build && ctest --test-dir t
 
 They cover the XPLM-free pieces only: `AxisCurve` (rudder response curve math) and
 `ConfigUtils` (key=value persistence, including the per-axis curve keys). Windows,
-datarefs and the serial path are verified manually.
+datarefs and the serial path are verified manually. The top-level `CMakeLists.txt` also
+pulls `tests/` into `./build-macos.sh` (not into Windows builds — the tests use POSIX
+`mkdtemp`/`setenv`), so a broken test breaks the plugin build on macOS.
 
 ## Architecture
 

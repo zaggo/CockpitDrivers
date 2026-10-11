@@ -1,4 +1,5 @@
 #include "ConfigUtils.h"
+#include <cstdio>
 #include <fstream>
 #include <cstdlib>
 #include <string>

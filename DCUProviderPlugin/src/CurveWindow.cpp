@@ -9,6 +9,7 @@
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
 #elif IBM
+#define NOMINMAX   // windows.h defines min/max macros that break std::min/std::max
 #include <windows.h>
 #include <GL/gl.h>
 #else
