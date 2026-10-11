@@ -64,12 +64,11 @@ The plot in the window samples `apply()` at 65 points; there is no second evalua
 
 ### 2. Integration and persistence
 
-**Data flow.** `DCUProvider` owns `AxisCurve rudderCurve_` and `float lastRudderRaw_`.
+**Data flow.** `DCUProvider` owns `AxisCurve rudderCurve_`; the live pedal value for the plot marker lives in the window (`CurveWindow::setLiveInput`).
 In `updateUplink()`, case `SerialMessageRudder`:
 
 ```cpp
 const float raw = static_cast<float>(message->rudder) / 1000.0f;
-lastRudderRaw_ = raw;
 dataRefMgr_->setRudderRatio(rudderCurve_.apply(raw));
 // left/right brake ratios unchanged (raw)
 ```
@@ -160,7 +159,7 @@ Changed:
 - `CMakeLists.txt` — add sources/headers
 - `ConfigUtils.h/.cpp` — curve load/save, curve window visibility
 - `StatusWindow.h/.cpp` — `appendMenuItem`
-- `DCUProvider.h/.cpp` — `rudderCurve_`, `lastRudderRaw_`, `curveWin_`, apply in the
+- `DCUProvider.h/.cpp` — `rudderCurve_`, `curveWin_`, apply in the
   rudder case, 1 Hz update, save callback
 - `DCUProviderPlugin/CLAUDE.md` — tests exist now, config keys
 
