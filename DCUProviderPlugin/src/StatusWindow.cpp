@@ -79,15 +79,14 @@ void StatusWindow::initialize() {
     if (pluginMenuId_) {
         // Create a submenu for our plugin
         int subMenuIdx = XPLMAppendMenuItem(pluginMenuId_, "DCU Provider", nullptr, 1);
-        XPLMMenuID ourMenuId = XPLMCreateMenu("DCU Provider", pluginMenuId_, subMenuIdx, 
+        XPLMMenuID ourMenuId = XPLMCreateMenu("DCU Provider", pluginMenuId_, subMenuIdx,
                                                menuCallback, this);
-        
-        // Add "Show Status Window" item to our submenu
-        XPLMAppendMenuItem(ourMenuId, "Show Status Window", this, 1);
-        
+
         // Store reference for cleanup
         menuItemIdx_ = subMenuIdx;
         pluginMenuId_ = ourMenuId;
+
+        appendMenuItem("Show Status Window", [this]() { setVisible(!isVisible()); });
     }
     
     XPLMDebugString("DCUProvider: Status window initialized\n");
@@ -264,12 +263,19 @@ void StatusWindow::mouseCallback(XPLMWindowID inWindowID, int x, int y,
     }
 }
 
+void StatusWindow::appendMenuItem(const std::string& label, std::function<void()> onSelect) {
+    if (!pluginMenuId_) return;
+    menuActions_.push_back(std::move(onSelect));
+    void* refcon = reinterpret_cast<void*>(static_cast<intptr_t>(menuActions_.size() - 1));
+    XPLMAppendMenuItem(pluginMenuId_, label.c_str(), refcon, 1);
+}
+
 void StatusWindow::menuCallback(void* inMenuRef, void* inItemRef) {
-    (void)inMenuRef;
-    StatusWindow* self = static_cast<StatusWindow*>(inItemRef);
-    if (self) {
-        self->setVisible(!self->isVisible());
-    }
+    StatusWindow* self = static_cast<StatusWindow*>(inMenuRef);
+    if (!self) return;
+    const size_t idx = static_cast<size_t>(reinterpret_cast<intptr_t>(inItemRef));
+    if (idx < self->menuActions_.size() && self->menuActions_[idx])
+        self->menuActions_[idx]();
 }
 
 int StatusWindow::button(int x, int y, const std::string& label, int action,

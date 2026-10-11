@@ -67,6 +67,10 @@ public:
     // Set callback for UI button actions (UI_RESCAN_PORTS, UI_DISCONNECT).
     void setCommandCallback(std::function<void(int)> cb);
 
+    // Append an item to the plugin's "DCU Provider" submenu. Call after
+    // initialize(). The callback runs on X-Plane's main thread.
+    void appendMenuItem(const std::string& label, std::function<void()> onSelect);
+
     /// Initialize window and menu item.
     /// Must be called during plugin startup.
     void initialize();
@@ -129,6 +133,8 @@ private:
     XPLMWindowID windowId_;
     int menuItemIdx_;
     XPLMMenuID pluginMenuId_;
+    // One entry per appended menu item; the XPLM item refcon is the index.
+    std::vector<std::function<void()>> menuActions_;
     StatusData statusData_;
     StatusLine connStatusLine_;
     std::vector<StatusLine> cachedLines_;
