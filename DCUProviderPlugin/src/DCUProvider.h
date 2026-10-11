@@ -6,6 +6,8 @@
 #include "DataRefManager.h"
 #include "MessageQueue.h"
 #include "StatusWindow.h"
+#include "CurveWindow.h"
+#include "AxisCurve.h"
 #include <memory>
 
 class DCUProvider {
@@ -86,7 +88,12 @@ private:
     std::unique_ptr<MessageQueue> msgQueue_;
     std::unique_ptr<ConnectionManager> connMgr_;
     std::unique_ptr<StatusWindow> statusWin_;
-    
+
+    // Rudder pedal response curve, edited live by curveWin_ and persisted
+    // under curve.rudder.* in the config file. Toe brakes stay linear.
+    AxisCurve rudderCurve_;
+    std::unique_ptr<CurveWindow> curveWin_;
+
     // ============ Rate Limiting Accumulators ============
     
     float fuelAccumulator_ = 0.0f;

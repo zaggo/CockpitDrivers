@@ -62,6 +62,14 @@ bool DCUProvider::initialize()
     statusWin_->setCommandCallback([this](int action)
                                    { onUiAction(action); });
 
+    rudderCurve_ = loadAxisCurve("rudder");
+    curveWin_ = std::make_unique<CurveWindow>("Rudder", &rudderCurve_);
+    curveWin_->initialize();
+    curveWin_->setChangedCallback([this]()
+                                  { saveAxisCurve("rudder", rudderCurve_); });
+    statusWin_->appendMenuItem("Rudder Curve...", [this]()
+                               { if (curveWin_) curveWin_->setVisible(!curveWin_->isVisible()); });
+
     char msg[256];
     std::snprintf(msg, sizeof(msg),
                   "DCUProvider: Initialized (Connection: %s)\n",
@@ -197,6 +205,12 @@ void DCUProvider::shutdown()
         dataRefMgr_->setRudderOverrideEnabled(false);
     }
 
+    if (curveWin_)
+    {
+        curveWin_->destroy();
+        curveWin_.reset();
+    }
+
     if (statusWin_)
     {
         statusWin_->destroy();
@@ -265,6 +279,8 @@ void DCUProvider::onFlightLoopTick(float elapsedTime)
     if (statusUpdateAccum >= 1.0f)
     {
         updateStatusWindow();
+        if (curveWin_)
+            curveWin_->update();
         statusUpdateAccum = 0.0f;
     }
 }
@@ -650,7 +666,10 @@ void DCUProvider::updateUplink()
                 rudderSilenceAccumulator_ = 0.0f;
                 dataRefMgr_->setRudderOverrideEnabled(true);
 
-                dataRefMgr_->setRudderRatio(static_cast<float>(message->rudder) / 1000.0f);
+                const float rudderRaw = static_cast<float>(message->rudder) / 1000.0f;
+                if (curveWin_)
+                    curveWin_->setLiveInput(rudderRaw);
+                dataRefMgr_->setRudderRatio(rudderCurve_.apply(rudderRaw));
                 dataRefMgr_->setLeftBrakeRatio(static_cast<float>(message->leftBrake) / 1000.0f);
                 dataRefMgr_->setRightBrakeRatio(static_cast<float>(message->rightBrake) / 1000.0f);
             }
