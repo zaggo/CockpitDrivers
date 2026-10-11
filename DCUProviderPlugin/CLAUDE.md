@@ -79,7 +79,11 @@ stats/queues, and sleeps 1s after reopening the port (Arduino reset settling tim
 edits `rudderCurve_` in place through a pointer, so slider drags are live on the next rudder
 frame, and fires a changed-callback on release/reset that `DCUProvider` answers with
 `saveAxisCurve("rudder", ...)`. `StatusWindow` owns the plugin submenu and exposes
-`appendMenuItem()` for anything else that wants an entry there.
+`appendMenuItem()` for anything else that wants an entry there. Its plot and sliders are
+immediate-mode OpenGL; X-Plane 12 keeps back-face culling on and `XPLMSetGraphicsState`
+doesn't reset it, so any filled primitive drawn in a window callback needs an explicit
+`glDisable(GL_CULL_FACE)` first — lines render regardless, which makes the symptom look like
+a colour or primitive-type problem rather than culling.
 
 ### Wire protocol
 

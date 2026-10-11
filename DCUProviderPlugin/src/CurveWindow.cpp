@@ -195,6 +195,11 @@ void CurveWindow::drawPlot(int left, int top, int size) {
     auto py = [&](float v) { return bottom + (v + 1.f) * 0.5f * size; };
 
     XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
+    // X-Plane leaves back-face culling enabled and XPLMSetGraphicsState does not
+    // touch it; under its 2D projection our winding is the back face, so every
+    // filled primitive vanished until this. Lines are never culled, which is why
+    // the curve rendered while the marker and sliders did not.
+    glDisable(GL_CULL_FACE);
 
     // Frame + axis cross
     glColor3f(0.35f, 0.35f, 0.35f);
@@ -218,8 +223,9 @@ void CurveWindow::drawPlot(int left, int top, int size) {
     // Live marker
     const float mx = px(std::max(-1.f, std::min(1.f, liveInput_)));
     const float my = py(curve_->apply(liveInput_));
+    // Filled primitives need the glDisable(GL_CULL_FACE) above - see drawPlot().
     glColor3f(1.0f, 0.9f, 0.3f);
-    glBegin(GL_QUADS);
+    glBegin(GL_TRIANGLE_FAN);
     glVertex2f(mx - 3, my - 3); glVertex2f(mx + 3, my - 3); glVertex2f(mx + 3, my + 3); glVertex2f(mx - 3, my + 3);
     glEnd();
 }
@@ -235,17 +241,26 @@ void CurveWindow::drawSliders(int x, int y) {
 
         drawString(x, y, row.label, 0.8f, 0.8f, 0.8f);
 
+        const float t = (v - row.min) / (row.max - row.min);
+        const int knobX = trackLeft + static_cast<int>(t * kTrackW);
+
+        // Track, then a brighter fill from the left edge to the knob (MSFS look).
+        // Filled primitives need the glDisable(GL_CULL_FACE) above.
         XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
-        glColor3f(0.25f, 0.3f, 0.4f);
-        glBegin(GL_QUADS);
+        glDisable(GL_CULL_FACE);
+        glColor3f(0.15f, 0.18f, 0.25f);
+        glBegin(GL_TRIANGLE_FAN);
         glVertex2i(trackLeft, trackBottom); glVertex2i(trackLeft + kTrackW, trackBottom);
         glVertex2i(trackLeft + kTrackW, trackTop); glVertex2i(trackLeft, trackTop);
         glEnd();
+        glColor3f(0.25f, 0.45f, 0.75f);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2i(trackLeft, trackBottom); glVertex2i(knobX, trackBottom);
+        glVertex2i(knobX, trackTop); glVertex2i(trackLeft, trackTop);
+        glEnd();
 
-        const float t = (v - row.min) / (row.max - row.min);
-        const int knobX = trackLeft + static_cast<int>(t * kTrackW);
         glColor3f(0.4f, 0.7f, 1.0f);
-        glBegin(GL_QUADS);
+        glBegin(GL_TRIANGLE_FAN);
         glVertex2i(knobX - 3, trackBottom - 3); glVertex2i(knobX + 3, trackBottom - 3);
         glVertex2i(knobX + 3, trackTop + 3);    glVertex2i(knobX - 3, trackTop + 3);
         glEnd();
