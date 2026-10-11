@@ -16,6 +16,8 @@ EXPORTS
     XPLMGetWindowGeometry
     XPLMDrawString
     XPLMDrawTranslucentDarkBox
+    XPLMSetGraphicsState
+    XPLMSetWindowTitle
     XPLMGetFontDimensions
     XPLMFindPluginsMenu
     XPLMAppendMenuItem

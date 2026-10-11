@@ -9,7 +9,8 @@
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
 #elif IBM
-#define NOMINMAX   // windows.h defines min/max macros that break std::min/std::max
+// NOMINMAX comes from CMakeLists.txt: windows.h is already pulled in by
+// XPLMDefs.h above, so a define here would be too late.
 #include <windows.h>
 #include <GL/gl.h>
 #else

@@ -169,6 +169,7 @@ elseif(WIN32)
         APL=0
         _WIN32=1
         _WIN64=1
+        NOMINMAX=1
         XPLM200=1
         XPLM210=1
         XPLM300=1
