@@ -28,4 +28,4 @@ external/
 # Temporary files
 *~
 *.swp
-*.swo
+*.swotests/build*/

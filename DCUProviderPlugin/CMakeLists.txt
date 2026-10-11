@@ -83,6 +83,7 @@ set(SOURCES
     src/StatusWindow.cpp
     src/SerialPortUtils.cpp
     src/ConfigUtils.cpp
+    src/AxisCurve.cpp
 )
 
 # Plugin headers
@@ -96,6 +97,7 @@ set(HEADERS
     src/StatusWindow.h
     src/SerialPortUtils.h
     src/ConfigUtils.h
+    src/AxisCurve.h
 )
 
 # Create plugin library
