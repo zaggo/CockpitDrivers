@@ -26,8 +26,16 @@ X-Plane with debugger attached) or "Attach to X-Plane" (already-running instance
 file before pressing F5 or the debug config picker won't show. Plugin logs go through `XPLMDebugString`
 into X-Plane's `Log.txt` (path is machine-specific, see README.md for the configured location).
 
-No automated test suite currently exists (`CMakeLists.txt` conditionally adds a `tests/` subdirectory
-if present, but it isn't).
+Native unit tests (no X-Plane needed) live in `tests/`, framework-free `check()` executables
+driven by CTest, same shape as `MotionProviderPlugin/tests`:
+
+```bash
+cmake -S tests -B tests/build && cmake --build tests/build && ctest --test-dir tests/build --output-on-failure
+```
+
+They cover the XPLM-free pieces only: `AxisCurve` (rudder response curve math) and
+`ConfigUtils` (key=value persistence, including the per-axis curve keys). Windows,
+datarefs and the serial path are verified manually.
 
 ## Architecture
 
@@ -49,6 +57,9 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
 4. `DCUProvider::updateUplink()` — gateway → X-Plane. Drains `MessageQueue` RX, `switch`es on
    `MessageType`, writes into `DataRefManager` setters. Covers the transponder head, the handbrake,
    the rudder axes and the altimeter's barometer knob (`SerialMessageBaro`).
+   The rudder value passes through `AxisCurve rudderCurve_` (MSFS-style sensitivity /
+   neutral / dead-zone curve, see `docs/superpowers/specs/2026-10-11-rudder-axis-curve-design.md`)
+   before `setRudderRatio()`; toe brakes stay linear.
 5. `DCUProvider::updateRudderOverride()` — watchdog for the rudder/toe-brake axes. X-Plane rewrites
    `sim/joystick/yoke_heading_ratio` and the brake ratios from its own joystick input every frame, so
    writing them only sticks while `sim/operation/override/override_joystick_heading` and
@@ -61,6 +72,12 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
 X-Plane menu item / ImGui-ish window for serial port selection; port changes go through
 `DCUProvider::changePort()`, which tears down and recreates `ConnectionManager`, clears `MessageQueue`
 stats/queues, and sleeps 1s after reopening the port (Arduino reset settling time).
+
+`CurveWindow` is the second floating window ("Plugins → DCU Provider → Rudder Curve..."): it
+edits `rudderCurve_` in place through a pointer, so slider drags are live on the next rudder
+frame, and fires a changed-callback on release/reset that `DCUProvider` answers with
+`saveAxisCurve("rudder", ...)`. `StatusWindow` owns the plugin submenu and exposes
+`appendMenuItem()` for anything else that wants an entry there.
 
 ### Wire protocol
 
@@ -78,8 +95,11 @@ gets stuck.
 
 ### Config persistence
 
-`ConfigUtils` reads/writes a flat `key=value` file at `~/.dcuprovider.cfg` — currently just last-used
-serial port and status window visibility. Not related to the X-Plane dataref/aircraft config.
+`ConfigUtils` reads/writes a flat `key=value` file at `~/.dcuprovider.cfg` — last-used serial port,
+both window visibilities (`window_visible`, `curve_window_visible`) and the per-axis response curve
+under `curve.<axis>.{sens_pos,sens_neg,neutral,dead_zone,extremity}` (only `rudder` today; a second
+axis is another prefix plus an `apply()` call at its setter). Not related to the X-Plane
+dataref/aircraft config.
 
 ### Datarefs
 
