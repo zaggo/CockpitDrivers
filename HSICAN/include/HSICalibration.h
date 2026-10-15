@@ -107,6 +107,15 @@ struct GsPoint
 
 const uint8_t kGsPointCount = 9;
 
+// GS "not available" park target, in dots x 1000. interpolateGsPercent clamps
+// outside the taught table at the outermost point, so a value beyond every
+// realistic reading parks the needle at the end of the valid range instead of
+// the scale centre - which reads as a valid on-glidepath indication and hid
+// the missing signal on test flights. Positive parks at the high-dots end;
+// which physical way that is lives in the taught tables, so if the needle
+// parks at the wrong end on the rig, flip the sign rather than re-teaching.
+const int16_t kGsParkDots1000 = INT16_MAX;
+
 inline double gsPercentToServoDegree(double percent)
 {
     return 90.0 + percent * 0.9;

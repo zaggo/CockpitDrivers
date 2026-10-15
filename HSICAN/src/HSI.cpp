@@ -110,10 +110,12 @@ HSI::HSI()
     // the GS needles that is an arbitrary position - their taught 0-dot
     // percent is not 0 - and on the bus nothing writes them until a heading
     // frame has set gsValid: applyDeviation drops GS before that. Start every
-    // servo at its rest position instead of waiting for the right frame.
+    // servo at a defined position instead of waiting for the right frame; GS
+    // goes straight to its not-available park, which is also what the first
+    // flags frame commands while no glideslope is received.
     moveServo(cdiServo, 0.0);
     moveServo(fromToServo, static_cast<double>(noNav));
-    moveGs(0);
+    moveGs(kGsParkDots1000);
 
     // Enable Encoder Pins & Interrupts
     pinMode(kObsEncoderAPin, INPUT_PULLUP);
@@ -632,7 +634,9 @@ void HSI::applyFlags(uint8_t flags)
     gsValid = (flags & 0x04) != 0;
     if (!gsValid)
     {
-        moveGs(0);
+        // No glideslope: park the needles at the end of the valid range.
+        // Centring them (moveGs(0)) reads as a valid on-glidepath indication.
+        moveGs(kGsParkDots1000);
     }
 }
 

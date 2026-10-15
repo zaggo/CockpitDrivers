@@ -530,8 +530,15 @@ HDG pointers are left where they are — the LUA did not blank those either.
 bit0 TO    -> fromToServo = to    (90)
 bit1 FROM  -> fromToServo = from  (182)
 neither    -> fromToServo = noNav (0)
-bit2 == 0  -> gs1Servo/gs2Servo to mechanical zero
+bit2 == 0  -> gs1Servo/gs2Servo park at the end of the valid range
 ```
+
+The GS park originally read "to mechanical zero" (`moveGs(0)`), but test flights
+showed a centred needle reads as a valid on-glidepath indication — with a plain
+VOR tuned there was no visible difference between "no glideslope" and "perfectly
+on the glideslope". The needles now park at the end of the valid range instead:
+`applyFlags` drives `kGsParkDots1000` (HSICalibration.h), which
+`interpolateGsPercent` clamps at the outermost taught point.
 
 This replaces the broken float comparison in `HSIDriver/src/AirManager.cpp:98`, which
 tests `fromTo == 2.4` while the LUA sends `nav1_fromto * 1.0`, i.e. `2.0`. It never

@@ -136,6 +136,16 @@ void test_gs_table_with_no_points_centres_the_servo(void) {
     TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, interpolateGsPercent(nullptr, 0, 1500));
 }
 
+void test_the_gs_park_target_clamps_at_the_top_endstop(void) {
+    const GsPoint pts[] = { {-2000, -60}, {0, 5}, {2000, 70} };
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 70.0, interpolateGsPercent(pts, 3, kGsParkDots1000));
+}
+
+void test_the_gs_park_target_centres_an_untaught_table(void) {
+    // No taught points, no endstop to clamp at - the only defined position left.
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, 0.0, interpolateGsPercent(nullptr, 0, kGsParkDots1000));
+}
+
 void test_gs_table_with_one_point_holds_that_point(void) {
     const GsPoint pts[] = { {500, -20} };
     TEST_ASSERT_DOUBLE_WITHIN(0.001, -20.0, interpolateGsPercent(pts, 1, 1500));
@@ -199,6 +209,8 @@ int main(int, char **) {
     RUN_TEST(test_gs_table_interpolates_between_neighbouring_points);
     RUN_TEST(test_gs_table_outermost_points_are_soft_endstops);
     RUN_TEST(test_gs_table_with_no_points_centres_the_servo);
+    RUN_TEST(test_the_gs_park_target_clamps_at_the_top_endstop);
+    RUN_TEST(test_the_gs_park_target_centres_an_untaught_table);
     RUN_TEST(test_gs_table_with_one_point_holds_that_point);
     RUN_TEST(test_gs_points_are_inserted_sorted_by_dots);
     RUN_TEST(test_a_gs_point_at_the_same_dots_replaces_the_old_one);
