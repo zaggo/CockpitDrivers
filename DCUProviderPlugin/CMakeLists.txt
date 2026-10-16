@@ -84,6 +84,7 @@ set(SOURCES
     src/SerialPortUtils.cpp
     src/ConfigUtils.cpp
     src/AxisCurve.cpp
+    src/BusPower.cpp
     src/CurveWindow.cpp
 )
 

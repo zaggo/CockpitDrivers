@@ -8,6 +8,7 @@
 #include "StatusWindow.h"
 #include "CurveWindow.h"
 #include "AxisCurve.h"
+#include "BusPower.h"
 #include <memory>
 
 class DCUProvider {
@@ -95,6 +96,14 @@ private:
     std::unique_ptr<CurveWindow> curveWin_;
 
     // ============ Rate Limiting Accumulators ============
+
+    // Central brownout model: updated from the bus voltage at the top of every
+    // updateDownlink(), consulted by every electric consumer block below. See
+    // BusPower.h for what "powered" means and which instruments are exempt.
+    BusPower busPower_;
+    // Last state we logged, so a bus transition writes exactly one line to
+    // Log.txt instead of one per frame.
+    bool lastLoggedInstrumentsPowered_ = true;
     
     float fuelAccumulator_ = 0.0f;
     float lightsAccumulator_ = 0.0f;

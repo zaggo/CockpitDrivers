@@ -297,6 +297,25 @@ void DCUProvider::updateDownlink(float dt)
         return;
     }
 
+    // ============ Bus Power / Brownout ============
+    // One central reading drives the whole dashboard: lights dim and finally
+    // go dark as the bus sags, and below ~10V the bus-powered instruments get
+    // their "no power" positions sent instead of live values. Vacuum
+    // (attitude), pitot-static (ASI, altimeter, VSI), magnetic (compass) and
+    // mechanical (tach/odometer) instruments are exempt by design and keep
+    // receiving live data. Power-up simply resumes the live values - no homing
+    // is triggered; homing stays a board-power-up affair.
+    busPower_.update(dataRefMgr_->getBusVolts());
+    const float busLightFactor = busPower_.lightFactor();
+    const bool busPowered = busPower_.instrumentsPowered();
+    if (busPowered != lastLoggedInstrumentsPowered_)
+    {
+        lastLoggedInstrumentsPowered_ = busPowered;
+        XPLMDebugString(busPowered
+                            ? "DCUProvider: Bus power restored - instruments live, lighting unbrowned\n"
+                            : "DCUProvider: Bus power lost - instruments to no-power positions, lighting browned out\n");
+    }
+
     // ============ Fuel Data (5 Hz) ============
     fuelAccumulator_ += dt;
     float fuelRate = 1.0f / 5.0f; // 5 Hz = every 0.2s
@@ -313,6 +332,13 @@ void DCUProvider::updateDownlink(float dt)
         FuelData fuel;
         fuel.fuelLeft = dataRefMgr_->getFuelLeft();
         fuel.fuelRight = dataRefMgr_->getFuelRight();
+
+        // The fuel gauge is electric: a dead bus drops its needle to empty.
+        if (!busPowered)
+        {
+            fuel.fuelLeft = 0.0f;
+            fuel.fuelRight = 0.0f;
+        }
 
         msgQueue_->enqueueTx(MessageType::SerialMessageFuel, &fuel, sizeof(fuel));
 
@@ -338,6 +364,13 @@ void DCUProvider::updateDownlink(float dt)
         lights.radioDim = brightness[1];
         lights.domeLightDim = dataRefMgr_->getDomeLightBrightness();
 
+        // Brownout: all lighting follows the bus voltage. Panel/radio dim
+        // progressively; the dome light is on/off on the wire, so it snaps
+        // dark only when the fade reaches zero.
+        lights.panelDim *= busLightFactor;
+        lights.radioDim *= busLightFactor;
+        lights.domeLightDim *= busLightFactor;
+
         msgQueue_->enqueueTx(MessageType::SerialMessageLights, &lights, sizeof(lights));
 
         lightsAccumulator_ = 0.0f;
@@ -360,6 +393,15 @@ void DCUProvider::updateDownlink(float dt)
         transponder.code = static_cast<uint16_t>(dataRefMgr_->getTransponderCode());
         transponder.mode = static_cast<uint8_t>(dataRefMgr_->getTransponderMode());
         transponder.light = dataRefMgr_->getTransponderLight() > 0 ? true : false;
+
+        // The transponder head is electric: a dead bus blanks the display
+        // (mode off, reply light out). The code is kept so power-up restores
+        // the exact pre-loss state.
+        if (!busPowered)
+        {
+            transponder.mode = 0;
+            transponder.light = 0;
+        }
 
         msgQueue_->enqueueTx(MessageType::SerialMessageTransponder, &transponder, sizeof(transponder));
 
@@ -464,6 +506,15 @@ void DCUProvider::updateDownlink(float dt)
         hsi.flags = hsiFlagsByte(dataRefMgr_->getNav1FromTo(),
                                  dataRefMgr_->getNav1GlideslopeValid());
 
+        // The HSI's gyro and its nav needles are electric. On a dead bus the
+        // card simply stays put (we keep forwarding the sim's heading, tumble
+        // included), but the TO/FROM/GS flags drop and the deviation needles
+        // (below) centre.
+        if (!busPowered)
+        {
+            hsi.flags = 0;
+        }
+
         msgQueue_->enqueueTx(MessageType::SerialMessageHsiHeading, &hsi, sizeof(hsi));
 
         hsiHeadingAccumulator_ = 0.0f;
@@ -478,6 +529,13 @@ void DCUProvider::updateDownlink(float dt)
         HsiNavMessage nav;
         nav.cdiDots = dataRefMgr_->getNav1CdiDots();
         nav.gsDots = dataRefMgr_->getNav1GsDots();
+
+        // De-energized meter movements: both needles park centred.
+        if (!busPowered)
+        {
+            nav.cdiDots = 0.0f;
+            nav.gsDots = 0.0f;
+        }
 
         msgQueue_->enqueueTx(MessageType::SerialMessageHsiNav, &nav, sizeof(nav));
 
@@ -508,6 +566,13 @@ void DCUProvider::updateDownlink(float dt)
         TurnCoordinatorMessage tc;
         tc.turnRateDeg = dataRefMgr_->getTurnRateDeg();
         tc.slipDeg = dataRefMgr_->getSlipDeg();
+
+        // The turn needle is electric and centres when the gyro dies; the slip
+        // ball is a mechanical inclinometer and keeps working without power.
+        if (!busPowered)
+        {
+            tc.turnRateDeg = 0.0f;
+        }
 
         msgQueue_->enqueueTx(MessageType::SerialMessageTurnCoordinator, &tc, sizeof(tc));
 

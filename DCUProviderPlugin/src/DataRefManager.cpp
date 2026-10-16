@@ -12,6 +12,10 @@ void DataRefManager::initialize()
 
 void DataRefManager::onAircraftLoaded()
 {
+    // Electrical bus. Float array, one entry per bus; the Arrow has a single
+    // bus, so index 0 is the one every instrument hangs off.
+    dr_busVolts = XPLMFindDataRef("sim/cockpit2/electrical/bus_volts");
+
     // Fuel
     dr_fuelL = XPLMFindDataRef("sim/cockpit2/fuel/fuel_level_indicated_left");
     dr_fuelR = XPLMFindDataRef("sim/cockpit2/fuel/fuel_level_indicated_right");
@@ -99,10 +103,20 @@ void DataRefManager::onAircraftLoaded()
     dr_pitch_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot");
     dr_roll_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot");
 
-    // Turn coordinator. The gauge datarefs already follow electrical power in
-    // the sim, so no separate bus-voltage flag goes over the wire.
+    // Turn coordinator. DCUProvider gates the needle on bus volts (BusPower)
+    // before sending; the slip ball is a mechanical inclinometer and goes over
+    // the wire ungated regardless of electrical power.
     dr_turn_rate = XPLMFindDataRef("sim/cockpit2/gauges/indicators/turn_rate_roll_deg_pilot");
     dr_slip = XPLMFindDataRef("sim/cockpit2/gauges/indicators/slip_deg");
+}
+
+// Electrical bus
+float DataRefManager::getBusVolts() const
+{
+    // Missing dataref must not brown the panel out: assume a healthy bus and
+    // keep the pre-brownout always-on behaviour.
+    auto values = readFloatArray(dr_busVolts, 0, 1);
+    return dr_busVolts ? values[0] : 14.0f;
 }
 
 // Fuel

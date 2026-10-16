@@ -25,6 +25,9 @@ public:
     void onAircraftLoaded();
     
     // ============ DOWNLINK (Plugin → Gateway) ============
+    // Electrical bus (feeds the central brownout model, BusPower)
+    float getBusVolts() const;  // bus_volts[0], volts; healthy default when absent
+
     // Fuel system
     float getFuelLeft() const;
     float getFuelRight() const;
@@ -123,6 +126,7 @@ private:
     static XPLMDataRef resolveLazy(XPLMDataRef& cached, const char* name);
 
     // Cached datarefs (downlink)
+    XPLMDataRef dr_busVolts = nullptr;
     XPLMDataRef dr_fuelL = nullptr;
     XPLMDataRef dr_fuelR = nullptr;
     XPLMDataRef dr_panelDim = nullptr;

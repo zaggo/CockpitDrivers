@@ -33,7 +33,8 @@ driven by CTest, same shape as `MotionProviderPlugin/tests`:
 cmake -S tests -B tests/build && cmake --build tests/build && ctest --test-dir tests/build --output-on-failure
 ```
 
-They cover the XPLM-free pieces only: `AxisCurve` (rudder response curve math) and
+They cover the XPLM-free pieces only: `AxisCurve` (rudder response curve math), `BusPower`
+(electrical brownout thresholds/hysteresis) and
 `ConfigUtils` (key=value persistence, including the per-axis curve keys). Windows,
 datarefs and the serial path are verified manually. The top-level `CMakeLists.txt` also
 pulls `tests/` into `./build-macos.sh` (not into Windows builds — the tests use POSIX
@@ -55,7 +56,15 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
 3. `DCUProvider::updateDownlink()` — X-Plane → gateway. Reads datarefs via `DataRefManager` and
    `msgQueue_->enqueueTx(...)`, one block per data category, each independently rate-limited via its own
    accumulator (fuel 5 Hz, lights/transponder/odometer 10 Hz, RPM/airspeed/altimeter+VSI 50 Hz —
-   constants in `DCUProvider.h`).
+   constants in `DCUProvider.h`). At the top of every tick the central brownout model
+   (`BusPower busPower_`, fed from `sim/cockpit2/electrical/bus_volts`) is updated and consulted by
+   the electric consumers: lights are scaled by its dim factor, and below ~10V (with hysteresis) the
+   bus-powered devices get "no power" values instead of live ones — fuel gauge to empty, HSI
+   deviation needles centred + flags cleared, turn needle centred, transponder dark. Vacuum
+   (attitude), pitot-static (ASI/altimeter/VSI), magnetic (compass) and mechanical (tach/odometer)
+   instruments are exempt and keep streaming live values. Power-up just resumes live values; nothing
+   here ever triggers homing on the boards. `BusPower` itself is XPLM-free and unit-tested in
+   `tests/test_buspower.cpp`.
 4. `DCUProvider::updateUplink()` — gateway → X-Plane. Drains `MessageQueue` RX, `switch`es on
    `MessageType`, writes into `DataRefManager` setters. Covers the transponder head, the handbrake,
    the rudder axes and the altimeter's barometer knob (`SerialMessageBaro`).
