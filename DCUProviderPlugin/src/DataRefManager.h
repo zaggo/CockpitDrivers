@@ -56,7 +56,10 @@ public:
     // Magnetic compass (whiskey compass)
     float getCompassHeadingDegMag() const;  // degrees magnetic, 0..360
 
-    // Attitude indicator (vacuum-driven gyro: tumbles on vacuum failure)
+    // Attitude indicator (vacuum-driven gyro: degradation is simulated centrally
+    // by AttitudeGyro - the _vacuum datarefs themselves do NOT react to suction
+    // loss in the sim, verified on the rig)
+    float getVacuumInHg() const;         // sim/cockpit/misc/vacuum, inHg; healthy default when absent
     float getPitchVacuumDeg() const;  // pitch_vacuum_deg_pilot, degrees, nose up positive
     float getRollVacuumDeg() const;   // roll_vacuum_deg_pilot, degrees, right wing down positive
 
@@ -165,6 +168,7 @@ private:
 
     XPLMDataRef dr_altitude = nullptr;
     XPLMDataRef dr_vsi = nullptr;
+    XPLMDataRef dr_vacuum = nullptr;
     XPLMDataRef dr_pitch_vacuum = nullptr;
     XPLMDataRef dr_roll_vacuum = nullptr;
     XPLMDataRef dr_turn_rate = nullptr;

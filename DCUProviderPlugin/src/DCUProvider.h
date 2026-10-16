@@ -9,6 +9,7 @@
 #include "CurveWindow.h"
 #include "AxisCurve.h"
 #include "BusPower.h"
+#include "AttitudeGyro.h"
 #include <memory>
 
 class DCUProvider {
@@ -104,6 +105,14 @@ private:
     // Last state we logged, so a bus transition writes exactly one line to
     // Log.txt instead of one per frame.
     bool lastLoggedInstrumentsPowered_ = true;
+
+    // Vacuum-gyro model for the attitude indicator: updated from the measured
+    // suction at the top of every updateDownlink(), applied to the outgoing
+    // attitude in the 50 Hz block below. The horizon is the only
+    // vacuum-driven instrument on the rig (the suction gauge isn't installed).
+    AttitudeGyro attitudeGyro_;
+    // Same log-once pattern as the bus state above.
+    bool lastLoggedGyroDead_ = false;
     
     float fuelAccumulator_ = 0.0f;
     float lightsAccumulator_ = 0.0f;

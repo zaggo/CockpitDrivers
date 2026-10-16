@@ -316,6 +316,20 @@ void DCUProvider::updateDownlink(float dt)
                             : "DCUProvider: Bus power lost - instruments to no-power positions, lighting browned out\n");
     }
 
+    // ============ Vacuum Gyro (attitude indicator) ============
+    // The sim's _vacuum datarefs don't model suction loss (verified on the
+    // rig), so the horizon's degradation is simulated centrally here: slow
+    // wander as the rotor droops, wobble mid spin-down, rest pose when dead.
+    attitudeGyro_.update(dataRefMgr_->getVacuumInHg(), dt);
+    const bool gyroDead = attitudeGyro_.rotorSpeed() < AttitudeGyro::kRestFullSpeed;
+    if (gyroDead != lastLoggedGyroDead_)
+    {
+        lastLoggedGyroDead_ = gyroDead;
+        XPLMDebugString(gyroDead
+                            ? "DCUProvider: Vacuum gyro spun down - attitude indicator at rest pose\n"
+                            : "DCUProvider: Vacuum gyro spun up - attitude indicator live\n");
+    }
+
     // ============ Fuel Data (5 Hz) ============
     fuelAccumulator_ += dt;
     float fuelRate = 1.0f / 5.0f; // 5 Hz = every 0.2s
@@ -551,6 +565,10 @@ void DCUProvider::updateDownlink(float dt)
         AttitudeMessage attitude;
         attitude.pitchDeg = dataRefMgr_->getPitchVacuumDeg();
         attitude.rollDeg = dataRefMgr_->getRollVacuumDeg();
+
+        // Vacuum degradation, modelled centrally (see top of function). With a
+        // healthy gyro this is a no-op.
+        attitudeGyro_.apply(attitude.pitchDeg, attitude.rollDeg);
 
         msgQueue_->enqueueTx(MessageType::SerialMessageAttitude, &attitude, sizeof(attitude));
 

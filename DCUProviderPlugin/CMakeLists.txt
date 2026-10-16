@@ -85,6 +85,7 @@ set(SOURCES
     src/ConfigUtils.cpp
     src/AxisCurve.cpp
     src/BusPower.cpp
+    src/AttitudeGyro.cpp
     src/CurveWindow.cpp
 )
 

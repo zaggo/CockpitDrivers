@@ -98,8 +98,11 @@ void DataRefManager::onAircraftLoaded()
     dr_altitude = XPLMFindDataRef("sim/cockpit2/gauges/indicators/altitude_ft_pilot");
     dr_vsi = XPLMFindDataRef("sim/cockpit2/gauges/indicators/vvi_fpm_pilot");
 
-    // Attitude indicator. The _vacuum variants already model the gyro spinning
-    // down on vacuum failure, so no separate failure flag goes over the wire.
+    // Attitude indicator. The _vacuum variants do NOT model the gyro spinning
+    // down on suction loss (verified on the rig: they stay stable with
+    // sim/cockpit/misc/vacuum at 0), so the degradation is simulated centrally
+    // by AttitudeGyro in DCUProvider, fed from the suction dataref below.
+    dr_vacuum = XPLMFindDataRef("sim/cockpit/misc/vacuum");
     dr_pitch_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/pitch_vacuum_deg_pilot");
     dr_roll_vacuum = XPLMFindDataRef("sim/cockpit2/gauges/indicators/roll_vacuum_deg_pilot");
 
@@ -208,6 +211,13 @@ float DataRefManager::getCompassHeadingDegMag() const
 }
 
 // Attitude indicator
+float DataRefManager::getVacuumInHg() const
+{
+    // Missing dataref must not tumble the horizon: assume healthy suction and
+    // keep the pre-degradation always-live behaviour.
+    return dr_vacuum ? XPLMGetDataf(dr_vacuum) : 4.9f;
+}
+
 float DataRefManager::getPitchVacuumDeg() const
 {
     return readFloat(dr_pitch_vacuum, 0.0f);
