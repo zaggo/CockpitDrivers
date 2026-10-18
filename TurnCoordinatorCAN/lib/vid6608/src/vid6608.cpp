@@ -90,6 +90,74 @@ void vid6608::zero(uint16_t initialPos /*= VID6608_DEFAULT_MAX_STEPS/2*/, uint16
   this->moveDirection = MOVE_NONE;
 }
 
+void vid6608::zeroAll(vid6608* const* motors, const uint16_t* initialPos, uint8_t count, uint16_t delay /*= VID6608_DEFAULT_ZERO_SPEED*/) {
+  if (motors == nullptr || count == 0) {
+    return;
+  }
+  // Same three homing phases as zero(): forward sweep, full sweep back to the
+  // stop, then the slow pull-up to seat precisely. Every phase steps all
+  // motors in lockstep - pulse each motor that still owes a step, then wait
+  // the step delay once for the whole group, so one motor's wait does not
+  // stretch the other's step period.
+  for (uint8_t phase = 0; phase < 3; phase++) {
+    if (phase == 2 && !VID6608_ZERO_PULLUP_STEPS) {
+      break;
+    }
+    const MoveDirection phaseDir = (phase == 0) ? MOVE_FORWARD : MOVE_BACKWARD;
+    const uint16_t phaseDelay = (phase == 2) ? delay * 10 : delay;
+    // Longest run of this phase across all motors. count is tiny and the
+    // delay dominates, so recomputing the per-motor lengths inline is fine
+    // and keeps this allocation-free.
+    uint16_t phaseSteps = 0;
+    for (uint8_t i = 0; i < count; i++) {
+      uint16_t n;
+      if (phase == 0) {
+        uint16_t pos = initialPos ? initialPos[i] : motors[i]->maxSteps / 2;
+        if (pos >= motors[i]->maxSteps) {
+          pos = motors[i]->maxSteps - 1;
+        }
+        n = motors[i]->maxSteps - pos;
+      } else if (phase == 1) {
+        n = motors[i]->maxSteps;
+      } else {
+        n = VID6608_ZERO_PULLUP_STEPS;
+      }
+      if (n > phaseSteps) {
+        phaseSteps = n;
+      }
+    }
+    for (uint16_t x = 0; x < phaseSteps; x++) {
+      for (uint8_t i = 0; i < count; i++) {
+        uint16_t n;
+        if (phase == 0) {
+          uint16_t pos = initialPos ? initialPos[i] : motors[i]->maxSteps / 2;
+          if (pos >= motors[i]->maxSteps) {
+            pos = motors[i]->maxSteps - 1;
+          }
+          n = motors[i]->maxSteps - pos;
+        } else if (phase == 1) {
+          n = motors[i]->maxSteps;
+        } else {
+          n = VID6608_ZERO_PULLUP_STEPS;
+        }
+        if (x < n) {
+          motors[i]->stepPulse(phaseDir);
+        }
+      }
+      delayMicroseconds(phaseDelay);
+      yield();
+    }
+  }
+  // Reset values, same as zero()
+  for (uint8_t i = 0; i < count; i++) {
+    motors[i]->currentPosition = 0;
+    motors[i]->targetPosition = 0;
+    motors[i]->targetPositionNext = 0;
+    motors[i]->moveState = STATE_IDLE;
+    motors[i]->moveDirection = MOVE_NONE;
+  }
+}
+
 void vid6608::moveTo(uint16_t position) {
   // Test for duplicates
   if (position == this->targetPositionNext) {

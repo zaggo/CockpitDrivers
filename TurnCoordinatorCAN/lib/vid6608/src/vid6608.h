@@ -14,7 +14,8 @@
  *   Here loop() only emits a short step pulse and returns; the inter-step
  *   interval is timed with micros(), so OLED/CAN work overlaps the wait
  *   instead of adding to it. Homing (zero()) stays blocking - it runs once at
- *   startup and wants tight sequential steps.
+ *   startup and wants tight sequential steps. zeroAll() homes several motors
+ *   in parallel while still blocking the caller as a whole.
  */
 
 #ifndef vid6608_h
@@ -68,6 +69,25 @@ class vid6608 {
      * @param delay single step delay, controls sthe speed of motor, default is deined in VID6608_DEFAULT_ZERO_SPEED
      */
     void zero(uint16_t initialPos = VID6608_DEFAULT_MAX_STEPS/2, uint16_t delay = VID6608_DEFAULT_ZERO_SPEED);
+
+    /**
+     * @brief Homes several motors in parallel (LOCAL FORK: TurnCoordinatorCAN)
+     *
+     * Runs the same three-phase homing sequence as zero(), but every phase
+     * steps all motors in lockstep: each loop iteration pulses every motor
+     * that still owes a step in this phase (via the short stepPulse()), then
+     * waits the step delay once for the whole group. The sequence as a whole
+     * is still blocking, but it takes as long as the slowest motor instead of
+     * the sum of all motors, and each motor keeps the same per-step speed it
+     * would have had in a sequential zero().
+     *
+     * @param motors array of motor pointers, must not be null
+     * @param initialPos per-motor assumed position (see zero()), or nullptr to
+     * use maxSteps/2 for every motor
+     * @param count number of entries in motors and initialPos
+     * @param delay single step delay in microseconds, @see zero()
+     */
+    static void zeroAll(vid6608* const* motors, const uint16_t* initialPos, uint8_t count, uint16_t delay = VID6608_DEFAULT_ZERO_SPEED);
 
     /**
      * @brief Shedules movement to defined absolute position

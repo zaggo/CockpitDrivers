@@ -21,8 +21,8 @@ public:
 
     void setBrightness(uint8_t brightness);
 
-    // Re-runs the blocking homing sweep on both motors, one after the other,
-    // and parks each needle on its mechanical stop. Calibration always starts
+    // Re-runs the blocking homing sweep on both motors in parallel and parks
+    // each needle on its mechanical stop. Calibration always starts
     // here, because every stored step count is relative to that stop. The stop
     // is *not* the 0 mark - that one is taught like any other point.
     void home();

@@ -47,13 +47,12 @@ TurnCoordinator::TurnCoordinator()
         analogWrite(kLightPin, 0);
     }
 
-    // One /RST for both channels: release it once, then home the motors one
-    // after the other. zero() is blocking and runs once at startup.
+    // One /RST for both channels: release it once, then home both motors in
+    // parallel. zeroAll() still blocks until homing is done, but each phase
+    // steps both motors in lockstep, so startup takes as long as the slowest
+    // motor instead of the sum of both.
     digitalWrite(kRstPin, HIGH);
-    for (uint8_t i = 0; i < needleCount; i++)
-    {
-        motors[i]->zero();
-    }
+    vid6608::zeroAll(motors, nullptr, needleCount);
 
     loadConfig();
 }
@@ -118,12 +117,14 @@ void TurnCoordinator::saveConfig()
 
 void TurnCoordinator::home()
 {
-    // Feeding the known position in keeps zero() from taking the long way
-    // round and bouncing off the end stop.
+    // Feeding the known positions in keeps the homing from taking the long
+    // way round and bouncing off the end stop. Both motors home in parallel.
+    uint16_t initialPos[needleCount];
     for (uint8_t i = 0; i < needleCount; i++)
     {
-        motors[i]->zero(motors[i]->getPosition());
+        initialPos[i] = motors[i]->getPosition();
     }
+    vid6608::zeroAll(motors, initialPos, needleCount);
 }
 
 bool TurnCoordinator::isSettled(Needle needle)
