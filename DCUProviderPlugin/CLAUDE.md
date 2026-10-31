@@ -33,7 +33,8 @@ driven by CTest, same shape as `MotionProviderPlugin/tests`:
 cmake -S tests -B tests/build && cmake --build tests/build && ctest --test-dir tests/build --output-on-failure
 ```
 
-They cover the XPLM-free pieces only: `AxisCurve` (rudder response curve math), `BusPower`
+They cover the XPLM-free pieces only: `AxisCurve` (rudder/toe-brake response curve math),
+`BrakeEqualizer` (differential toe-brake dead zone), `BusPower`
 (electrical brownout thresholds/hysteresis), `AttitudeGyro` (vacuum-gyro spin-down/tumble physics)
 and
 `ConfigUtils` (key=value persistence, including the per-axis curve keys). Windows,
@@ -78,7 +79,12 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
    the rudder axes and the altimeter's barometer knob (`SerialMessageBaro`).
    The rudder value passes through `AxisCurve rudderCurve_` (MSFS-style sensitivity /
    neutral / dead-zone curve, see `docs/superpowers/specs/2026-10-11-rudder-axis-curve-design.md`)
-   before `setRudderRatio()`; toe brakes stay linear.
+   before `setRudderRatio()`. The toe brakes each get their own unipolar `AxisCurve`
+   (`leftBrakeCurve_` / `rightBrakeCurve_`, 0..1 domain: only Sensitivity, Dead zone and
+   Extremity DZ apply), then `BrakeEqualizer brakeDiffEqualizer_` equalizes small left/right
+   asymmetries: while `|left - right|` is inside its `diffDeadZone` both sides output their
+   average, and past it the differential component fades in linearly (rescaled so full
+   pedal separation still yields full differential braking).
 5. `DCUProvider::updateRudderOverride()` — watchdog for the rudder/toe-brake axes. X-Plane rewrites
    `sim/joystick/yoke_heading_ratio` and the brake ratios from its own joystick input every frame, so
    writing them only sticks while `sim/operation/override/override_joystick_heading` and
@@ -92,10 +98,14 @@ X-Plane menu item / ImGui-ish window for serial port selection; port changes go 
 `DCUProvider::changePort()`, which tears down and recreates `ConnectionManager`, clears `MessageQueue`
 stats/queues, and sleeps 1s after reopening the port (Arduino reset settling time).
 
-`CurveWindow` is the second floating window ("Plugins → DCU Provider → Rudder Curve..."): it
-edits `rudderCurve_` in place through a pointer, so slider drags are live on the next rudder
-frame, and fires a changed-callback on release/reset that `DCUProvider` answers with
-`saveAxisCurve("rudder", ...)`. `StatusWindow` owns the plugin submenu and exposes
+`CurveWindow` is the floating curve editor — three instances: "Rudder Curve...", "Left Brake
+Curve..." and "Right Brake Curve..." under "Plugins → DCU Provider". Each edits its `AxisCurve`
+in place through a pointer, so slider drags are live on the next axis frame, and fires a
+changed-callback on release/reset that `DCUProvider` answers with `saveAxisCurve(...)`.
+`CurveWindowOptions` picks bipolar (-1..1, rudder) vs unipolar (0..1, brakes) domain and slider
+rows, the per-axis visibility config key and the window position; the brake windows additionally
+share a "Diff dead zone" slider row bound to `brakeDiffEqualizer_.diffDeadZone` (same pointer in
+both windows, so they stay in sync). `StatusWindow` owns the plugin submenu and exposes
 `appendMenuItem()` for anything else that wants an entry there. Its plot and sliders are
 immediate-mode OpenGL; X-Plane 12 keeps back-face culling on and `XPLMSetGraphicsState`
 doesn't reset it, so any filled primitive drawn in a window callback needs an explicit
@@ -119,9 +129,11 @@ gets stuck.
 ### Config persistence
 
 `ConfigUtils` reads/writes a flat `key=value` file at `~/.dcuprovider.cfg` — last-used serial port,
-both window visibilities (`window_visible`, `curve_window_visible`) and the per-axis response curve
-under `curve.<axis>.{sens_pos,sens_neg,neutral,dead_zone,extremity}` (only `rudder` today; a second
-axis is another prefix plus an `apply()` call at its setter). Not related to the X-Plane
+window visibilities (`window_visible`, per-axis `curve_window_visible.<axis>` with the legacy
+rudder-only `curve_window_visible` as fallback for "rudder"), the per-axis response curves
+under `curve.<axis>.{sens_pos,sens_neg,neutral,dead_zone,extremity}` (axes: `rudder`,
+`left_brake`, `right_brake`) and the shared toe-brake differential dead zone
+`curve.brake.diff_dead_zone`. Not related to the X-Plane
 dataref/aircraft config.
 
 ### Datarefs

@@ -25,41 +25,39 @@ constexpr int kRowStep = 30;
 constexpr int kCurveSamples = 65;
 }
 
-const CurveWindow::Row CurveWindow::kRows[CurveWindow::PARAM_COUNT] = {
-    { "Sensitivity +", -1.f, 1.f },
-    { "Sensitivity -", -1.f, 1.f },
-    { "Neutral",       -1.f, 1.f },
-    { "Dead zone",      0.f, 0.5f },
-    { "Extremity DZ",   0.f, 0.5f },
-};
-
-CurveWindow::CurveWindow(std::string axisLabel, AxisCurve* curve)
-    : axisLabel_(std::move(axisLabel)), curve_(curve) {}
+CurveWindow::CurveWindow(std::string axisLabel, AxisCurve* curve, CurveWindowOptions options)
+    : axisLabel_(std::move(axisLabel)), curve_(curve), options_(std::move(options)) {
+    if (options_.bipolar) {
+        rows_ = {
+            { "Sensitivity +", -1.f, 1.f,  &curve_->sensPos },
+            { "Sensitivity -", -1.f, 1.f,  &curve_->sensNeg },
+            { "Neutral",       -1.f, 1.f,  &curve_->neutral },
+            { "Dead zone",      0.f, 0.5f, &curve_->deadZone },
+            { "Extremity DZ",   0.f, 0.5f, &curve_->extremityDeadZone },
+        };
+        domainLo_ = -1.f;
+    } else {
+        // Unipolar axis (toe brakes): only the positive half of the curve is
+        // exercised, so Sensitivity - / Neutral would be dead controls.
+        rows_ = {
+            { "Sensitivity",   -1.f, 1.f,  &curve_->sensPos },
+            { "Dead zone",      0.f, 0.5f, &curve_->deadZone },
+            { "Extremity DZ",   0.f, 0.5f, &curve_->extremityDeadZone },
+        };
+        if (options_.diffDeadZone)
+            rows_.push_back({ "Diff dead zone", 0.f, 0.5f, options_.diffDeadZone });
+        domainLo_ = 0.f;
+    }
+}
 
 CurveWindow::~CurveWindow() { destroy(); }
 
 void CurveWindow::setChangedCallback(std::function<void()> cb) { changedCallback_ = std::move(cb); }
 void CurveWindow::setLiveInput(float raw) { liveInput_ = raw; }
 
-float CurveWindow::getParam(int p) const {
-    switch (p) {
-        case SENS_POS:  return curve_->sensPos;
-        case SENS_NEG:  return curve_->sensNeg;
-        case NEUTRAL:   return curve_->neutral;
-        case DEAD_ZONE: return curve_->deadZone;
-        default:        return curve_->extremityDeadZone;
-    }
-}
-
-void CurveWindow::setParam(int p, float v) {
-    v = std::max(kRows[p].min, std::min(kRows[p].max, v));
-    switch (p) {
-        case SENS_POS:  curve_->sensPos = v; break;
-        case SENS_NEG:  curve_->sensNeg = v; break;
-        case NEUTRAL:   curve_->neutral = v; break;
-        case DEAD_ZONE: curve_->deadZone = v; break;
-        default:        curve_->extremityDeadZone = v; break;
-    }
+void CurveWindow::setValue(int row, float v) {
+    const Row& r = rows_[row];
+    *r.target = std::max(r.min, std::min(r.max, v));
 }
 
 float CurveWindow::valueFromX(int x, int trackLeft, int trackWidth, float min, float max) {
@@ -69,14 +67,14 @@ float CurveWindow::valueFromX(int x, int trackLeft, int trackWidth, float min, f
 }
 
 void CurveWindow::initialize() {
-    const bool shouldBeVisible = loadCurveWindowVisible();
+    const bool shouldBeVisible = loadCurveWindowVisible(options_.configAxis);
 
     XPLMCreateWindow_t params = {};
     params.structSize = sizeof(XPLMCreateWindow_t);
-    params.left = 150;
-    params.top = 600;
-    params.right = 150 + kWinW;
-    params.bottom = 600 - kWinH;
+    params.left = options_.left;
+    params.top = options_.top;
+    params.right = options_.left + kWinW;
+    params.bottom = options_.top - kWinH;
     params.visible = shouldBeVisible ? 1 : 0;
     params.drawWindowFunc = drawCallback;
     params.handleKeyFunc = keyCallback;
@@ -109,7 +107,7 @@ void CurveWindow::setVisible(bool visible) {
     if (!windowId_) return;
     XPLMSetWindowIsVisible(windowId_, visible ? 1 : 0);
     lastKnownVisible_ = visible;
-    saveCurveWindowVisible(visible);
+    saveCurveWindowVisible(options_.configAxis, visible);
 }
 
 bool CurveWindow::isVisible() const {
@@ -122,7 +120,7 @@ void CurveWindow::update() {
     const bool nowVisible = isVisible();
     if (nowVisible != lastKnownVisible_) {
         lastKnownVisible_ = nowVisible;
-        saveCurveWindowVisible(nowVisible);
+        saveCurveWindowVisible(options_.configAxis, nowVisible);
     }
 }
 
@@ -144,22 +142,22 @@ int CurveWindow::mouseCallback(XPLMWindowID, int x, int y, XPLMMouseStatus inMou
     if (inMouse == xplm_MouseDown) {
         for (const Hit& h : self->hits_) {
             if (x < h.left || x > h.right || y < h.bottom || y > h.top) continue;
+            const Row& row = self->rows_[h.row];
             if (h.reset) {
-                self->setParam(h.param, 0.f);
+                self->setValue(h.row, 0.f);
                 if (self->changedCallback_) self->changedCallback_();
             } else {
-                self->grabbed_ = h.param;
+                self->grabbed_ = h.row;
                 self->grabLeft_ = h.left;
                 self->grabWidth_ = h.right - h.left;
-                self->setParam(h.param, valueFromX(x, h.left, h.right - h.left,
-                                                   kRows[h.param].min, kRows[h.param].max));
+                self->setValue(h.row, valueFromX(x, h.left, h.right - h.left, row.min, row.max));
             }
             return 1;
         }
     } else if (inMouse == xplm_MouseDrag) {
         if (self->grabbed_ >= 0) {
-            const int p = self->grabbed_;
-            self->setParam(p, valueFromX(x, self->grabLeft_, self->grabWidth_, kRows[p].min, kRows[p].max));
+            const Row& row = self->rows_[self->grabbed_];
+            self->setValue(self->grabbed_, valueFromX(x, self->grabLeft_, self->grabWidth_, row.min, row.max));
         }
     } else if (inMouse == xplm_MouseUp) {
         if (self->grabbed_ >= 0) {
@@ -192,7 +190,8 @@ void CurveWindow::draw() {
 void CurveWindow::drawPlot(int left, int top, int size) {
     const int bottom = top - size;
     const int right = left + size;
-    auto px = [&](float v) { return left + (v + 1.f) * 0.5f * size; };
+    const float span = 1.f - domainLo_;
+    auto px = [&](float v) { return left + (v - domainLo_) / span * size; };
     auto py = [&](float v) { return bottom + (v + 1.f) * 0.5f * size; };
 
     XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
@@ -202,27 +201,29 @@ void CurveWindow::drawPlot(int left, int top, int size) {
     // the curve rendered while the marker and sliders did not.
     glDisable(GL_CULL_FACE);
 
-    // Frame + axis cross
+    // Frame + axis cross (for a unipolar domain the x=0 line is the frame edge)
     glColor3f(0.35f, 0.35f, 0.35f);
     glBegin(GL_LINE_LOOP);
     glVertex2i(left, bottom); glVertex2i(right, bottom); glVertex2i(right, top); glVertex2i(left, top);
     glEnd();
     glBegin(GL_LINES);
-    glVertex2f(px(-1.f), py(0.f)); glVertex2f(px(1.f), py(0.f));
-    glVertex2f(px(0.f), py(-1.f)); glVertex2f(px(0.f), py(1.f));
+    glVertex2f(px(domainLo_), py(0.f)); glVertex2f(px(1.f), py(0.f));
+    if (domainLo_ < 0.f) {
+        glVertex2f(px(0.f), py(-1.f)); glVertex2f(px(0.f), py(1.f));
+    }
     glEnd();
 
     // Curve
     glColor3f(0.4f, 0.8f, 1.0f);
     glBegin(GL_LINE_STRIP);
     for (int i = 0; i < kCurveSamples; ++i) {
-        const float x = -1.f + 2.f * i / (kCurveSamples - 1);
+        const float x = domainLo_ + span * i / (kCurveSamples - 1);
         glVertex2f(px(x), py(curve_->apply(x)));
     }
     glEnd();
 
     // Live marker
-    const float mx = px(std::max(-1.f, std::min(1.f, liveInput_)));
+    const float mx = px(std::max(domainLo_, std::min(1.f, liveInput_)));
     const float my = py(curve_->apply(liveInput_));
     // Filled primitives need the glDisable(GL_CULL_FACE) above - see drawPlot().
     glColor3f(1.0f, 0.9f, 0.3f);
@@ -233,9 +234,9 @@ void CurveWindow::drawPlot(int left, int top, int size) {
 
 void CurveWindow::drawSliders(int x, int y) {
     const int labelW = 100;
-    for (int p = 0; p < PARAM_COUNT; ++p) {
-        const Row& row = kRows[p];
-        const float v = getParam(p);
+    for (int p = 0; p < static_cast<int>(rows_.size()); ++p) {
+        const Row& row = rows_[p];
+        const float v = *row.target;
         const int trackLeft = x + labelW;
         const int trackBottom = y - 2;
         const int trackTop = trackBottom + kTrackH;

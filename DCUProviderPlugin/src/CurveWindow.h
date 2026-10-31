@@ -5,16 +5,32 @@
 #include <string>
 #include <vector>
 
+// Options for one CurveWindow instance.
+struct CurveWindowOptions {
+    // true: axis domain -1..1 with Sensitivity +/- and Neutral rows (rudder).
+    // false: unipolar 0..1 domain with a single Sensitivity row (toe brakes).
+    bool bipolar = true;
+    // When set, adds a shared "Diff dead zone" slider row editing this value
+    // (the toe-brake differential dead zone; both brake windows get the same
+    // pointer, so it stays in sync regardless of which window is dragged).
+    float* diffDeadZone = nullptr;
+    // Config key suffix: visibility persists as curve_window_visible.<configAxis>.
+    std::string configAxis;
+    // Initial window position (screen coordinates of the top-left corner).
+    int left = 150;
+    int top = 600;
+};
+
 // Floating window that edits one AxisCurve in place: a plot of the curve with
-// a live marker of the current axis input on the left, five draggable sliders
-// (one per AxisCurve parameter) with reset buttons on the right.
+// a live marker of the current axis input on the left, draggable sliders (one
+// per edited parameter) with reset buttons on the right.
 //
-// The curve pointer is written directly on every drag, so the change is live
-// on the next axis frame. changedCallback_ fires on slider release and reset
-// so the owner can persist it.
+// The row targets (curve fields, optional shared diff dead zone) are written
+// directly on every drag, so the change is live on the next axis frame.
+// changedCallback_ fires on slider release and reset so the owner can persist.
 class CurveWindow {
 public:
-    CurveWindow(std::string axisLabel, AxisCurve* curve);
+    CurveWindow(std::string axisLabel, AxisCurve* curve, CurveWindowOptions options = {});
     ~CurveWindow();
 
     CurveWindow(const CurveWindow&) = delete;
@@ -30,24 +46,23 @@ public:
     // Call ~1 Hz: detects the native close button and persists visibility.
     void update();
 
-    // Current raw axis input (-1..1) for the live marker. Call per axis frame.
+    // Current raw axis input for the live marker, in the window's domain
+    // (-1..1 bipolar, 0..1 unipolar). Call per axis frame.
     void setLiveInput(float raw);
 
     // Fired on slider release and on reset. Owner persists the curve here.
     void setChangedCallback(std::function<void()> cb);
 
 private:
-    enum Param { SENS_POS = 0, SENS_NEG, NEUTRAL, DEAD_ZONE, EXTREMITY, PARAM_COUNT };
-
-    struct Row { const char* label; float min; float max; };
-    static const Row kRows[PARAM_COUNT];
+    // One slider row: label, slider range and the value it edits. Built from
+    // CurveWindowOptions at construction.
+    struct Row { std::string label; float min, max; float* target; };
 
     // Clickable region, rebuilt every draw() frame. reset=false is a slider
-    // track, reset=true is that row's [R] button.
-    struct Hit { int left, top, right, bottom; int param; bool reset; };
+    // track, reset=true is that row's [R] button. row indexes rows_.
+    struct Hit { int left, top, right, bottom; int row; bool reset; };
 
-    float getParam(int p) const;
-    void  setParam(int p, float v);
+    void setValue(int row, float v);
     static float valueFromX(int x, int trackLeft, int trackWidth, float min, float max);
 
     static void drawCallback(XPLMWindowID inWindowID, void* inRefcon);
@@ -63,11 +78,14 @@ private:
 
     std::string axisLabel_;
     AxisCurve* curve_;
+    CurveWindowOptions options_;
+    std::vector<Row> rows_;
+    float domainLo_ = -1.f;   // plot/marker domain lower end (-1 or 0)
     std::function<void()> changedCallback_;
     XPLMWindowID windowId_ = nullptr;
     std::vector<Hit> hits_;
 
-    // Slider currently being dragged, -1 when none; track geometry captured
+    // Slider row currently being dragged, -1 when none; track geometry captured
     // at MouseDown so MouseDrag doesn't depend on hits_ being rebuilt.
     int grabbed_ = -1;
     int grabLeft_ = 0;

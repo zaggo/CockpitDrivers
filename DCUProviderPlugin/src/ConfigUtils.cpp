@@ -5,6 +5,8 @@
 #include <string>
 #include <sstream>
 #include <map>
+#include <algorithm>
+#include <cmath>
 
 std::string getConfigFilePath() {
     const char* home = std::getenv("HOME");
@@ -111,15 +113,39 @@ void saveAxisCurve(const std::string& axis, const AxisCurve& curve) {
     saveConfig(config);
 }
 
-bool loadCurveWindowVisible() {
+bool loadCurveWindowVisible(const std::string& axis) {
     auto config = loadConfig();
-    auto it = config.find("curve_window_visible");
-    if (it == config.end()) return false;
-    return it->second == "1" || it->second == "true";
+    auto it = config.find("curve_window_visible." + axis);
+    if (it != config.end())
+        return it->second == "1" || it->second == "true";
+    // Legacy single-window key from the rudder-only version.
+    if (axis == "rudder") {
+        auto legacy = config.find("curve_window_visible");
+        if (legacy != config.end())
+            return legacy->second == "1" || legacy->second == "true";
+    }
+    return false;
 }
 
-void saveCurveWindowVisible(bool visible) {
+void saveCurveWindowVisible(const std::string& axis, bool visible) {
     auto config = loadConfig();
-    config["curve_window_visible"] = visible ? "1" : "0";
+    config["curve_window_visible." + axis] = visible ? "1" : "0";
+    saveConfig(config);
+}
+
+float loadBrakeDiffDeadZone() {
+    auto config = loadConfig();
+    auto it = config.find("curve.brake.diff_dead_zone");
+    if (it == config.end()) return 0.f;
+    const float v = parseFloat(it->second);
+    if (std::isnan(v)) return 0.f;
+    return std::max(0.f, std::min(1.f, v));
+}
+
+void saveBrakeDiffDeadZone(float v) {
+    auto config = loadConfig();
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%.4f", v);
+    config["curve.brake.diff_dead_zone"] = buf;
     saveConfig(config);
 }

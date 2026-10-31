@@ -23,6 +23,13 @@ void saveStatusWindowVisible(bool visible);
 AxisCurve loadAxisCurve(const std::string& axis);
 void saveAxisCurve(const std::string& axis, const AxisCurve& curve);
 
-// Loads the curve window visibility. Default: hidden.
-bool loadCurveWindowVisible();
-void saveCurveWindowVisible(bool visible);
+// Curve window visibility, per axis: curve_window_visible.<axis>. Default:
+// hidden. The legacy single-window key (curve_window_visible) from the
+// rudder-only version still applies to "rudder" as a fallback.
+bool loadCurveWindowVisible(const std::string& axis);
+void saveCurveWindowVisible(const std::string& axis, bool visible);
+
+// Shared toe-brake differential dead zone (curve.brake.diff_dead_zone).
+// Missing or unparseable -> 0; clamped to 0..1.
+float loadBrakeDiffDeadZone();
+void  saveBrakeDiffDeadZone(float v);

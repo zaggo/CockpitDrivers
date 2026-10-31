@@ -84,6 +84,7 @@ set(SOURCES
     src/SerialPortUtils.cpp
     src/ConfigUtils.cpp
     src/AxisCurve.cpp
+    src/BrakeEqualizer.cpp
     src/BusPower.cpp
     src/AttitudeGyro.cpp
     src/CurveWindow.cpp
@@ -101,7 +102,8 @@ set(HEADERS
     src/SerialPortUtils.h
     src/ConfigUtils.h
     src/AxisCurve.h
-    src/CurveWindow.h
+   src/BrakeEqualizer.h
+   src/CurveWindow.h
 )
 
 # Create plugin library

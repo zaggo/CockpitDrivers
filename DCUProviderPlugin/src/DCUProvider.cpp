@@ -63,12 +63,40 @@ bool DCUProvider::initialize()
                                    { onUiAction(action); });
 
     rudderCurve_ = loadAxisCurve("rudder");
-    curveWin_ = std::make_unique<CurveWindow>("Rudder", &rudderCurve_);
+    curveWin_ = std::make_unique<CurveWindow>("Rudder", &rudderCurve_,
+                                              CurveWindowOptions{ true, nullptr, "rudder", 150, 600 });
     curveWin_->initialize();
     curveWin_->setChangedCallback([this]()
                                   { saveAxisCurve("rudder", rudderCurve_); });
     statusWin_->appendMenuItem("Rudder Curve...", [this]()
                                { if (curveWin_) curveWin_->setVisible(!curveWin_->isVisible()); });
+
+    // Toe brakes: one unipolar curve per side. The shared differential dead
+    // zone is passed to both windows, so either one can edit it.
+    leftBrakeCurve_ = loadAxisCurve("left_brake");
+    rightBrakeCurve_ = loadAxisCurve("right_brake");
+    brakeDiffEqualizer_.diffDeadZone = loadBrakeDiffDeadZone();
+    brakeDiffEqualizer_.clampToRange();
+    auto saveBrakes = [this]()
+    {
+        saveAxisCurve("left_brake", leftBrakeCurve_);
+        saveAxisCurve("right_brake", rightBrakeCurve_);
+        saveBrakeDiffDeadZone(brakeDiffEqualizer_.diffDeadZone);
+    };
+    leftBrakeWin_ = std::make_unique<CurveWindow>("Left Brake", &leftBrakeCurve_,
+                                                  CurveWindowOptions{ false, &brakeDiffEqualizer_.diffDeadZone,
+                                                                      "left_brake", 780, 600 });
+    leftBrakeWin_->initialize();
+    leftBrakeWin_->setChangedCallback(saveBrakes);
+    statusWin_->appendMenuItem("Left Brake Curve...", [this]()
+                               { if (leftBrakeWin_) leftBrakeWin_->setVisible(!leftBrakeWin_->isVisible()); });
+    rightBrakeWin_ = std::make_unique<CurveWindow>("Right Brake", &rightBrakeCurve_,
+                                                   CurveWindowOptions{ false, &brakeDiffEqualizer_.diffDeadZone,
+                                                                       "right_brake", 150, 260 });
+    rightBrakeWin_->initialize();
+    rightBrakeWin_->setChangedCallback(saveBrakes);
+    statusWin_->appendMenuItem("Right Brake Curve...", [this]()
+                               { if (rightBrakeWin_) rightBrakeWin_->setVisible(!rightBrakeWin_->isVisible()); });
 
     char msg[256];
     std::snprintf(msg, sizeof(msg),
@@ -211,6 +239,18 @@ void DCUProvider::shutdown()
         curveWin_.reset();
     }
 
+    if (leftBrakeWin_)
+    {
+        leftBrakeWin_->destroy();
+        leftBrakeWin_.reset();
+    }
+
+    if (rightBrakeWin_)
+    {
+        rightBrakeWin_->destroy();
+        rightBrakeWin_.reset();
+    }
+
     if (statusWin_)
     {
         statusWin_->destroy();
@@ -281,6 +321,10 @@ void DCUProvider::onFlightLoopTick(float elapsedTime)
         updateStatusWindow();
         if (curveWin_)
             curveWin_->update();
+        if (leftBrakeWin_)
+            leftBrakeWin_->update();
+        if (rightBrakeWin_)
+            rightBrakeWin_->update();
         statusUpdateAccum = 0.0f;
     }
 }
@@ -766,8 +810,21 @@ void DCUProvider::updateUplink()
                 if (curveWin_)
                     curveWin_->setLiveInput(rudderRaw);
                 dataRefMgr_->setRudderRatio(rudderCurve_.apply(rudderRaw));
-                dataRefMgr_->setLeftBrakeRatio(static_cast<float>(message->leftBrake) / 1000.0f);
-                dataRefMgr_->setRightBrakeRatio(static_cast<float>(message->rightBrake) / 1000.0f);
+
+                // Toe brakes: per-side response curve first, then the
+                // differential dead zone equalizes small asymmetries on the
+                // values X-Plane actually gets.
+                const float leftBrakeRaw = static_cast<float>(message->leftBrake) / 1000.0f;
+                const float rightBrakeRaw = static_cast<float>(message->rightBrake) / 1000.0f;
+                if (leftBrakeWin_)
+                    leftBrakeWin_->setLiveInput(leftBrakeRaw);
+                if (rightBrakeWin_)
+                    rightBrakeWin_->setLiveInput(rightBrakeRaw);
+                float leftBrake = leftBrakeCurve_.apply(leftBrakeRaw);
+                float rightBrake = rightBrakeCurve_.apply(rightBrakeRaw);
+                brakeDiffEqualizer_.apply(leftBrake, rightBrake);
+                dataRefMgr_->setLeftBrakeRatio(leftBrake);
+                dataRefMgr_->setRightBrakeRatio(rightBrake);
             }
             break;
 

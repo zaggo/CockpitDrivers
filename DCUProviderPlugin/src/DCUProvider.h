@@ -8,6 +8,7 @@
 #include "StatusWindow.h"
 #include "CurveWindow.h"
 #include "AxisCurve.h"
+#include "BrakeEqualizer.h"
 #include "BusPower.h"
 #include "AttitudeGyro.h"
 #include <memory>
@@ -92,9 +93,20 @@ private:
     std::unique_ptr<StatusWindow> statusWin_;
 
     // Rudder pedal response curve, edited live by curveWin_ and persisted
-    // under curve.rudder.* in the config file. Toe brakes stay linear.
+    // under curve.rudder.* in the config file.
     AxisCurve rudderCurve_;
     std::unique_ptr<CurveWindow> curveWin_;
+
+    // Toe-brake response curves (unipolar, 0..1 domain), persisted under
+    // curve.left_brake.* / curve.right_brake.* and edited by their own curve
+    // windows. After the per-side curves, brakeDiffEqualizer_ equalizes small
+    // left/right asymmetries; its dead zone (curve.brake.diff_dead_zone) is a
+    // shared slider row in both brake windows.
+    AxisCurve leftBrakeCurve_;
+    AxisCurve rightBrakeCurve_;
+    BrakeEqualizer brakeDiffEqualizer_;
+    std::unique_ptr<CurveWindow> leftBrakeWin_;
+    std::unique_ptr<CurveWindow> rightBrakeWin_;
 
     // ============ Rate Limiting Accumulators ============
 
