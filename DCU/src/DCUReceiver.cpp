@@ -27,6 +27,7 @@ DCUReceiver::DCUReceiver(CAN *canBus) : canBus(canBus)
   hsiNavMeta = {0, 5000};
   attitudeMeta = {0, 5000};
   turnCoordinatorMeta = {0, 5000};
+  starterLedMeta = {0, 5000};
 }
 
 DCUReceiver::~DCUReceiver()
@@ -377,6 +378,21 @@ void DCUReceiver::handleFrame(MessageType type, uint8_t len, const uint8_t *payl
     break;
   }
 
+  case MessageType::SerialMessageStarterLed:
+  {
+    if (len != 1)
+      return;
+
+    const uint8_t running = payload[0] ? 1 : 0;
+    if (running != starterRunning)
+    {
+      starterRunning = running;
+      DEBUGLOG_PRINTLN(String(F("Received MSG_STARTER_LED Datagram running: ")) + String(starterRunning));
+      sendStarterLed();
+    }
+    break;
+  }
+
   default:
     // Unknown message type -> ignore
     DEBUGLOG_PRINTLN(String(F("Received unknown message type: ")) + String(static_cast<int>(type)) + String(F(" len: ")) + String(len));
@@ -558,6 +574,18 @@ void DCUReceiver::sendTurnCoordinator()
   turnCoordinatorMeta.lastSendTimestamp = millis();
 }
 
+void DCUReceiver::sendStarterLed()
+{
+  byte data[8] = {0};
+
+  // [0] starter running 0/1, [1..7] reserved.
+  data[0] = starterRunning;
+
+  canBus->sendMessage(CanMessageId::starterLed, 8, data);
+
+  starterLedMeta.lastSendTimestamp = millis();
+}
+
 void DCUReceiver::checkMaxAgeResync()
 {
   unsigned long now = millis();
@@ -640,5 +668,11 @@ void DCUReceiver::checkMaxAgeResync()
   {
     DEBUGLOG_PRINTLN(String(F("MaxAge resync for turnCoordinator")));
     sendTurnCoordinator();
+  }
+
+  if (isStale(starterLedMeta.lastSendTimestamp, now, starterLedMeta.maxAgeMs))
+  {
+    DEBUGLOG_PRINTLN(String(F("MaxAge resync for starterLed")));
+    sendStarterLed();
   }
 }

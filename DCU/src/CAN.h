@@ -88,6 +88,7 @@ class CAN : public BaseCAN {
         void updateRudder(uint8_t len, const uint8_t* data);
         void updateBaro(uint8_t len, const uint8_t* data);
         void updateHsiInput(uint8_t len, const uint8_t* data);
+        void updateStarter(uint8_t len, const uint8_t* data);
 
         void sendGatewayHeartbeat();
         void checkInstrumentHeartbeats();

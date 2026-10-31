@@ -73,6 +73,12 @@ enum class CanMessageId : uint16_t {
   lights = 0x203,
   transponder = 0x201,
 
+  // 0x204: Starter LED (Gateway -> Instrument, 5Hz)
+  // [0]    starter running uint8, 0/1
+  //        (sim/flightmodel2/engines/starter_is_running[0] != 0)
+  // [1..7] reserved
+  starterLed = 0x204,
+
   // Heartbeats (Variante 2)
   // 0x300: Gateway heartbeat (Instrumente überwachen den DCU)
   gatewayHeartbeat = 0x300,
@@ -115,7 +121,17 @@ enum class CanMessageId : uint16_t {
   // the same clicks a second time. onChange only, never on a timer.
   // The board holds no absolute state: the OBS pointer follows the sim's own
   // value via 0x104 bytes 2..3, so the loop closes through X-Plane.
-  hsiInput = 0x341
+  hsiInput = 0x341,
+
+  // 0x345: Starter/magneto rotary switch (Instrument -> Gateway, onChange)
+  // [0]    StarterPosition uint8: 0 = OFF, 1 = R, 2 = L, 3 = BOTH, 4 = START
+  // [1..7] reserved
+  // The plugin maps each position to a sim command: magnetos_off/right/left/
+  // both_1 fire once on entering the position, engage_starter_1 is held with
+  // CommandBegin on entering 4 and released with CommandEnd on leaving it.
+  // Unlike hsiInput this is absolute state, so it takes part in the 5s block
+  // resend; the plugin dedups repeated positions and only fires on change.
+  starterSwitch = 0x345
 };
 
 // Filtering

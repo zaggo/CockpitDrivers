@@ -126,6 +126,7 @@ private:
     float hsiNavAccumulator_ = 0.0f;
     float attitudeAccumulator_ = 0.0f;
     float turnCoordinatorAccumulator_ = 0.0f;
+    float starterLedAccumulator_ = 0.0f;
 
     static constexpr float FUEL_RATE = 5.0f;    // Hz
     static constexpr float LIGHTS_RATE = 10.0f;  // Hz
@@ -139,6 +140,14 @@ private:
     static constexpr float HSI_NAV_RATE = 10.0f;     // Hz
     static constexpr float ATTITUDE_RATE = 50.0f;    // Hz
     static constexpr float TURN_COORDINATOR_RATE = 50.0f; // Hz
+    static constexpr float STARTER_LED_RATE = 5.0f;  // Hz
+
+    // Last starter/magneto switch position seen from the StarterCAN board
+    // (CAN 0x345), 0xFF = unknown (plugin just started; the board's 5s resend
+    // delivers the current position). Commands fire only on *change* so the
+    // periodic resend is a no-op, and a plugin restart re-applies the switch.
+    static constexpr uint8_t STARTER_POSITION_UNKNOWN = 0xFF;
+    uint8_t lastStarterPosition_ = STARTER_POSITION_UNKNOWN;
 
     // The old AirManager chain fed its raw encoder counter straight into the
     // dataref as degrees, so one detent is one degree. Kept identical so the

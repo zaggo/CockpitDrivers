@@ -45,8 +45,10 @@ gateway, so it implements the other half of the heartbeat protocol described in 
   (`kMaxInstrumentNodes = 16`), and flags a node dead after 1500ms of silence
   (`checkInstrumentHeartbeats()`).
 - Filters/decodes `transponderInput` (0x311), `handbrakeStatus` (0x330), `rudder` (0x303) and the
-  cluster-input block `0x340`–`0x34F` (currently just `altimeterBaro`, 0x340) from instruments and
-  forwards them to the plugin via `DCUSender`. RXB0 matches the instrument heartbeat exactly; RXB1
+  cluster-input block `0x340`–`0x34F` (`altimeterBaro` 0x340, `hsiInput` 0x341, `starterSwitch`
+  0x345) from instruments and forwards them to the plugin via `DCUSender`. `starterSwitch` carries
+  the StarterCAN rotary-switch position in byte 0 and is forwarded unchanged as
+  `SerialMessageStarter` (0x12). RXB0 matches the instrument heartbeat exactly; RXB1
   uses the range mask `MASK_RANGE` so each of its four filters covers 16 consecutive ids — that is
   what lets new cluster inputs arrive without touching the gateway. Note `rudder` arrives big-endian
   on CAN but the serial `RudderToDcuMessage` struct is host order, so `updateRudder()` converts via
@@ -83,6 +85,8 @@ Frame format on `Serial`: `0xAA 0x55 TYPE LEN PAYLOAD...` — `TYPE` is `Message
   `SerialMessageTurnCoordinator` (`0x10`) carries `TurnCoordinatorMessage` (two floats, turn rate
   then slip); `DCUReceiver` repacks it into CAN `0x103` as two big-endian `int16` of degrees × 100
   through the same `attitudeDeg100()` — one helper for every signed-degrees frame.
+  `SerialMessageStarterLed` (`0x11`) carries a single `uint8` starter-running flag; `DCUReceiver`
+  forwards it unchanged as CAN `0x204` byte 0 (5 Hz from the plugin, plus the usual 5s resync).
 - **`DCUSender`**: formats outbound frames back to the plugin — used by `CAN` to relay instrument-side
   input (transponder knob commands, handbrake status) that arrived over CAN.
 - Adding a new serial message type touches three places: `SerialMessageId.h` (enum + payload struct),
@@ -113,8 +117,8 @@ Unit-tested independent of Arduino/hardware (see `env:native` above):
 `Configuration.h`'s `BENCHDEBUG` flag swaps `DCUReceiver` out for `BenchDebug` in `main.cpp`: a
 serial-console simulator that drives fuel/light/RPM/odometer/airspeed CAN messages directly, for
 testing instruments on the CAN bus without the plugin/X-Plane attached. `?` lists the commands
-(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`co`/`tc`/`rw`/`bw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
-AirspeedCAN. `al<feet>` and `vs<fpm>` both resend the same `altimeterVsi` (0x102) frame — altitude and
+(`lt`/`rt`/`cl`/`rp`/`oh`/`as`/`al`/`vs`/`co`/`tc`/`sl`/`rw`/`bw`/`hb`); `as<knots>` sends an `airspeed` (0x100) frame to
+AirspeedCAN. `sl<0|1>` sends a `starterLed` (0x204) frame to StarterCAN. `al<feet>` and `vs<fpm>` both resend the same `altimeterVsi` (0x102) frame — altitude and
 climb rate share one message, so each command updates its half and ships both. `co<deg>` sends a
 `compass` (0x107) frame to WhiskeyCompassCAN. `tc<turn>,<slip>` sends a `turnCoordinator` (0x103)
 frame to TurnCoordinatorCAN — one frame carries both needles, so one command sets both. `hb` prints the

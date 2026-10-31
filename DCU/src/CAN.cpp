@@ -163,6 +163,9 @@ void CAN::handleFrame(uint32_t id, uint8_t ext, uint8_t len, const uint8_t *data
     case CanMessageId::hsiInput:
         updateHsiInput(len, data);
         break;
+    case CanMessageId::starterSwitch:
+        updateStarter(len, data);
+        break;
     default:
         // Unknown/unhandled CAN ID - ignore for now but log
         DEBUGLOG_PRINTLN(String(F("Received message with unknown CAN ID: 0x")) + String(id, HEX) + String(F(" len: ")) + String(len));
@@ -351,6 +354,21 @@ void CAN::updateHsiInput(uint8_t len, const uint8_t *data)
         dcuSender->sendFrame(MessageType::SerialMessageHsiInput,
                              sizeof(msg),
                              reinterpret_cast<const uint8_t *>(&msg));
+    }
+}
+
+void CAN::updateStarter(uint8_t len, const uint8_t *data)
+{
+    // CAN 0x345: [0] starter position 0..4. Absolute state, forwarded as-is;
+    // the plugin dedups repeated positions and fires the sim commands.
+    if (len < 1)
+        return;
+
+    DEBUGLOG_PRINTLN(String(F("Received Starter Position: ")) + String(data[0]));
+
+    if (dcuSender != nullptr)
+    {
+        dcuSender->sendFrame(MessageType::SerialMessageStarter, 1, data);
     }
 }
 

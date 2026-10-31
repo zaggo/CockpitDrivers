@@ -96,6 +96,16 @@ void BenchDebug::sendTurnCoordinator() {
     canBus->sendMessage(CanMessageId::turnCoordinator, 8, data);
 }
 
+void BenchDebug::sendStarterLed() {
+    byte data[8] = {0};
+    // [0] starter running 0/1. [1..7] reserved.
+    data[0] = starterRunning;
+
+    Serial.println(String(F("Send Starter LED: ")) + starterRunning);
+
+    canBus->sendMessage(CanMessageId::starterLed, 8, data);
+}
+
 void BenchDebug::sendHsiHeadingFrame() {
     byte data[8] = {0};
     packBE16(data + 0, hsiHeadingDeg100);
@@ -249,6 +259,13 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Turn coordinator set to turn ")) + turnRateDeg + F(" deg, slip ") + slipDeg + F(" deg"));
         sendTurnCoordinator();
         return true;
+    } else if (command.startsWith("sl")) {
+        String rString = command.substring(2);
+        rString.trim();
+        starterRunning = rString.toInt() ? 1 : 0;
+        Serial.println(String(F("Starter LED set to "))+starterRunning);
+        sendStarterLed();
+        return true;
     } else if (command.startsWith("rw")) {
         startRudderWatch();
         return true;
@@ -332,6 +349,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
         Serial.println(F("co<deg>: set magnetic compass heading"));
         Serial.println(F("tc<turn>,<slip>: set turn coordinator, degrees, negative = left"));
+        Serial.println(F("sl<0|1>: set starter LED"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         Serial.println(F("bw: watch altimeter baro setting (any key stops)"));
         Serial.println(F("hb: list instrument nodes that went quiet"));

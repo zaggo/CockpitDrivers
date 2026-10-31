@@ -36,6 +36,7 @@ class DCUReceiver {
         void sendHsiNav();
         void sendAttitude();
         void sendTurnCoordinator();
+        void sendStarterLed();
 
         // RX state machine
         // Fuel Gauge
@@ -90,6 +91,9 @@ class DCUReceiver {
         int16_t turnRate100 = 0;
         int16_t slip100 = 0;
 
+        // Starter LED (CAN 0x204)
+        uint8_t starterRunning = 0;
+
         // Message metadata for maxAge resync
         MessageMeta fuelLevelMeta;
         MessageMeta cockpitLightMeta;
@@ -103,6 +107,7 @@ class DCUReceiver {
         MessageMeta hsiNavMeta;
         MessageMeta attitudeMeta;
         MessageMeta turnCoordinatorMeta;
+        MessageMeta starterLedMeta;
 
         // Reference to CAN bus
         CAN* canBus;

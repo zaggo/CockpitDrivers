@@ -67,6 +67,19 @@ public:
     float getTurnRateDeg() const;  // turn_rate_roll_deg_pilot, degrees of the aircraft symbol, right turn positive
     float getSlipDeg() const;      // slip_deg, degrees of slip
 
+    // Starter LED (feeds the StarterCAN board's indicator)
+    bool getStarterRunning() const;  // starter_is_running[0], true while the starter cranks
+
+    // Magneto/starter switch commands (uplink from the StarterCAN rotary switch).
+    // Positions 0..3 fire once on entry; position 4 (START) is held with
+    // begin/end like a real key switch.
+    void magnetosOffOnce();
+    void magnetosRightOnce();
+    void magnetosLeftOnce();
+    void magnetosBothOnce();
+    void engageStarterBegin();
+    void engageStarterEnd();
+
     // HSI
     float getHsiHeadingDegMag() const;   // heading_electric_deg_mag_pilot
     float getHsiObsDeg() const;          // hsi_obs_deg_mag_pilot
@@ -174,5 +187,12 @@ private:
     XPLMDataRef dr_turn_rate = nullptr;
     XPLMDataRef dr_slip = nullptr;
 
+    XPLMDataRef dr_starterRunning = nullptr;
+
     XPLMCommandRef cr_TransponderIdent = nullptr;
+    XPLMCommandRef cr_MagnetosOff = nullptr;
+    XPLMCommandRef cr_MagnetosRight = nullptr;
+    XPLMCommandRef cr_MagnetosLeft = nullptr;
+    XPLMCommandRef cr_MagnetosBoth = nullptr;
+    XPLMCommandRef cr_EngageStarter = nullptr;
 };

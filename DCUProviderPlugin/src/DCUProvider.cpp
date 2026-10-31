@@ -597,6 +597,19 @@ void DCUProvider::updateDownlink(float dt)
         turnCoordinatorAccumulator_ = 0.0f;
     }
 
+    // ============ Starter LED (5 Hz) ============
+    starterLedAccumulator_ += dt;
+    float starterLedRate = 1.0f / STARTER_LED_RATE;
+
+    if (starterLedAccumulator_ >= starterLedRate)
+    {
+        uint8_t starterRunning = dataRefMgr_->getStarterRunning() ? 1 : 0;
+
+        msgQueue_->enqueueTx(MessageType::SerialMessageStarterLed, &starterRunning, sizeof(starterRunning));
+
+        starterLedAccumulator_ = 0.0f;
+    }
+
     // ============ Odometer Data (10 Hz) ============
     odometerAccumulator_ += dt;
     float odometerRate = 1.0f / ODOMETER_RATE;
@@ -755,6 +768,36 @@ void DCUProvider::updateUplink()
                 dataRefMgr_->setRudderRatio(rudderCurve_.apply(rudderRaw));
                 dataRefMgr_->setLeftBrakeRatio(static_cast<float>(message->leftBrake) / 1000.0f);
                 dataRefMgr_->setRightBrakeRatio(static_cast<float>(message->rightBrake) / 1000.0f);
+            }
+            break;
+
+        case MessageType::SerialMessageStarter:
+            // Gateway -> Plugin: magneto/starter rotary switch (CAN 0x345).
+            // Commands fire on *change* only: the board resends its position
+            // every 5s, and refiring e.g. magnetos_both every 5s would be
+            // wrong (and a held starter would re-begin). Position 4 (START) is
+            // a held command: Begin on entry, End on exit.
+            if (msg->payload.size() >= sizeof(uint8_t))
+            {
+                const uint8_t pos = msg->payload[0];
+                if (pos <= 4 && pos != lastStarterPosition_)
+                {
+                    if (lastStarterPosition_ == 4)
+                    {
+                        dataRefMgr_->engageStarterEnd();
+                    }
+
+                    switch (pos)
+                    {
+                    case 0: dataRefMgr_->magnetosOffOnce(); break;
+                    case 1: dataRefMgr_->magnetosRightOnce(); break;
+                    case 2: dataRefMgr_->magnetosLeftOnce(); break;
+                    case 3: dataRefMgr_->magnetosBothOnce(); break;
+                    case 4: dataRefMgr_->engageStarterBegin(); break;
+                    }
+
+                    lastStarterPosition_ = pos;
+                }
             }
             break;
 

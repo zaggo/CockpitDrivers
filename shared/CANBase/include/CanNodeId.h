@@ -17,6 +17,7 @@ enum class CanNodeId : uint8_t {
   compassNodeId = 0x0A,
   hsiNodeId = 0x0B,
   attitudeNodeId = 0x0C,
-  turnCoordinatorNodeId = 0x0D
+  turnCoordinatorNodeId = 0x0D,
+  starterNodeId = 0x0E
 };
 #endif // CAN_NODE_ID_H

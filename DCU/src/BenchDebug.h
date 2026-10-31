@@ -26,6 +26,7 @@ class BenchDebug {
         void sendAltimeterVsi();
         void sendCompass();
         void sendTurnCoordinator();
+        void sendStarterLed();
 
         void startRudderWatch();
         void stopRudderWatch();
@@ -71,6 +72,9 @@ class BenchDebug {
         // sets both (tc<turn>,<slip>).
         float turnRateDeg = 0.;
         float slipDeg = 0.;
+
+        // Starter LED state for the sl<0|1> command.
+        uint8_t starterRunning = 0;
 
         // Rudder watch: prints incoming 0x303 frames until any key is pressed.
         bool rudderWatchActive = false;

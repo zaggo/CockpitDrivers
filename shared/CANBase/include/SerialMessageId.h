@@ -48,6 +48,12 @@ enum class MessageType : uint8_t {
     // Plugin -> DCU. Payload: TurnCoordinatorMessage (8 bytes, host order).
     // Repacked by the DCU into CAN 0x103 as two big-endian int16 of degrees * 100.
     SerialMessageTurnCoordinator = 0x10,
+    // Plugin -> DCU. Payload: uint8 starterRunning (1 byte, 0/1).
+    // Repacked by the DCU into CAN 0x204 byte 0 as-is.
+    SerialMessageStarterLed = 0x11,
+    // DCU -> Plugin. Payload: uint8 starterPosition (1 byte, 0..4).
+    // Decoded from CAN 0x345, forwarded unchanged.
+    SerialMessageStarter = 0x12,
 };
 
 // Message Payload for Transponder > DCU

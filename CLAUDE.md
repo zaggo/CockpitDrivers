@@ -14,7 +14,7 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 - Board projects (`AirspeedCAN`, `AltimeterCAN`, `AltimeterDriver`, `AttitudeCAN`, `CANDebugNode`,
   `DCU`, `FuelGaugeCAN`, `HSICAN`, `HSIDriver`, `HandbrakeCAN`, `I2CBoard`,
   `MasterClock`, `MotionActor`, `MotionGateway`, `RPMGaugeCAN`,
-  `RudderCAN`, `ServoBoard`, `StepperBoard`, `TransponderBoard`, `TurnCoordinatorCAN`,
+  `RudderCAN`, `ServoBoard`, `StarterCAN`, `StepperBoard`, `TransponderBoard`, `TurnCoordinatorCAN`,
   `VerticalSpeedCAN`, `WhiskeyCompassCAN`): independent PlatformIO/Arduino projects, each with its own
   `platformio.ini`, `include/`, `lib/`, `src/`, `test/`. Some (`DCU`, `MotionActor`, `MotionGateway`)
   have their own `CLAUDE.md` with board-specific detail — read it too when working in that directory.
@@ -118,6 +118,11 @@ Plugin logs go to X-Plane's `Log.txt` (`XPLMDebugString`).
   slip, one AX1201728SG drives both motors through the vendored `vid6608` fork, and each needle
   has its own taught calibration table (VSI-style, 0 is a taught mark, not the home stop).
   See `docs/superpowers/specs/2026-10-09-turn-coordinator-can-design.md`.
+  `StarterCAN` is the no-motor variant: a 5-detent magneto/starter rotary switch (one pin per
+  detent, internal pull-ups, active low) plus one indicator LED. Gateway→instrument `0x204`
+  is the starter-running LED, instrument→gateway `0x345` reports the switch position (absolute,
+  so it joins the 0x340–0x34F block's 5s resend) and the plugin turns position changes into the
+  magnetos_*_1 commands, holding engage_starter_1 with begin/end while the switch sits in START.
 
 ### Motion chain (`MotionProviderPlugin` → `MotionGateway` → `MotionActor`)
 

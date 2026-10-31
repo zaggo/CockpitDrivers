@@ -111,6 +111,16 @@ void DataRefManager::onAircraftLoaded()
     // the wire ungated regardless of electrical power.
     dr_turn_rate = XPLMFindDataRef("sim/cockpit2/gauges/indicators/turn_rate_roll_deg_pilot");
     dr_slip = XPLMFindDataRef("sim/cockpit2/gauges/indicators/slip_deg");
+
+    // Starter/magneto switch (StarterCAN board). starter_is_running is an int
+    // array, one entry per engine; the Arrow has one engine, so index 0.
+    dr_starterRunning = XPLMFindDataRef("sim/flightmodel2/engines/starter_is_running");
+
+    cr_MagnetosOff = XPLMFindCommand("sim/magnetos/magnetos_off_1");
+    cr_MagnetosRight = XPLMFindCommand("sim/magnetos/magnetos_right_1");
+    cr_MagnetosLeft = XPLMFindCommand("sim/magnetos/magnetos_left_1");
+    cr_MagnetosBoth = XPLMFindCommand("sim/magnetos/magnetos_both_1");
+    cr_EngageStarter = XPLMFindCommand("sim/starters/engage_starter_1");
 }
 
 // Electrical bus
@@ -237,6 +247,55 @@ float DataRefManager::getTurnRateDeg() const
 float DataRefManager::getSlipDeg() const
 {
     return readFloat(dr_slip, 0.0f);
+}
+
+// Starter LED
+bool DataRefManager::getStarterRunning() const
+{
+    if (!dr_starterRunning)
+    {
+        return false;
+    }
+    int running = 0;
+    XPLMGetDatavi(dr_starterRunning, &running, 0, 1);
+    return running != 0;
+}
+
+// Magneto/starter switch commands
+void DataRefManager::magnetosOffOnce()
+{
+    if (cr_MagnetosOff)
+        XPLMCommandOnce(cr_MagnetosOff);
+}
+
+void DataRefManager::magnetosRightOnce()
+{
+    if (cr_MagnetosRight)
+        XPLMCommandOnce(cr_MagnetosRight);
+}
+
+void DataRefManager::magnetosLeftOnce()
+{
+    if (cr_MagnetosLeft)
+        XPLMCommandOnce(cr_MagnetosLeft);
+}
+
+void DataRefManager::magnetosBothOnce()
+{
+    if (cr_MagnetosBoth)
+        XPLMCommandOnce(cr_MagnetosBoth);
+}
+
+void DataRefManager::engageStarterBegin()
+{
+    if (cr_EngageStarter)
+        XPLMCommandBegin(cr_EngageStarter);
+}
+
+void DataRefManager::engageStarterEnd()
+{
+    if (cr_EngageStarter)
+        XPLMCommandEnd(cr_EngageStarter);
 }
 
 // Altimeter
