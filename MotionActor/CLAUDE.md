@@ -25,8 +25,15 @@ SoftwareSerial on pins 8/9 at 9600 baud, not to USB — the Nano has no second h
 ## What MotionActor is
 
 One node driving **two** actuators of the 6DOF platform through a Dimension Engineering **Kangaroo
-x2** motion controller (`HardwareSerial` at 19200, `Kangaroo.h`). Three identical boards make up the
+x2** motion controller (`HardwareSerial`, `Kangaroo.h`). Three identical boards make up the
 six legs.
+
+**Kangaroo baud rate is probed at boot.** The constructor tries `kKangarooBaudRate` (38400), then
+115200/19200/9600, with one `getP()` each (`kKangarooProbeTimeoutMs`). If the Kangaroo answers on
+another rate, the actor sends `baudRate(38400)` and probes again — the baud command is unconfirmed,
+so the re-probe is the only proof. If nothing answers at boot, `home()` probes again before homing
+and fails with `homingFailed` instead of blocking. See
+`../docs/superpowers/specs/2026-09-01-kangaroo-baud-migration-ticket.md`.
 
 **`kNodeId` is a compile-time constant.** `Configuration.h` sets `kNodeId` to
 `actorNodeId1`/`2`/`3`, and `kActorAddress` derives from it (`127 + nodeId`). Each of the three

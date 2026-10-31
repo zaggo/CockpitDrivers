@@ -1,6 +1,7 @@
 # Ticket: raise the actor→Kangaroo baud rate
 
-**Status:** open, worth doing. Not cosmetic — the link runs at roughly 94 % occupancy while the
+**Status:** implemented 2026-10-31 (boot probe + switch to 38400 only when the probe finds another
+rate). Bench verification below still pending. Originally: the link runs at roughly 94 % occupancy while the
 platform is moving. Written 2026-09-01.
 
 **Type:** robustness. Nothing is broken today; there is simply almost no margin left, and the margin

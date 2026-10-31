@@ -16,7 +16,8 @@
 
 const MotionNodeId kNodeId = MotionNodeId::actorNodeId1; // Set the node ID for this actor pair. Adjust as needed for different pairs.
 const byte kActorAddress = 127 + static_cast<byte>(kNodeId); 
-const uint32_t kKangarooBaudRate = 19200; // Default baud rate for Kangaroo. Adjust if needed.
+const uint32_t kKangarooBaudRate = 38400; // Target rate; the boot probe migrates the Kangaroo here if it answers on another rate.
+const int32_t kKangarooProbeTimeoutMs = 250; // Per probed rate; the library retries every 100 ms, so ~3 attempts.
 
 const uint8_t kCanIntPin = 2;
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)

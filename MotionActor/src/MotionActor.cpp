@@ -6,12 +6,12 @@ MotionActor::MotionActor() : state(MotionActorState::stopped),
                              kangarooSerial(Serial),
                              K(kangarooSerial)
 {
-    kangarooSerial.begin(kKangarooBaudRate);
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         const char channelName = static_cast<char>('1' + i);
         actors[i] = new KangarooChannel(K, channelName, kActorAddress);
     }
+    connectKangaroo();
     DEBUGLOG_PRINT(F("MotionActor initialized with Kangaroo address "));
     DEBUGLOG_PRINTLN(kActorAddress);
 }
@@ -42,12 +42,83 @@ void MotionActor::setStreaming(bool enabled)
     }
 }
 
+bool MotionActor::detectKangarooBaudRate()
+{
+    // Target rate first, so a migrated Kangaroo is found on the first try.
+    static const uint32_t kProbeRates[] = {kKangarooBaudRate, 115200, 19200, 9600};
+
+    KangarooChannel *probe = actors[0];
+    const int32_t savedTimeout = probe->commandTimeout();
+    probe->commandTimeout(kKangarooProbeTimeoutMs);
+
+    kangarooBaudRate = 0;
+    for (uint8_t i = 0; i < sizeof(kProbeRates) / sizeof(kProbeRates[0]); ++i)
+    {
+        if (i > 0 && kProbeRates[i] == kKangarooBaudRate)
+        {
+            continue;
+        }
+        kangarooSerial.end();
+        kangarooSerial.begin(kProbeRates[i]);
+        while (kangarooSerial.available() > 0)
+        {
+            kangarooSerial.read();
+        }
+        // Any reply, even an error like NOT_STARTED, proves the rate.
+        if (!probe->getP().timedOut())
+        {
+            kangarooBaudRate = kProbeRates[i];
+            break;
+        }
+    }
+
+    probe->commandTimeout(savedTimeout);
+
+    if (kangarooBaudRate == 0)
+    {
+        kangarooSerial.end();
+        kangarooSerial.begin(kKangarooBaudRate);
+        DEBUGLOG_PRINTLN(F("Kangaroo did not answer on any baud rate"));
+        return false;
+    }
+    DEBUGLOG_PRINT(F("Kangaroo answers at "));
+    DEBUGLOG_PRINTLN(kangarooBaudRate);
+    return true;
+}
+
+bool MotionActor::connectKangaroo()
+{
+    if (!detectKangarooBaudRate())
+    {
+        return false;
+    }
+    if (kangarooBaudRate == kKangarooBaudRate)
+    {
+        return true;
+    }
+
+    DEBUGLOG_PRINT(F("Switching Kangaroo baud rate to "));
+    DEBUGLOG_PRINTLN(kKangarooBaudRate);
+    // The baud command is unconfirmed; the re-probe is the only proof it took.
+    actors[0]->baudRate(kKangarooBaudRate);
+    kangarooSerial.flush();
+    delay(50);
+    return detectKangarooBaudRate();
+}
+
 void MotionActor::home()
 {
     DEBUGLOG_PRINTLN(F("Homing started"));
     state = MotionActorState::homing;
     haveLastCommanded = false;   // next demand glides gently (see setDemands)
     setStreaming(false);         // home/start/waitAll need confirmed commands
+    // Kangaroo may have been unpowered at boot; probe again rather than block forever.
+    if (kangarooBaudRate == 0 && !connectKangaroo())
+    {
+        DEBUGLOG_PRINTLN(F("Homing failed: Kangaroo not answering"));
+        state = MotionActorState::homingFailed;
+        return;
+    }
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         if (actors[i] == nullptr)

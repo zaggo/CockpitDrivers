@@ -36,6 +36,7 @@ class MotionActor {
         HardwareSerial& kangarooSerial;
         KangarooSerial  K;
         KangarooChannel* actors[kActorCount] = {nullptr, nullptr};
+        uint32_t kangarooBaudRate = 0; // 0 = Kangaroo did not answer the last probe
 
         static constexpr int kEepromAddress = 0;
         static constexpr uint16_t kEepromMagic = 0x4D41;
@@ -65,6 +66,8 @@ class MotionActor {
 
         KangarooChannel* channelForIndex(uint8_t channel);
         void setStreaming(bool enabled);
+        bool detectKangarooBaudRate();
+        bool connectKangaroo();
         bool readCurrentPosition(uint8_t channel, int32_t& position);
         bool loadLogicalLimitsFromEeprom();
         void saveLogicalLimitsToEeprom();
