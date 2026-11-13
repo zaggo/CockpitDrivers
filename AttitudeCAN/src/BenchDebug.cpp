@@ -73,11 +73,29 @@ static bool reportMove(AttitudeIndicator::AttitudeResult result)
     return true;
 }
 
+static void reportBenchJog(AttitudeIndicator* attitude, AttitudeAxis axis, bool clockwise)
+{
+    if (!attitude->benchJogMotor(axis, clockwise))
+    {
+        Serial.println(F("Jog rejected: homing or motor movement active"));
+        return;
+    }
+    Serial.print(axis == roll ? F("Roll") : F("Pitch"));
+    Serial.println(clockwise ? F(" motor jog +5 deg (logical CW)")
+                             : F(" motor jog -5 deg (logical CCW)"));
+}
+
 // One command per line, unlike the DCU console - this board has few enough of
 // them that a splitter would be more code than it saves.
 bool BenchDebug::handleCommand(String command)
 {
-    if (command.startsWith("ho")) {
+    if (command.length() == 3 && command.charAt(0) == 'j'
+        && (command.charAt(1) == 'r' || command.charAt(1) == 'p')
+        && (command.charAt(2) == '+' || command.charAt(2) == '-')) {
+        const AttitudeAxis axis = command.charAt(1) == 'r' ? roll : pitch;
+        reportBenchJog(attitude, axis, command.charAt(2) == '+');
+        return true;
+    } else if (command.startsWith("ho")) {
         attitude->beginHoming();
         Serial.println(F("Homing started"));
         return true;
@@ -158,6 +176,8 @@ bool BenchDebug::handleCommand(String command)
         return true;
     } else if (command.startsWith("?")) {
         Serial.println(F("AttitudeIndicator Commands:"));
+        Serial.println(F("jr+ / jr-: isolated roll motor jog +/-5 deg"));
+        Serial.println(F("jp+ / jp-: isolated pitch motor jog +/-5 deg"));
         Serial.println(F("ho: start homing (roll first, then pitch)"));
         Serial.println(F("ro<deg>: roll to degrees (display frame)"));
         Serial.println(F("pi<deg>: pitch to degrees (display frame, clamped +-30)"));

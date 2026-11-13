@@ -47,8 +47,8 @@ const uint8_t kStepperPins[attitudeAxisCount][4] = {
 
 // Hall sensors, INPUT_PULLUP, active LOW, polled.
 const uint8_t kHallPins[attitudeAxisCount] = {
-    3,  // roll
-    6   // pitch
+    6,  // roll
+    3   // pitch
 };
 
 // 4096 mini-steps per turn on both axes. The nested-axis maths in
@@ -58,7 +58,7 @@ const uint32_t kTotalSteps = 4096L;
 
 // Whether a motor turns with or against its commanded direction depends on the
 // wiring of the coil pins. Flip on the bench if an axis runs backwards.
-const bool kStepperInversed[attitudeAxisCount] = { false, false };
+const bool kStepperInversed[attitudeAxisCount] = { false, true };
 
 // The AirManager LUA sent -roll. Kept as the default so the instrument behaves
 // like before; flip if the horizon banks the wrong way on the rig.

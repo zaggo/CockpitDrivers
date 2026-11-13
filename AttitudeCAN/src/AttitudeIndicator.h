@@ -60,6 +60,9 @@ public:
     // commanded value (a roll move still counter-moves the pitch motor).
     AttitudeResult moveAxisToDegree(AttitudeAxis axis, double deg);
 
+    // Bench-only isolated motor jog; rejected while homing or moving.
+    bool benchJogMotor(AttitudeAxis axis, bool clockwise);
+
     void setBrightness(uint8_t brightness);
 
     // Records the axis' current display position as its true zero and persists

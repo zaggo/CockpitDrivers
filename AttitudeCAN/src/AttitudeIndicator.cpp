@@ -168,6 +168,21 @@ void AttitudeIndicator::moveMotors(int32_t stepsRoll, int32_t stepsPitch)
     axes[pitch]->newMove(stepsPitch > 0, (uint32_t)labs(stepsPitch), now);
 }
 
+bool AttitudeIndicator::benchJogMotor(AttitudeAxis axis, bool clockwise)
+{
+    if ((axis != roll && axis != pitch) || homingActive
+        || axes[roll]->getStepsLeft() != 0 || axes[pitch]->getStepsLeft() != 0)
+    {
+        return false;
+    }
+
+    isHomed = false;
+    axes[axis]->setDelay(stepDelay[axis][minRpm]);
+    const uint32_t steps = (uint32_t)signedDegreesToSteps(5.0, kTotalSteps);
+    axes[axis]->newMove(clockwise, steps, micros());
+    return true;
+}
+
 void AttitudeIndicator::moveToTargets(uint32_t rollTarget, int32_t pitchDisplayTarget)
 {
     const int32_t rollPos = axes[roll]->getPosition();
