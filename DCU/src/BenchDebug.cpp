@@ -96,6 +96,17 @@ void BenchDebug::sendTurnCoordinator() {
     canBus->sendMessage(CanMessageId::turnCoordinator, 8, data);
 }
 
+void BenchDebug::sendAttitude() {
+    byte data[8] = {0};
+    // [0..1] pitch, [2..3] roll, both int16 degrees * 100. [4..7] reserved.
+    packBE16(data + 0, static_cast<uint16_t>(attitudeDeg100(attitudePitchDeg)));
+    packBE16(data + 2, static_cast<uint16_t>(attitudeDeg100(attitudeRollDeg)));
+
+    Serial.println(String(F("Send Attitude: pitch ")) + attitudePitchDeg + F(" deg, roll ") + attitudeRollDeg + F(" deg"));
+
+    canBus->sendMessage(CanMessageId::attitude, 8, data);
+}
+
 void BenchDebug::sendStarterLed() {
     byte data[8] = {0};
     // [0] starter running 0/1. [1..7] reserved.
@@ -259,6 +270,23 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(String(F("Turn coordinator set to turn ")) + turnRateDeg + F(" deg, slip ") + slipDeg + F(" deg"));
         sendTurnCoordinator();
         return true;
+    } else if (command.startsWith("at")) {
+        // at<pitch>,<roll> - e.g. at10,-30. Missing roll keeps the old roll;
+        // a bare at resends both cached values (toFloat("") would read as 0).
+        String rString = command.substring(2);
+        rString.trim();
+        const int comma = rString.indexOf(',');
+        if (rString.length() == 0) {
+            // keep both
+        } else if (comma < 0) {
+            attitudePitchDeg = rString.toFloat();
+        } else {
+            attitudePitchDeg = rString.substring(0, comma).toFloat();
+            attitudeRollDeg = rString.substring(comma + 1).toFloat();
+        }
+        Serial.println(String(F("Attitude set to pitch ")) + attitudePitchDeg + F(" deg, roll ") + attitudeRollDeg + F(" deg"));
+        sendAttitude();
+        return true;
     } else if (command.startsWith("sl")) {
         String rString = command.substring(2);
         rString.trim();
@@ -349,6 +377,7 @@ bool BenchDebug::handleAltimeterInput(String command) {
         Serial.println(F("vs<fpm>: set vertical speed, negative = descent (shared 0x102 frame)"));
         Serial.println(F("co<deg>: set magnetic compass heading"));
         Serial.println(F("tc<turn>,<slip>: set turn coordinator, degrees, negative = left"));
+        Serial.println(F("at<pitch>,<roll>: set attitude indicator, degrees, negative = down/left"));
         Serial.println(F("sl<0|1>: set starter LED"));
         Serial.println(F("rw: watch rudder/toe brake input (any key stops)"));
         Serial.println(F("bw: watch altimeter baro setting (any key stops)"));

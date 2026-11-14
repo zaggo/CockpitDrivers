@@ -69,9 +69,11 @@ else lives behind `DCUProvider`, which owns and drives four components once per 
    `tests/test_buspower.cpp`. Next to it, `AttitudeGyro attitudeGyro_` models the vacuum gyro of the
    attitude indicator from `sim/cockpit/misc/vacuum` (the sim's `_vacuum` attitude datarefs stay
    stable at suction 0 — verified on the rig — so they carry no failure behaviour themselves):
-   rotor speed is a first-order lag of suction/4.9 inHg (spin-up tau 30 s, spin-down tau 75 s), and
-   the outgoing pitch/roll get a slow wander at low RPM, a ~1 Hz nutation wobble peaking at half
-   rotor speed, and a fixed rest pose once the rotor is dead; spin-up re-erects the horizon onto
+   rotor speed is a first-order lag of suction/4.5 inHg (bottom of the green arc; spin-up tau 15 s,
+   spin-down tau 75 s). Above 97 % rotor speed the gyro counts as healthy and adds no error —
+   otherwise the exponential tail (or suction just under nominal) leaves a permanent visible pitch
+   wobble. Below that the outgoing pitch/roll get a slow wander, a ~1 Hz nutation wobble peaking at
+   half rotor speed, and a fixed rest pose once the rotor is dead; spin-up re-erects the horizon onto
    truth. The horizon is the only vacuum-driven instrument on the rig (no suction gauge installed).
    `AttitudeGyro` is likewise XPLM-free and covered by `tests/test_attitudegyro.cpp`.
 4. `DCUProvider::updateUplink()` — gateway → X-Plane. Drains `MessageQueue` RX, `switch`es on

@@ -26,6 +26,7 @@ class BenchDebug {
         void sendAltimeterVsi();
         void sendCompass();
         void sendTurnCoordinator();
+        void sendAttitude();
         void sendStarterLed();
 
         void startRudderWatch();
@@ -72,6 +73,11 @@ class BenchDebug {
         // sets both (tc<turn>,<slip>).
         float turnRateDeg = 0.;
         float slipDeg = 0.;
+
+        // Attitude indicator: one frame carries pitch and roll, so one
+        // command sets both (at<pitch>,<roll>).
+        float attitudePitchDeg = 0.;
+        float attitudeRollDeg = 0.;
 
         // Starter LED state for the sl<0|1> command.
         uint8_t starterRunning = 0;
