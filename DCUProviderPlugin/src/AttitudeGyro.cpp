@@ -34,11 +34,22 @@ void AttitudeGyro::update(float vacuumInHg, float dt)
 
     const float target = clamp01(vacuumInHg / kNominalSuctionInHg);
 
+    if (syncPending_)
+    {
+        syncElapsed_ += dt;
+        if (syncElapsed_ >= kSyncDelaySec)
+        {
+            rotorSpeed_ = target;
+            syncPending_ = false;
+        }
+    }
+
     // Exact first-order lag toward the target RPM - stable for any dt.
     const float tau = (target > rotorSpeed_) ? kSpinUpTauSec : kSpinDownTauSec;
     rotorSpeed_ = target + (rotorSpeed_ - target) * std::exp(-dt / tau);
 
-    const float rel = 1.0f - rotorSpeed_; // degradation factor, 0 = healthy
+    // Degradation factor, 0 = healthy.
+    const float rel = clamp01((kHealthySpeed - rotorSpeed_) / kHealthySpeed);
 
     // Wander: very slow pseudo-drift from two incommensurate sines per axis,
     // present as soon as the rotor droops and growing with rel.
@@ -54,13 +65,19 @@ void AttitudeGyro::update(float vacuumInHg, float dt)
     // Nutation wobble ("taumeln"): ~1 Hz, amplitude peaks at half rotor speed
     // and vanishes both at full speed and at a standstill.
     wobblePhase_ = wrapPhase(wobblePhase_ + kTwoPi * 0.9f * dt);
-    const float wobble = kWobbleDeg * 4.0f * rel * rotorSpeed_;
+    const float wobble = kWobbleDeg * 4.0f * rel * (1.0f - rel);
     pitchErr_ += wobble * std::sin(wobblePhase_);
     rollErr_ += wobble * std::sin(wobblePhase_ * 1.31f + 0.9f);
 
     // Below ~a quarter speed the horizon starts falling toward its rest pose.
     float w = clamp01((kRestBeginSpeed - rotorSpeed_) / (kRestBeginSpeed - kRestFullSpeed));
     restWeight_ = w * w * (3.0f - 2.0f * w); // smoothstep
+}
+
+void AttitudeGyro::syncToSuction()
+{
+    syncPending_ = true;
+    syncElapsed_ = 0.0f;
 }
 
 void AttitudeGyro::apply(float& pitchDeg, float& rollDeg) const

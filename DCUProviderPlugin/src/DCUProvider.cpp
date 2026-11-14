@@ -23,6 +23,8 @@ bool DCUProvider::initialize()
 
     msgQueue_ = std::make_unique<MessageQueue>();
 
+    attitudeGyro_.syncToSuction();
+
     // Ports ermitteln und letzten Port laden
     auto ports = enumerateSerialPorts();
     std::string lastPort = loadLastUsedPort();
@@ -272,6 +274,8 @@ void DCUProvider::onAircraftLoaded()
     if (dataRefMgr_) {
         dataRefMgr_->onAircraftLoaded();
     }
+    // A new flight may start cold and dark: no spin-down run from a stale rotor.
+    attitudeGyro_.syncToSuction();
 }
 
 void DCUProvider::onFlightLoopTick(float elapsedTime)

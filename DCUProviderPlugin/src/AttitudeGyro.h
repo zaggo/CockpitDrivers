@@ -32,6 +32,12 @@ public:
     // a sim hitch can't jump the phases.
     void update(float vacuumInHg, float dt);
 
+    // Arms a one-shot snap: kSyncDelaySec of update() later, the rotor jumps
+    // straight to the steady-state speed for the suction measured then, so a
+    // cold-and-dark start parks the horizon at rest without a spin-down run.
+    // The delay lets the sim's vacuum dataref settle after a load.
+    void syncToSuction();
+
     // Degrades a true attitude into the indicated one. Cheap, const, no state
     // change - safe to call from the rate-limited send block.
     void apply(float& pitchDeg, float& rollDeg) const;
@@ -39,15 +45,19 @@ public:
     // Normalized rotor speed, 0..1. 1 = full RPM.
     float rotorSpeed() const { return rotorSpeed_; }
 
-    // Suction (inHg) that spins the rotor to full speed. Measured on the rig:
-    // ~4.8-4.9 at full throttle, ~3.4 at idle - idle taxi therefore slowly
-    // droops the gyro, exactly like the real pump.
-    static constexpr float kNominalSuctionInHg = 4.9f;
+    // Suction (inHg) that spins the rotor to full speed: the bottom of the
+    // green arc, so anything in the arc (rig: 4.7-5.0 running) is a healthy
+    // gyro. Well below it (~3.4 at idle) the gyro still droops slowly.
+    static constexpr float kNominalSuctionInHg = 4.5f;
 
     // First-order rotor lag. Spin-down is much slower than spin-up: a healthy
     // rotor coasts for a minute or two, the pump revs it back up faster.
-    static constexpr float kSpinUpTauSec = 30.0f;
+    static constexpr float kSpinUpTauSec = 15.0f;
     static constexpr float kSpinDownTauSec = 75.0f;
+
+    // Rotor speed at and above which the gyro is rigid enough to show no error;
+    // cuts off the endless exponential tail that would otherwise keep wobbling.
+    static constexpr float kHealthySpeed = 0.97f;
 
     // Amplitudes of the two error components, degrees.
     static constexpr float kWanderPitchDeg = 5.0f;
@@ -64,11 +74,17 @@ public:
     static constexpr float kRestBeginSpeed = 0.25f;
     static constexpr float kRestFullSpeed = 0.08f;
 
+    // Short enough that the rotor stays above kHealthySpeed until the snap.
+    static constexpr float kSyncDelaySec = 2.0f;
+
 private:
     // Starts healthy: until the first update() proves otherwise, behave as if
     // the gyro were at full speed - same fail-live default as BusPower, so
     // loading the plugin onto a running aircraft doesn't tumble the horizon.
     float rotorSpeed_ = 1.0f;
+
+    bool syncPending_ = false;
+    float syncElapsed_ = 0.0f;
 
     // Phase accumulators (radians). They run unconditionally; the amplitudes
     // gate them to zero while the rotor is healthy.

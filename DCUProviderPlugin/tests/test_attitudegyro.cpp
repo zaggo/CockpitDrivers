@@ -44,8 +44,24 @@ int main() {
 
         AttitudeGyro g2;
         run(g2, 0.f, 600.f); // fully dead
-        run(g2, AttitudeGyro::kNominalSuctionInHg, 30.f);
-        check(near(g2.rotorSpeed(), 1.f - std::exp(-1.f), 0.02f), "spin-up: r ~= 1-e^-1 after one tau (30s)");
+        run(g2, AttitudeGyro::kNominalSuctionInHg, AttitudeGyro::kSpinUpTauSec);
+        check(near(g2.rotorSpeed(), 1.f - std::exp(-1.f), 0.02f), "spin-up: r ~= 1-e^-1 after one tau");
+    }
+
+    // Green-arc suction below the old 4.9 nominal (rig: 4.7 running) must not
+    // leave a residual wobble: a minute after a cold start the horizon is exact.
+    {
+        AttitudeGyro g;
+        run(g, 0.f, 600.f);
+        run(g, 4.7f, 60.f);
+        float maxErr = 0.f;
+        for (int i = 0; i < 500; ++i) {
+            g.update(4.7f, 0.02f);
+            float p = 2.f, r = -4.f;
+            g.apply(p, r);
+            maxErr = std::fmax(maxErr, std::fmax(std::fabs(p - 2.f), std::fabs(r + 4.f)));
+        }
+        check(maxErr < 1e-4f, "green arc: no residual wobble 60s after start");
     }
 
     // Phase 1 & 2: shortly after suction loss the indication has moved off
@@ -88,7 +104,7 @@ int main() {
     {
         AttitudeGyro g;
         run(g, 0.f, 600.f);
-        run(g, AttitudeGyro::kNominalSuctionInHg, 180.f); // six spin-up tau
+        run(g, AttitudeGyro::kNominalSuctionInHg, 180.f); // twelve spin-up tau
         float p = -7.f, r = 12.f;
         g.apply(p, r);
         check(near(p, -7.f, 0.5f) && near(r, 12.f, 0.5f), "spin-up: indication re-erected onto truth");
@@ -99,12 +115,37 @@ int main() {
     {
         AttitudeGyro g;
         run(g, 3.41f, 60.f);
-        // r settles toward 3.41/4.9 ~= 0.696 with tau 75s from 1.0:
-        // r = 0.696 + 0.304*e^(-0.8) ~= 0.833
-        check(near(g.rotorSpeed(), 0.833f, 0.02f), "idle: gyro droops to ~0.83 after 60s");
+        // r settles toward 3.41/4.5 ~= 0.758 with tau 75s from 1.0:
+        // r = 0.758 + 0.242*e^(-0.8) ~= 0.867
+        check(near(g.rotorSpeed(), 0.867f, 0.02f), "idle: gyro droops to ~0.87 after 60s");
         float p = 0.f, r = 0.f;
         g.apply(p, r);
         check(std::fabs(p) < 10.f && std::fabs(r) < 15.f, "idle: degraded but not tumbled");
+    }
+
+    // Sync on a cold-and-dark start: no spin-down run, straight to rest pose
+    // once the settle delay has passed.
+    {
+        AttitudeGyro g;
+        g.syncToSuction();
+        run(g, 0.f, AttitudeGyro::kSyncDelaySec - 0.1f);
+        check(g.rotorSpeed() > AttitudeGyro::kHealthySpeed, "sync: rotor untouched before delay");
+        run(g, 0.f, 0.2f);
+        check(near(g.rotorSpeed(), 0.f), "sync: rotor snapped to dead after delay");
+        float p = 0.f, r = 0.f;
+        g.apply(p, r);
+        check(near(p, AttitudeGyro::kRestPitchDeg) && near(r, AttitudeGyro::kRestRollDeg),
+              "sync: horizon at rest pose right away");
+    }
+
+    // Sync on a running engine stays live, and the snap is one-shot.
+    {
+        AttitudeGyro g;
+        g.syncToSuction();
+        run(g, AttitudeGyro::kNominalSuctionInHg, AttitudeGyro::kSyncDelaySec + 0.5f);
+        check(near(g.rotorSpeed(), 1.f), "sync healthy: rotor stays at full speed");
+        run(g, 0.f, 75.f);
+        check(near(g.rotorSpeed(), std::exp(-1.f), 0.02f), "sync healthy: later loss spins down normally");
     }
 
     // Robustness: junk input changes nothing, huge dt is clamped to 0.25s.
