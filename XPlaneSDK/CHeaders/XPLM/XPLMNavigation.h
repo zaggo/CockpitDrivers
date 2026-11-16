@@ -2,7 +2,7 @@
 #define _XPLMNavigation_h_
 
 /*
- * Copyright 2005-2022 Laminar Research, Sandy Barbour and Ben Supnik All
+ * Copyright 2005-2026 Laminar Research, Sandy Barbour and Ben Supnik All
  * rights reserved.  See license.txt for usage. X-Plane SDK Version: 4.0.0
  *
  */
@@ -22,15 +22,35 @@
  *
  */
 
+
 #include "XPLMDefs.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+
 /***************************************************************************
  * NAVIGATION DATABASE ACCESS
  ***************************************************************************/
+
+
+/*
+ * XPLMNavRef
+ * 
+ *                 XPLMNavRef is an iterator into the navigation database. 
+ *                 The navigation database is essentially an array, but it is
+ *                 not necessarily densely populated. The only assumption you
+ *                 can safely make is that like-typed nav-aids are grouped
+ *                 together.
+ * 
+ *                 Use XPLMNavRef to refer to a nav-aid.
+ * 
+ *                 XPLM_NAV_NOT_FOUND is returned by functions that return an
+ *                 XPLMNavRef when the iterator must be invalid.
+ *
+ */
+typedef int XPLMNavRef;
 
 /*
  * XPLMNavType
@@ -46,53 +66,51 @@ extern "C" {
  *
  */
 enum {
+
     xplm_Nav_Unknown                         = 0,
+
 
     xplm_Nav_Airport                         = 1,
 
+
     xplm_Nav_NDB                             = 2,
+
 
     xplm_Nav_VOR                             = 4,
 
+
     xplm_Nav_ILS                             = 8,
+
 
     xplm_Nav_Localizer                       = 16,
 
+
     xplm_Nav_GlideSlope                      = 32,
+
 
     xplm_Nav_OuterMarker                     = 64,
 
+
     xplm_Nav_MiddleMarker                    = 128,
+
 
     xplm_Nav_InnerMarker                     = 256,
 
+
     xplm_Nav_Fix                             = 512,
+
 
     xplm_Nav_DME                             = 1024,
 
+
     xplm_Nav_LatLon                          = 2048,
+
 
     xplm_Nav_TACAN                           = 4096,
 
 
 };
 typedef int XPLMNavType;
-
-/*
- * XPLMNavRef
- * 
- * XPLMNavRef is an iterator into the navigation database.  The navigation
- * database is essentially an array, but it is not necessarily densely
- * populated. The only assumption you can safely make is that like-typed
- * nav-aids are grouped together.
- * 
- * Use XPLMNavRef to refer to a nav-aid.
- * 
- * XPLM_NAV_NOT_FOUND is returned by functions that return an XPLMNavRef when
- * the iterator must be invalid.
- *
- */
-typedef int XPLMNavRef;
 
 #define XPLM_NAV_NOT_FOUND   -1
 
@@ -104,6 +122,7 @@ typedef int XPLMNavRef;
  * empty.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavRef XPLMGetFirstNavAid(void);
 
 /*
@@ -115,6 +134,7 @@ XPLM_API XPLMNavRef XPLMGetFirstNavAid(void);
  * across all like-typed navaids or the entire database.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavRef XPLMGetNextNavAid(
                          XPLMNavRef           inNavAidRef);
 
@@ -126,6 +146,7 @@ XPLM_API XPLMNavRef XPLMGetNextNavAid(
  * database.  You must pass exactly one navaid type to this routine.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavRef XPLMFindFirstNavAidOfType(
                          XPLMNavType          inType);
 
@@ -137,6 +158,7 @@ XPLM_API XPLMNavRef XPLMFindFirstNavAidOfType(
  * database.  You must pass exactly one navaid type to this routine.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavRef XPLMFindLastNavAidOfType(
                          XPLMNavType          inType);
 
@@ -168,6 +190,7 @@ XPLM_API XPLMNavRef XPLMFindLastNavAidOfType(
  * * Find the nearest airport whose name contains "Chicago".
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavRef XPLMFindNavAid(
                          const char *         inNameFragment,         /* Can be NULL */
                          const char *         inIDFragment,           /* Can be NULL */
@@ -196,6 +219,7 @@ XPLM_API XPLMNavRef XPLMFindNavAid(
  * string.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMGetNavAidInfo(
                          XPLMNavRef           inRef,
                          XPLMNavType *        outType,                /* Can be NULL */
@@ -204,9 +228,9 @@ XPLM_API void       XPLMGetNavAidInfo(
                          float *              outHeight,              /* Can be NULL */
                          int *                outFrequency,           /* Can be NULL */
                          float *              outHeading,             /* Can be NULL */
-                         char *               outID,                  /* Can be NULL */
-                         char *               outName,                /* Can be NULL */
-                         char *               outReg);                /* Can be NULL */
+                         char                 outID[32],              /* Can be NULL */
+                         char                 outName[256],           /* Can be NULL */
+                         char                 outReg[1]);             /* Can be NULL */
 
 /***************************************************************************
  * FLIGHT MANAGEMENT COMPUTER
@@ -229,6 +253,7 @@ XPLM_API void       XPLMGetNavAidInfo(
  * This routine returns the number of entries in the FMS.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API int        XPLMCountFMSEntries(void);
 
 /*
@@ -237,6 +262,7 @@ XPLM_API int        XPLMCountFMSEntries(void);
  * This routine returns the index of the entry the pilot is viewing.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API int        XPLMGetDisplayedFMSEntry(void);
 
 /*
@@ -245,6 +271,7 @@ XPLM_API int        XPLMGetDisplayedFMSEntry(void);
  * This routine returns the index of the entry the FMS is flying to.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API int        XPLMGetDestinationFMSEntry(void);
 
 /*
@@ -253,6 +280,7 @@ XPLM_API int        XPLMGetDestinationFMSEntry(void);
  * This routine changes which entry the FMS is showing to the index specified.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetDisplayedFMSEntry(
                          int                  inIndex);
 
@@ -263,6 +291,7 @@ XPLM_API void       XPLMSetDisplayedFMSEntry(
  * track is from the n-1'th point to the n'th point. 
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetDestinationFMSEntry(
                          int                  inIndex);
 
@@ -287,10 +316,11 @@ XPLM_API void       XPLMSetDestinationFMSEntry(
  * passing the pointer to this function.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMGetFMSEntryInfo(
                          int                  inIndex,
                          XPLMNavType *        outType,                /* Can be NULL */
-                         char *               outID,                  /* Can be NULL */
+                         char                 outID[256],             /* Can be NULL */
                          XPLMNavRef *         outRef,                 /* Can be NULL */
                          int *                outAltitude,            /* Can be NULL */
                          float *              outLat,                 /* Can be NULL */
@@ -305,10 +335,11 @@ XPLM_API void       XPLMGetFMSEntryInfo(
  * support VORs and NDBs. Use the routines below to clear or fly to a lat/lon.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetFMSEntryInfo(
                          int                  inIndex,
                          XPLMNavRef           inRef,
-                         int                  inAltitude);
+                         int                  inAltitudeFt);
 
 /*
  * XPLMSetFMSEntryLatLon
@@ -317,11 +348,12 @@ XPLM_API void       XPLMSetFMSEntryInfo(
  * coordinates.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetFMSEntryLatLon(
                          int                  inIndex,
                          float                inLat,
                          float                inLon,
-                         int                  inAltitude);
+                         int                  inAltitudeFt);
 
 /*
  * XPLMClearFMSEntry
@@ -330,6 +362,7 @@ XPLM_API void       XPLMSetFMSEntryLatLon(
  * plan.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMClearFMSEntry(
                          int                  inIndex);
 
@@ -337,26 +370,31 @@ XPLM_API void       XPLMClearFMSEntry(
 /*
  * XPLMNavFlightPlan
  * 
- *     These enumerations defines the flightplan you are accesing using the
- *     FMSFlightPlan functions. An airplane can have up to two navigation
- *     devices (GPS or FMS) and each device can have two flightplans. A GPS
- *     has an enroute and an approach flightplan. An FMS has an active and a
- *     temporary flightplan. If you are trying to access a flightplan that
- *     doesn't exist in your aircraft, e.g. asking a GPS for a temp
- *     flightplan, FMSFlighPlan functions have no effect and will return no
- *     information.
+ * These enumerations defines the flightplan you are accesing using the
+ * FMSFlightPlan functions. An airplane can have up to two navigation devices
+ * (GPS or FMS) and each device can have two flightplans. A GPS has an enroute
+ * and an approach flightplan. An FMS has an active and a temporary
+ * flightplan. If you are trying to access a flightplan that doesn't exist in
+ * your aircraft, e.g. asking a GPS for a temp flightplan, FMSFlighPlan
+ * functions have no effect and will return no information.
  *
  */
 enum {
+
     xplm_Fpl_Pilot_Primary                   = 0,
+
 
     xplm_Fpl_CoPilot_Primary                 = 1,
 
+
     xplm_Fpl_Pilot_Approach                  = 2,
+
 
     xplm_Fpl_CoPilot_Approach                = 3,
 
+
     xplm_Fpl_Pilot_Temporary                 = 4,
+
 
     xplm_Fpl_CoPilot_Temporary               = 5,
 
@@ -372,6 +410,7 @@ typedef int XPLMNavFlightPlan;
  * This routine returns the number of entries in the FMS.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API int        XPLMCountFMSFlightPlanEntries(
                          XPLMNavFlightPlan    inFlightPlan);
 #endif /* XPLM410 */
@@ -383,6 +422,7 @@ XPLM_API int        XPLMCountFMSFlightPlanEntries(
  * This routine returns the index of the entry the pilot is viewing.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API int        XPLMGetDisplayedFMSFlightPlanEntry(
                          XPLMNavFlightPlan    inFlightPlan);
 #endif /* XPLM410 */
@@ -394,6 +434,7 @@ XPLM_API int        XPLMGetDisplayedFMSFlightPlanEntry(
  * This routine returns the index of the entry the FMS is flying to.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API int        XPLMGetDestinationFMSFlightPlanEntry(
                          XPLMNavFlightPlan    inFlightPlan);
 #endif /* XPLM410 */
@@ -405,6 +446,7 @@ XPLM_API int        XPLMGetDestinationFMSFlightPlanEntry(
  * This routine changes which entry the FMS is showing to the index specified.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetDisplayedFMSFlightPlanEntry(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex);
@@ -418,6 +460,7 @@ XPLM_API void       XPLMSetDisplayedFMSFlightPlanEntry(
  * track is from the n-1'th point to the n'th point.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetDestinationFMSFlightPlanEntry(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex);
@@ -432,6 +475,7 @@ XPLM_API void       XPLMSetDestinationFMSFlightPlanEntry(
  * point, ignoring the point before it.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetDirectToFMSFlightPlanEntry(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex);
@@ -459,11 +503,12 @@ XPLM_API void       XPLMSetDirectToFMSFlightPlanEntry(
  * passing the pointer to this function.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMGetFMSFlightPlanEntryInfo(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex,
                          XPLMNavType *        outType,                /* Can be NULL */
-                         char *               outID,                  /* Can be NULL */
+                         char                 outID[256],             /* Can be NULL */
                          XPLMNavRef *         outRef,                 /* Can be NULL */
                          int *                outAltitude,            /* Can be NULL */
                          float *              outLat,                 /* Can be NULL */
@@ -481,11 +526,12 @@ XPLM_API void       XPLMGetFMSFlightPlanEntryInfo(
  * lat/lon.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetFMSFlightPlanEntryInfo(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex,
                          XPLMNavRef           inRef,
-                         int                  inAltitude);
+                         int                  inAltitudeFt);
 #endif /* XPLM410 */
 
 #if defined(XPLM410)
@@ -496,12 +542,13 @@ XPLM_API void       XPLMSetFMSFlightPlanEntryInfo(
  * coordinates.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetFMSFlightPlanEntryLatLon(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex,
                          float                inLat,
                          float                inLon,
-                         int                  inAltitude);
+                         int                  inAltitudeFt);
 #endif /* XPLM410 */
 
 #if defined(XPLM410)
@@ -512,12 +559,13 @@ XPLM_API void       XPLMSetFMSFlightPlanEntryLatLon(
  * coordinates. You can specify the display ID of the waypoint.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMSetFMSFlightPlanEntryLatLonWithId(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex,
                          float                inLat,
                          float                inLon,
-                         int                  inAltitude,
+                         int                  inAltitudeFt,
                          const char*          inId,
                          unsigned int         inIdLength);
 #endif /* XPLM410 */
@@ -530,6 +578,7 @@ XPLM_API void       XPLMSetFMSFlightPlanEntryLatLonWithId(
  * plan.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMClearFMSFlightPlanEntry(
                          XPLMNavFlightPlan    inFlightPlan,
                          int                  inIndex);
@@ -544,6 +593,7 @@ XPLM_API void       XPLMClearFMSFlightPlanEntry(
  * pilot-side and device index 1 for the co-pilot side unit.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API void       XPLMLoadFMSFlightPlan(
                          int                  inDevice,
                          const char *         inBuffer,
@@ -566,6 +616,7 @@ XPLM_API void       XPLMLoadFMSFlightPlan(
  * and the buffer not null-terminated.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API unsigned int XPLMSaveFMSFlightPlan(
                          int                  inDevice,
                          char *               inBuffer,
@@ -580,6 +631,7 @@ XPLM_API unsigned int XPLMSaveFMSFlightPlan(
  *
  */
 
+
 /*
  * XPLMGetGPSDestinationType
  * 
@@ -587,6 +639,7 @@ XPLM_API unsigned int XPLMSaveFMSFlightPlan(
  * one of fix, airport, VOR or NDB.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavType XPLMGetGPSDestinationType(void);
 
 /*
@@ -595,8 +648,8 @@ XPLM_API XPLMNavType XPLMGetGPSDestinationType(void);
  * This routine returns the current GPS destination.
  *
  */
+/* NOT thread-safe. Use ONLY from the main thread, in callbacks.                 */
 XPLM_API XPLMNavRef XPLMGetGPSDestination(void);
-
 #ifdef __cplusplus
 }
 #endif
