@@ -42,7 +42,7 @@ enum RpmKeys {
 // Nano. A4/A5 stay free for I2C should it ever be needed.
 const uint8_t kStepperPins[attitudeAxisCount][4] = {
     {4, 7, 8, 9},       // roll
-    {A0, A1, A2, A3}    // pitch
+    {A3, A2, A1, A0}    // pitch
 };
 
 // Hall sensors, INPUT_PULLUP, active LOW, polled.
