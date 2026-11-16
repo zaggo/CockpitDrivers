@@ -39,6 +39,8 @@ X-Plane via AirManager. `DCUProviderPlugin` is the X-Plane-side counterpart.
 - `XPlaneSDK/`: the X-Plane SDK, vendored once and shared by every X-Plane plugin project
   (`DCUProviderPlugin`, `MotionProviderPlugin`). Their CMake/build scripts resolve it as
   `../XPlaneSDK`; don't re-vendor a per-plugin `SDK/` copy.
+  Currently SDK 4.4.0-r2; API docs at https://xpsdk-api.docs.staging.x-plane.com, offline copy in
+  `XPlaneSDK/Documentation/xplm/`.
 - `etc/`: reference material only (Fusion360 CAD, AirManager backups/cleartext LUA) — not source to edit.
 
 ## Commands
