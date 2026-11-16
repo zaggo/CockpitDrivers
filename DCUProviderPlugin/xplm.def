@@ -9,6 +9,7 @@ EXPORTS
     XPLMGetDatai
     XPLMSetDatai
     XPLMGetDatavf
+    XPLMGetDatavi
     XPLMCreateWindowEx
     XPLMDestroyWindow
     XPLMSetWindowIsVisible
@@ -26,3 +27,5 @@ EXPORTS
     XPLMDestroyMenu
     XPLMFindCommand
     XPLMCommandOnce
+    XPLMCommandBegin
+    XPLMCommandEnd

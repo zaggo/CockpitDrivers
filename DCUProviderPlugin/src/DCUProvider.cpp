@@ -610,13 +610,16 @@ void DCUProvider::updateDownlink(float dt)
 
     if (attitudeAccumulator_ >= attitudeRate)
     {
-        AttitudeMessage attitude;
-        attitude.pitchDeg = dataRefMgr_->getPitchVacuumDeg();
-        attitude.rollDeg = dataRefMgr_->getRollVacuumDeg();
+        float pitchDeg = dataRefMgr_->getPitchVacuumDeg();
+        float rollDeg = dataRefMgr_->getRollVacuumDeg();
 
         // Vacuum degradation, modelled centrally (see top of function). With a
         // healthy gyro this is a no-op.
-        attitudeGyro_.apply(attitude.pitchDeg, attitude.rollDeg);
+        attitudeGyro_.apply(pitchDeg, rollDeg);
+
+        AttitudeMessage attitude;
+        attitude.pitchDeg = pitchDeg;
+        attitude.rollDeg = rollDeg;
 
         msgQueue_->enqueueTx(MessageType::SerialMessageAttitude, &attitude, sizeof(attitude));
 
