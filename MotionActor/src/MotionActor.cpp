@@ -321,6 +321,17 @@ void MotionActor::gotoDemands(uint16_t demand1, uint16_t demand2, uint16_t durat
 
     const uint16_t demands[kActorCount] = {demand1, demand2};
 
+    // A goto is a one-shot: unlike the 60 Hz stream nothing re-sends a lost packet,
+    // so confirm delivery (the library re-sends until the Kangaroo acknowledges).
+    setStreaming(false);
+    int32_t savedTimeouts[kActorCount];
+    for (uint8_t i = 0; i < kActorCount; ++i)
+    {
+        savedTimeouts[i] = actors[i]->commandTimeout();
+        actors[i]->commandTimeout(kKangarooConfirmTimeoutMs);
+    }
+    bool delivered = true;
+
     for (uint8_t i = 0; i < kActorCount; ++i)
     {
         const int32_t pos = map(demands[i], 0, 0xffff, logicalMinPosition[i], logicalMaxPosition[i]);
@@ -362,11 +373,23 @@ void MotionActor::gotoDemands(uint16_t demand1, uint16_t demand2, uint16_t durat
         if (speed > maxSpeed) speed = maxSpeed;
         if (speed < 1) speed = 1;
 
-        actors[i]->p(pos, speed);
+        if (actors[i]->p(pos, speed).status().timedOut())
+        {
+            DEBUGLOG_PRINTLN(F("Goto not acknowledged by Kangaroo"));
+            delivered = false;
+        }
         lastCommandedPosition[i] = pos;
     }
+
+    for (uint8_t i = 0; i < kActorCount; ++i)
+    {
+        actors[i]->commandTimeout(savedTimeouts[i]);
+    }
+    setStreaming(true);
     lastDemandTimestampMs = millis();
-    haveLastCommanded = true;   // next streamed demand computes delta from the goto target
+    // Unconfirmed: the next demand (at the latest the gateway's 5 s resync of the goto
+    // target) must not be skipped as delta 0, but glide there like the first post-homing one.
+    haveLastCommanded = delivered;
 }
 
 void MotionActor::calibrationMove(uint8_t channel, uint16_t positionPercent)

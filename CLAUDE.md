@@ -158,7 +158,8 @@ Goto frames are valid in `mode1` only.
 
 **CAN link (gateway → actor).** Command IDs must stay inside `0x380`–`0x38F`: the actors' RXB1 uses
 a range filter (mask `0x7F0`, filter `0x380`), so anything outside is silently dropped.
-`actorPairDemand` (`0x110`) is the exception, matched separately.
+`actorPairDemand` (`0x110`) is the exception, matched separately. The actors' filters also match
+`data[0]` against their own node ID, so every gateway→actor frame must carry the target node there.
 
 | ID | Message |
 |---|---|

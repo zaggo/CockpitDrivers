@@ -33,18 +33,26 @@ bool CAN::begin()
         return false;
     }
 
-    // RXB0: exact matches for demand + gateway heartbeat
-    canBus->init_Mask(0, 0, MASK_EXACT);
-    canBus->init_Filt(0, 0, CAN_STD_ID(MotionMessageId::actorPairDemand));
-    canBus->init_Filt(1, 0, CAN_STD_ID(MotionMessageId::gatewayHeartbeat));
+    // For standard frames the MCP2515 applies the low 16 mask/filter bits to data
+    // bytes 0-1, so the filters also match data[0] = target node. Without that every
+    // actor buffers all three frames of a gateway burst, overflows its two RX buffers
+    // and drops the gateway heartbeat or its own goto.
+    const uint32_t MASK_DATA0 = 0x0000FF00UL;
+    const uint32_t ownNode = static_cast<uint32_t>(kNodeId) << 8;
+    const uint32_t gatewayNode = static_cast<uint32_t>(MotionNodeId::gatewayNodeId) << 8;
 
-    // RXB1: command range 0x380-0x38F (home/stop/calibration/save messages)
+    // RXB0: exact matches for own demand + gateway heartbeat
+    canBus->init_Mask(0, 0, MASK_EXACT | MASK_DATA0);
+    canBus->init_Filt(0, 0, CAN_STD_ID(MotionMessageId::actorPairDemand) | ownNode);
+    canBus->init_Filt(1, 0, CAN_STD_ID(MotionMessageId::gatewayHeartbeat) | gatewayNode);
+
+    // RXB1: own commands in the range 0x380-0x38F (home/stop/goto/calibration/save)
     const uint32_t MASK_38X = (0x07F0UL << 16);
-    canBus->init_Mask(1, 0, MASK_38X);
-    canBus->init_Filt(2, 0, (0x0380UL << 16));
-    canBus->init_Filt(3, 0, (0x0380UL << 16));
-    canBus->init_Filt(4, 0, (0x0380UL << 16));
-    canBus->init_Filt(5, 0, (0x0380UL << 16));
+    canBus->init_Mask(1, 0, MASK_38X | MASK_DATA0);
+    canBus->init_Filt(2, 0, (0x0380UL << 16) | ownNode);
+    canBus->init_Filt(3, 0, (0x0380UL << 16) | ownNode);
+    canBus->init_Filt(4, 0, (0x0380UL << 16) | ownNode);
+    canBus->init_Filt(5, 0, (0x0380UL << 16) | ownNode);
 
     canBus->setMode(MCP_NORMAL);
 

@@ -14,7 +14,7 @@ class MotionActor {
         void setDemands(uint16_t demand1, uint16_t demand2);
         // Profiled move: one fire-and-forget p(target, speed) per channel, speed
         // chosen so BOTH channels arrive after durationMs (coordinated arrival).
-        // Used for arm/disarm; runs in streaming mode like setDemands.
+        // Used for arm/disarm; unlike setDemands each move is confirmed by the Kangaroo.
         void gotoDemands(uint16_t demand1, uint16_t demand2, uint16_t durationMs);
         void calibrationMove(uint8_t channel, uint16_t positionPercent);
         void saveLogicalMin(uint8_t channel);

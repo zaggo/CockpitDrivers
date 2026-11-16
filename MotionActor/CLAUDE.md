@@ -59,10 +59,15 @@ This is where the platform's smoothness is won or lost. Three entry points, all 
   both channels — and across the three nodes, all six legs — arrive together and the platform moves
   as one rigid pose. Duration is clamped to 100..30000 ms; the same `range/2` ceiling applies.
   Current position comes from `lastCommandedPosition`, falling back to a `getP()` round-trip when
-  `haveLastCommanded` is false (e.g. straight after homing).
+  `haveLastCommanded` is false (e.g. straight after homing). Unlike demands, goto moves are sent
+  **confirmed** (streaming off, `kKangarooConfirmTimeoutMs`): a lost streamed demand is healed 16 ms
+  later, a lost goto is not — that pair sat out the arm move and jerked into place afterwards. If
+  the Kangaroo doesn't acknowledge, `haveLastCommanded` is cleared so the gateway's 5 s resync of the
+  goto target glides there instead of being skipped as delta 0.
 - **`home()` / `powerDown()` / `calibrationMove()` / `saveLogicalMin|Max()`** — setup and shutdown.
 
-`setStreaming(true)` is used in the `active` state and off for home/start/waitAll/powerDown. This
+`setStreaming(true)` is used in the `active` state and off for home/start/waitAll/powerDown and
+while a goto is being sent. This
 matters: a confirmed (non-streaming) Kangaroo `p()` costs a **~20 ms blocking round-trip per
 channel**, which throttled the production demand path to ~25 Hz and was the original source of the
 felt jerkiness.
@@ -78,6 +83,11 @@ Subclasses `BaseCAN` directly (not `InstrumentCAN` — the motion chain has its 
   `gatewayHeartbeat` (`0x300`).
 - RXB1 uses a **range filter** (mask `0x7F0`, filter `0x380`), so every gateway→actor command must
   live in `0x380`–`0x38F`. `actorPairDemand` (`0x110`) is matched separately.
+- All filters also match **data byte 0** (the MCP2515 applies the low 16 filter bits to data bytes
+  0–1 of standard frames): own `kNodeId` for demands/commands, `0` for the gateway heartbeat. Every
+  gateway→actor frame must therefore carry the target node in `data[0]`. Without this, each actor
+  buffered all three frames of a gateway burst, overflowed its two RX buffers and dropped the
+  gateway heartbeat (brief red LED) or its own `actorPairGoto` (one pair missed the arm move).
 - **Kangaroo serial writes never run inside the RX drain loop.** Demands and gotos are latched into
   `pendingDemand*` / `pendingGoto*` during the drain and applied once per `loop()` pass afterwards.
   Blocking inside the drain overflows the RX buffer and drops gateway heartbeats.
